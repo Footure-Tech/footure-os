@@ -7,6 +7,7 @@ import { buscarPedidoDetalhe } from "@/lib/pedidos/consultas";
 import { pedidoEhEditavel } from "@/lib/pedidos/statusEditavel";
 import { Button } from "@/components/ui/button";
 import { urlLogoCliente } from "@/lib/clientes/consultas";
+import { formatarEnderecoCliente } from "@/lib/clientes/formatacao";
 import { LogoCliente } from "@/components/clientes/logo-cliente";
 import { gerarAlertas } from "@/lib/validacoes/pedido";
 import { buscarPlanoPorKey } from "@/lib/plans/normalize";
@@ -48,7 +49,14 @@ export default async function DetalhePedidoPage({ params }: PageProps<"/pedidos/
   const cliente = pedido.clientes as unknown as {
     razao_social: string;
     cnpj: string;
-    endereco: string;
+    endereco: string | null;
+    numero: string | null;
+    complemento: string | null;
+    bairro: string | null;
+    cep: string | null;
+    municipio: string | null;
+    uf: string | null;
+    endereco_legado: string | null;
     tipo: "clube" | "agente";
     foro_preferencial: string;
     logo_path: string | null;
@@ -156,7 +164,7 @@ export default async function DetalhePedidoPage({ params }: PageProps<"/pedidos/
             <div className="flex flex-col">
               <InfoRow label="Razão social" value={cliente?.razao_social} />
               <InfoRow label="CNPJ" value={cliente?.cnpj} />
-              <InfoRow label="Endereço" value={cliente?.endereco} longo />
+              <InfoRow label="Endereço" value={cliente ? formatarEnderecoCliente(cliente) : undefined} longo />
             </div>
           </div>
         </BlocoFormulario>

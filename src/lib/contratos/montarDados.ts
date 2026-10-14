@@ -9,6 +9,7 @@ import { buscarPlanoPorKey, tierDaKey } from "@/lib/plans/normalize";
 import { gerarParcelas } from "./parcelas";
 import { valorFormatadoComExtenso, formatarMoeda } from "./valorPorExtenso";
 import { FORO_DEFAULT } from "@/lib/validacoes/pedido";
+import { formatarEnderecoCliente } from "@/lib/clientes/formatacao";
 
 type Supa = SupabaseClient<Database>;
 
@@ -78,7 +79,7 @@ export async function montarDadosContrato(supabase: Supa, pedidoId: string): Pro
     robusta: pedido.robusta,
     cliente: cliente.razao_social,
     cnpj: cliente.cnpj,
-    endereco: cliente.endereco,
+    endereco: formatarEnderecoCliente(cliente),
     representantesContratante,
     testemunhasContratante,
     representantesFooture,

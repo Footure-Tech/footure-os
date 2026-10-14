@@ -102,6 +102,16 @@ export async function buscarPedidoDetalhe(supabase: Supa, pedidoId: string) {
   };
 }
 
+export async function listarPedidosDoCliente(supabase: Supa, clienteId: string) {
+  const { data, error } = await supabase
+    .from("pedidos")
+    .select("id, status, plano, valor_mensal, valor_total, vigencia_inicio, vigencia_fim, criado_em")
+    .eq("cliente_id", clienteId)
+    .order("criado_em", { ascending: false });
+  logSeErro(`listarPedidosDoCliente(${clienteId})`, error);
+  return data ?? [];
+}
+
 export async function listarClientes(supabase: Supa) {
   const { data, error } = await supabase.from("clientes").select("*").order("razao_social", { ascending: true });
   logSeErro("listarClientes", error);

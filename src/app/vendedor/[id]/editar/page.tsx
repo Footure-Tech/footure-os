@@ -96,7 +96,7 @@ export default async function EditarPedidoPage({ params }: PageProps<"/vendedor/
       )}
       <PedidoForm
         pedidoId={pedido.id}
-        clientes={clientes.map((c) => ({ id: c.id, tipo: c.tipo, razaoSocial: c.razao_social, cnpj: c.cnpj, endereco: c.endereco }))}
+        clientes={clientes.map((c) => ({ id: c.id, tipo: c.tipo, razaoSocial: c.razao_social, cnpj: c.cnpj }))}
         signatariosPorCliente={signatariosPorCliente}
         representantesFooture={representantesFooture.map((r) => ({ id: r.id, nome: r.nome }))}
         usuarios={usuarios.map((u) => ({ id: u.user_id, nome: u.nome }))}

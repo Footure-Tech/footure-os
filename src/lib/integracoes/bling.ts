@@ -118,6 +118,469 @@ export async function buscarStatusBling(supabase: Supa) {
   return { conectado: !!data, expiresAt: data?.expires_at ?? null, atualizadoEm: data?.atualizado_em ?? null };
 }
 
+const API_BASE = "https://api.bling.com.br/Api/v3";
+
+// Bling limita a 3 requisições/segundo por aplicativo — telas como a lista de
+// clientes disparam várias chamadas em paralelo (uma por cliente), então todo
+// GET passa por essa fila, que serializa com um intervalo mínimo entre
+// chamadas (processo único do servidor Next, suficiente pro volume atual).
+const INTERVALO_MIN_MS = 350;
+let proximoHorarioLivre = 0;
+
+function aguardarVezNaFila(): Promise<void> {
+  const agora = Date.now();
+  const inicio = Math.max(agora, proximoHorarioLivre);
+  proximoHorarioLivre = inicio + INTERVALO_MIN_MS;
+  const espera = inicio - agora;
+  return espera > 0 ? new Promise((resolve) => setTimeout(resolve, espera)) : Promise.resolve();
+}
+
+async function chamarApiBling<T>(token: string, caminho: string, tentativa = 0): Promise<T> {
+  await aguardarVezNaFila();
+  const resposta = await fetch(`${API_BASE}${caminho}`, { headers: { Authorization: `Bearer ${token}` } });
+  const json = await resposta.json().catch(() => null);
+  if (resposta.status === 429 && tentativa < 2) {
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    return chamarApiBling<T>(token, caminho, tentativa + 1);
+  }
+  if (!resposta.ok) throw new Error(`Bling ${caminho} retornou ${resposta.status}: ${JSON.stringify(json)}`);
+  return json as T;
+}
+
+export interface ParcelaBling {
+  id: number;
+  vencimento: string;
+  valor: number;
+  situacao: number;
+}
+
+export interface PedidoVendaBlingResumo {
+  id: number;
+  numero: number;
+  data: string;
+  total: number;
+  descricaoItens: string;
+  parcelas: ParcelaBling[];
+}
+
+export interface VisaoBlingCliente {
+  conectado: boolean;
+  contatoEncontrado: boolean;
+  pedidos: PedidoVendaBlingResumo[];
+}
+
+/** Não existe hoje vínculo gravado (bling_pedido_id nunca é preenchido —
+ * criarPedidoBling ainda é stub), então o cruzamento é sempre por CNPJ. */
+async function buscarContatoBling(token: string, cnpj: string): Promise<{ id: number; nome: string } | null> {
+  const cnpjLimpo = cnpj.replace(/\D/g, "");
+  const contatos = await chamarApiBling<{ data: Array<{ id: number; nome: string }> }>(
+    token,
+    `/contatos?numeroDocumento=${cnpjLimpo}`,
+  );
+  return contatos.data?.[0] ?? null;
+}
+
+async function buscarIdContatoBling(token: string, cnpj: string): Promise<number | null> {
+  const contato = await buscarContatoBling(token, cnpj);
+  return contato?.id ?? null;
+}
+
+/**
+ * Sincroniza o cache local bling_contatos com os contatos pessoa jurídica
+ * (CNPJ, 14 dígitos) do Bling. Disparado sob demanda (botão em /clientes) —
+ * a API do Bling não tem filtro server-side por tipo de pessoa e a conta tem
+ * 2000+ contatos (maioria pessoa física, de outro produto), então buscar ao
+ * vivo a cada carregamento da tela seria inviável.
+ *
+ * Também religa automaticamente qualquer cliente local ainda sem
+ * bling_contato_id, por CNPJ — cobre tanto a migração inicial dos clientes
+ * já cadastrados quanto o caso de alguém digitar o CNPJ errado e corrigir
+ * depois.
+ */
+/** limite=100: cobre o volume real visto até agora (nenhum cliente com mais
+ * de 1 dígito de pedidos de venda); se algum dia passar disso o total fica
+ * só truncado em 100, não quebra nada. */
+async function buscarTotalPedidosVenda(token: string, idContato: number): Promise<number> {
+  const resp = await chamarApiBling<{ data: Array<{ id: number }> }>(token, `/pedidos/vendas?idContato=${idContato}&limite=100`);
+  return (resp.data ?? []).length;
+}
+
+export async function sincronizarContatosBling(
+  supabase: Supa,
+): Promise<{ totalContatos: number; novosClientesRegistrados: number }> {
+  const token = await obterAccessTokenValido(supabase);
+
+  const candidatosPessoaJuridica: Array<{ id: number; nome: string; cnpj: string; telefone: string | null }> = [];
+  for (let pagina = 1; pagina <= 50; pagina++) {
+    const resp = await chamarApiBling<{
+      data: Array<{ id: number; nome: string; numeroDocumento: string; telefone?: string; celular?: string }>;
+    }>(token, `/contatos?pagina=${pagina}&limite=100`);
+    const lista = resp.data ?? [];
+    if (lista.length === 0) break;
+    for (const c of lista) {
+      const cnpjLimpo = c.numeroDocumento?.replace(/\D/g, "") ?? "";
+      if (cnpjLimpo.length === 14) {
+        candidatosPessoaJuridica.push({ id: c.id, nome: c.nome, cnpj: cnpjLimpo, telefone: c.celular || c.telefone || null });
+      }
+    }
+  }
+
+  // Essa conta do Bling é o financeiro inteiro da Footure, não só do
+  // Footlink — pessoa jurídica sozinho ainda inclui fornecedor/prestador de
+  // serviço (ex.: Google, Amazon, escritórios de advocacia). Só entra quem
+  // de fato tem pedido de venda: fornecedor nunca aparece como contato de um
+  // pedido de venda (a relação é invertida — a Footure paga eles, não vende
+  // pra eles). Já aproveita essa mesma chamada pra guardar o total de
+  // pedidos — é exibido na lista de clientes, que antes só contava pedido
+  // LOCAL (nosso processo de venda) e ficava zerada pra quase todo cliente
+  // real, já que a maioria nunca passou pelo nosso fluxo. Checagem
+  // sequencial (não paralela) pelo mesmo motivo do resto do arquivo: evita
+  // saturar o limite de 3 req/s do Bling.
+  const contatosPessoaJuridica: Array<
+    (typeof candidatosPessoaJuridica)[number] & {
+      totalPedidosVenda: number;
+      temParcelaAtrasada: boolean;
+      temParcelaAVencer: boolean;
+      totalParcelas: number;
+      parcelasEmitidas: number;
+      parcelasAtrasadas: number;
+    }
+  > = [];
+  const hoje = new Date().toISOString().slice(0, 10);
+  for (const candidato of candidatosPessoaJuridica) {
+    const totalPedidosVenda = await buscarTotalPedidosVenda(token, candidato.id);
+    if (totalPedidosVenda === 0) continue;
+    const parcelas = await buscarContasReceberBling(token, candidato.id);
+    const classificacoes = parcelas.map((p) => classificarSituacaoParcela(p.situacao, p.vencimento));
+    const parcelasAtrasadas = classificacoes.filter((c) => c === "atrasada").length;
+    const temParcelaAtrasada = parcelasAtrasadas > 0;
+    // "Em dia" só faz sentido com parcela futura em aberto — sem isso
+    // (tudo já recebido, ou pedido antigo sem parcela nenhuma pendente), o
+    // cliente está de fato inativo, mesmo sem nenhuma atrasada.
+    const temParcelaAVencer = classificacoes.includes("em_aberto");
+    // "Emitida" = já passou do vencimento, paga ou não (contraste com "a
+    // vencer", que é só o que ainda não chegou na data) — é o que a
+    // listagem mostra como "X de Y parcelas".
+    const parcelasEmitidas = parcelas.filter((p) => p.vencimento <= hoje).length;
+    contatosPessoaJuridica.push({
+      ...candidato,
+      totalPedidosVenda,
+      temParcelaAtrasada,
+      temParcelaAVencer,
+      totalParcelas: parcelas.length,
+      parcelasEmitidas,
+      parcelasAtrasadas,
+    });
+  }
+
+  if (contatosPessoaJuridica.length > 0) {
+    const { error } = await supabase.from("bling_contatos").upsert(
+      contatosPessoaJuridica.map((c) => ({
+        id: c.id,
+        nome: c.nome,
+        cnpj: c.cnpj,
+        telefone: c.telefone,
+        total_pedidos_venda: c.totalPedidosVenda,
+        tem_parcela_atrasada: c.temParcelaAtrasada,
+        tem_parcela_a_vencer: c.temParcelaAVencer,
+        total_parcelas: c.totalParcelas,
+        parcelas_emitidas: c.parcelasEmitidas,
+        parcelas_atrasadas: c.parcelasAtrasadas,
+        sincronizado_em: new Date().toISOString(),
+      })),
+    );
+    if (error) throw new Error(`Falha ao salvar cache de contatos do Bling: ${error.message}`);
+  }
+
+  // Remove do cache quem não qualifica mais (ex.: era fornecedor que tinha
+  // ficado antes dessa checagem existir) — nunca quem ainda está vinculado a
+  // um cliente local, pra não violar a FK.
+  const { data: contatosEmCache } = await supabase.from("bling_contatos").select("id");
+  const { data: clientesVinculados } = await supabase.from("clientes").select("bling_contato_id").not("bling_contato_id", "is", null);
+  const idsVinculados = new Set((clientesVinculados ?? []).map((c) => c.bling_contato_id));
+  const idsQualificados = new Set(contatosPessoaJuridica.map((c) => c.id));
+  const idsParaRemover = (contatosEmCache ?? [])
+    .map((c) => c.id)
+    .filter((id) => !idsQualificados.has(id) && !idsVinculados.has(id));
+  if (idsParaRemover.length > 0) {
+    await supabase.from("bling_contatos").delete().in("id", idsParaRemover);
+  }
+
+  const { data: clientesSemVinculo } = await supabase.from("clientes").select("id, cnpj").is("bling_contato_id", null);
+  for (const cliente of clientesSemVinculo ?? []) {
+    const cnpjLimpo = cliente.cnpj.replace(/\D/g, "");
+    const match = contatosPessoaJuridica.find((c) => c.cnpj === cnpjLimpo);
+    if (match) await supabase.from("clientes").update({ bling_contato_id: match.id }).eq("id", cliente.id);
+  }
+
+  // Cadastra automaticamente quem ainda não tem NENHUM cliente vinculado
+  // (nem religado por CNPJ acima) — ver os dados completos (contratos,
+  // parcelas) não deveria depender de alguém preencher um formulário manual
+  // pra cada contato que já existe no Bling. tipo e foro levam um padrão
+  // (sempre editável depois, nunca travado); o resto vem do Bling.
+  const { data: clientesAtuais } = await supabase.from("clientes").select("bling_contato_id").not("bling_contato_id", "is", null);
+  const idsJaCadastrados = new Set((clientesAtuais ?? []).map((c) => c.bling_contato_id));
+  const semCadastro = contatosPessoaJuridica.filter((c) => !idsJaCadastrados.has(c.id));
+
+  let novosClientesRegistrados = 0;
+  for (const contato of semCadastro) {
+    const detalhe = await buscarDetalheContatoBlingComToken(token, contato.id);
+    if (!detalhe) continue;
+    const { error } = await supabase.from("clientes").insert({
+      tipo: "clube",
+      razao_social: detalhe.nome,
+      cnpj: detalhe.cnpj,
+      nome_fantasia: detalhe.fantasia,
+      endereco: detalhe.endereco,
+      numero: detalhe.numero,
+      complemento: detalhe.complemento,
+      bairro: detalhe.bairro,
+      cep: detalhe.cep,
+      municipio: detalhe.municipio,
+      uf: detalhe.uf,
+      foro_preferencial: "Porto Alegre/RS",
+      bling_contato_id: contato.id,
+    });
+    if (error) {
+      console.error(`[sincronizarContatosBling] falha ao auto-cadastrar contato ${contato.id}:`, error.message);
+    } else {
+      novosClientesRegistrados++;
+    }
+  }
+
+  return { totalContatos: contatosPessoaJuridica.length, novosClientesRegistrados };
+}
+
+async function buscarContasReceberBling(token: string, idContato: number): Promise<Array<ParcelaBling & { numeroPedidoOrigem: string | null }>> {
+  const receberResp = await chamarApiBling<{
+    data: Array<{ id: number; vencimento: string; valor: number; situacao: number; origem?: { numero: string } }>;
+  }>(token, `/contas/receber?idContato=${idContato}&limite=100`);
+  return (receberResp.data ?? []).map((c) => ({
+    id: c.id,
+    vencimento: c.vencimento,
+    valor: c.valor,
+    situacao: c.situacao,
+    numeroPedidoOrigem: c.origem?.numero ?? null,
+  }));
+}
+
+export interface ParcelaAtrasadaDetalhe {
+  numeroPedido: string;
+  numeroParcela: number;
+  vencimento: string;
+  valor: number;
+  diasAtraso: number;
+}
+
+function diasDesdeVencimento(vencimentoIso: string): number {
+  const [ano, mes, dia] = vencimentoIso.split("-").map(Number);
+  const vencimento = new Date(ano, mes - 1, dia);
+  const hoje = new Date();
+  const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  return Math.round((hojeSemHora.getTime() - vencimento.getTime()) / 86_400_000);
+}
+
+/**
+ * Detalhe das parcelas atrasadas de um contato — usado na tela de
+ * Inadimplência. "Número da parcela" é a posição dela dentro do próprio
+ * pedido (ordenada por vencimento), já que o Bling não devolve isso pronto;
+ * calculado a partir do mesmo /contas/receber que já traz todas as parcelas
+ * do contato (nenhuma chamada extra).
+ */
+export async function buscarParcelasAtrasadasDoContato(supabase: Supa, idContato: number): Promise<ParcelaAtrasadaDetalhe[]> {
+  let token: string;
+  try {
+    token = await obterAccessTokenValido(supabase);
+  } catch {
+    return [];
+  }
+  const parcelas = await buscarContasReceberBling(token, idContato);
+
+  const porPedido = new Map<string, typeof parcelas>();
+  for (const p of parcelas) {
+    if (!p.numeroPedidoOrigem) continue;
+    const lista = porPedido.get(p.numeroPedidoOrigem) ?? [];
+    lista.push(p);
+    porPedido.set(p.numeroPedidoOrigem, lista);
+  }
+
+  const resultado: ParcelaAtrasadaDetalhe[] = [];
+  for (const [numeroPedido, lista] of porPedido) {
+    const ordenada = [...lista].sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+    ordenada.forEach((p, indice) => {
+      if (classificarSituacaoParcela(p.situacao, p.vencimento) === "atrasada") {
+        resultado.push({
+          numeroPedido,
+          numeroParcela: indice + 1,
+          vencimento: p.vencimento,
+          valor: p.valor,
+          diasAtraso: diasDesdeVencimento(p.vencimento),
+        });
+      }
+    });
+  }
+  return resultado.sort((a, b) => b.diasAtraso - a.diasAtraso);
+}
+
+/** Versão leve só pra saber se há parcela atrasada — usada na listagem de
+ * clientes, onde buscar itens/descrição de cada pedido (N+1) seria caro. */
+export async function buscarSituacaoPagamentoBling(supabase: Supa, cnpj: string): Promise<{ temParcelaAtrasada: boolean }> {
+  let token: string;
+  try {
+    token = await obterAccessTokenValido(supabase);
+  } catch {
+    return { temParcelaAtrasada: false };
+  }
+  const idContato = await buscarIdContatoBling(token, cnpj);
+  if (!idContato) return { temParcelaAtrasada: false };
+  return buscarSituacaoPagamentoPorIdContato(supabase, idContato);
+}
+
+/** Mesma checagem, mas pulando a busca de contato por CNPJ quando o
+ * bling_contato_id já é conhecido (cache local em bling_contatos). */
+export async function buscarSituacaoPagamentoPorIdContato(supabase: Supa, idContato: number): Promise<{ temParcelaAtrasada: boolean }> {
+  let token: string;
+  try {
+    token = await obterAccessTokenValido(supabase);
+  } catch {
+    return { temParcelaAtrasada: false };
+  }
+  const parcelas = await buscarContasReceberBling(token, idContato);
+  return { temParcelaAtrasada: parcelas.some((p) => classificarSituacaoParcela(p.situacao, p.vencimento) === "atrasada") };
+}
+
+export interface DetalheContatoBling {
+  id: number;
+  nome: string;
+  fantasia: string | null;
+  cnpj: string;
+  endereco: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cep: string | null;
+  municipio: string | null;
+  uf: string | null;
+}
+
+/**
+ * O Bling é a base oficial de identidade do cliente — razão social, nome
+ * fantasia, CNPJ e endereço vêm sempre daqui (ao vivo), nunca do que foi
+ * digitado localmente. Usado tanto na tela de detalhe de um cliente já
+ * cadastrado (pra mostrar o dado atual, não uma cópia local que pode estar
+ * desatualizada ou nunca ter sido preenchida) quanto na visualização de um
+ * contato que ainda não tem cadastro local nenhum.
+ */
+async function buscarDetalheContatoBlingComToken(token: string, idContato: number): Promise<DetalheContatoBling | null> {
+  try {
+    const resp = await chamarApiBling<{
+      data: {
+        id: number;
+        nome: string;
+        fantasia?: string;
+        numeroDocumento: string;
+        endereco?: {
+          geral?: { endereco?: string; numero?: string; complemento?: string; bairro?: string; cep?: string; municipio?: string; uf?: string };
+        };
+      };
+    }>(token, `/contatos/${idContato}`);
+    const d = resp.data;
+    const geral = d.endereco?.geral;
+    return {
+      id: d.id,
+      nome: d.nome,
+      fantasia: d.fantasia || null,
+      cnpj: (d.numeroDocumento ?? "").replace(/\D/g, ""),
+      endereco: geral?.endereco || null,
+      numero: geral?.numero || null,
+      complemento: geral?.complemento || null,
+      bairro: geral?.bairro || null,
+      cep: geral?.cep || null,
+      municipio: geral?.municipio || null,
+      uf: geral?.uf || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function buscarDetalheContatoBling(supabase: Supa, idContato: number): Promise<DetalheContatoBling | null> {
+  let token: string;
+  try {
+    token = await obterAccessTokenValido(supabase);
+  } catch {
+    return null;
+  }
+  return buscarDetalheContatoBlingComToken(token, idContato);
+}
+
+/**
+ * Cruza o cliente com o Bling por CNPJ. Confirmado contra dados reais: GET
+ * /contatos?numeroDocumento=X encontra o contato, e tanto /pedidos/vendas
+ * quanto /contas/receber aceitam filtrar por idContato.
+ */
+export async function buscarVisaoBlingDoCliente(supabase: Supa, cnpj: string): Promise<VisaoBlingCliente> {
+  let token: string;
+  try {
+    token = await obterAccessTokenValido(supabase);
+  } catch {
+    return { conectado: false, contatoEncontrado: false, pedidos: [] };
+  }
+
+  const idContato = await buscarIdContatoBling(token, cnpj);
+  if (!idContato) return { conectado: true, contatoEncontrado: false, pedidos: [] };
+
+  const [pedidosResp, contasReceber] = await Promise.all([
+    chamarApiBling<{ data: Array<{ id: number; numero: number; data: string; total: number }> }>(
+      token,
+      `/pedidos/vendas?idContato=${idContato}&limite=100`,
+    ),
+    buscarContasReceberBling(token, idContato),
+  ]);
+
+  const parcelasPorNumeroPedido = new Map<string, ParcelaBling[]>();
+  for (const conta of contasReceber) {
+    if (!conta.numeroPedidoOrigem) continue;
+    const lista = parcelasPorNumeroPedido.get(conta.numeroPedidoOrigem) ?? [];
+    lista.push({ id: conta.id, vencimento: conta.vencimento, valor: conta.valor, situacao: conta.situacao });
+    parcelasPorNumeroPedido.set(conta.numeroPedidoOrigem, lista);
+  }
+
+  const pedidos: PedidoVendaBlingResumo[] = [];
+  for (const p of pedidosResp.data ?? []) {
+    let descricaoItens = "";
+    try {
+      const detalhe = await chamarApiBling<{ data: { itens?: Array<{ descricao: string }> } }>(token, `/pedidos/vendas/${p.id}`);
+      descricaoItens = detalhe.data?.itens?.map((i) => i.descricao).join(", ") ?? "";
+    } catch {
+      // segue sem descrição se a consulta de detalhe de um pedido específico falhar
+    }
+    const parcelas = (parcelasPorNumeroPedido.get(String(p.numero)) ?? []).sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+    pedidos.push({ id: p.id, numero: p.numero, data: p.data, total: p.total, descricaoItens, parcelas });
+  }
+
+  return { conectado: true, contatoEncontrado: true, pedidos: pedidos.sort((a, b) => b.data.localeCompare(a.data)) };
+}
+
+export type SituacaoParcela = "recebida" | "recebida_parcial" | "atrasada" | "em_aberto";
+
+/**
+ * O código numérico de contas/receber só tem 3 valores confirmados contra
+ * dados reais da conta (1, 2, 3) e o Bling não expõe um endpoint de consulta
+ * de situações pra esse app (/situacoes/{id} retorna 403 insufficient_scope,
+ * e não existe escopo "Situações" na lista de permissões do app no Bling).
+ * 2 = Recebida e 3 = Recebida parcialmente foram confirmados manualmente no
+ * Bling; qualquer outro código (hoje só aparece o 1) é tratado como pendente
+ * de recebimento e classificado por data — não existe um código numérico
+ * fixo pra "atrasada", é a UI do Bling que deriva isso de vencimento < hoje.
+ */
+export function classificarSituacaoParcela(situacao: number, vencimento: string): SituacaoParcela {
+  if (situacao === 2) return "recebida";
+  if (situacao === 3) return "recebida_parcial";
+  const hoje = new Date().toISOString().slice(0, 10);
+  return vencimento < hoje ? "atrasada" : "em_aberto";
+}
+
 export interface PedidoVendaBling {
   numero?: string;
   data: string;

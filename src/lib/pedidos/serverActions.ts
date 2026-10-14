@@ -28,6 +28,12 @@ const PedidoPayloadSchema = z.object({
       apelido: z.string().optional(), // só faz sentido pra clube — validado na UI, não aqui
       cnpj: z.string().min(1),
       endereco: z.string().min(1),
+      numero: z.string().min(1),
+      complemento: z.string().optional(),
+      bairro: z.string().min(1),
+      cep: z.string().min(1),
+      municipio: z.string().min(1),
+      uf: z.string().length(2),
     })
     .optional(),
   perfil: z.enum(["clube", "agente"]),
@@ -122,6 +128,12 @@ export async function salvarPedido(_prev: SalvarPedidoState, formData: FormData)
         apelido: payload.novoCliente.tipo === "clube" ? payload.novoCliente.apelido || null : null,
         cnpj: payload.novoCliente.cnpj,
         endereco: payload.novoCliente.endereco,
+        numero: payload.novoCliente.numero,
+        complemento: payload.novoCliente.complemento || null,
+        bairro: payload.novoCliente.bairro,
+        cep: payload.novoCliente.cep,
+        municipio: payload.novoCliente.municipio,
+        uf: payload.novoCliente.uf,
       })
       .select("id")
       .single();

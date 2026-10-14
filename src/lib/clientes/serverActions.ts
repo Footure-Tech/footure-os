@@ -5,15 +5,21 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { exigirPapel } from "@/lib/auth/session";
+import { sincronizarContatosBling } from "@/lib/integracoes/bling";
 
 const ClientePayloadSchema = z.object({
   clienteId: z.string().uuid().optional(), // presente = edição
+  blingContatoId: z.number(), // razão social/CNPJ vêm do Bling, nunca digitados aqui
   tipo: z.enum(["clube", "agente"]),
-  razaoSocial: z.string().min(1),
   nomeFantasia: z.string().optional(),
   apelido: z.string().optional(), // só faz sentido pra clube — validado na UI, não aqui
-  cnpj: z.string().min(1),
   endereco: z.string().min(1),
+  numero: z.string().min(1),
+  complemento: z.string().optional(),
+  bairro: z.string().min(1),
+  cep: z.string().min(1),
+  municipio: z.string().min(1),
+  uf: z.string().length(2),
   foroPreferencial: z.string().min(1),
 });
 
@@ -32,13 +38,31 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
   const payload = parsed.data;
   const supabase = await createClient();
 
+  // Razão social/CNPJ sempre vêm do contato do Bling (fonte única de
+  // identidade) — nunca do que o formulário mandou, pra não confiar em texto
+  // que o cliente do navegador poderia ter alterado e pra sempre gravar a
+  // versão mais atual já que estamos buscando de qualquer forma.
+  const { data: contatoBling, error: erroContato } = await supabase
+    .from("bling_contatos")
+    .select("nome, cnpj")
+    .eq("id", payload.blingContatoId)
+    .single();
+  if (erroContato || !contatoBling) return { erro: "Contato do Bling não encontrado — sincronize novamente e tente de novo." };
+
   const linha = {
     tipo: payload.tipo,
-    razao_social: payload.razaoSocial,
+    razao_social: contatoBling.nome,
+    cnpj: contatoBling.cnpj,
+    bling_contato_id: payload.blingContatoId,
     nome_fantasia: payload.nomeFantasia || null,
     apelido: payload.tipo === "clube" ? payload.apelido || null : null,
-    cnpj: payload.cnpj,
     endereco: payload.endereco,
+    numero: payload.numero,
+    complemento: payload.complemento || null,
+    bairro: payload.bairro,
+    cep: payload.cep,
+    municipio: payload.municipio,
+    uf: payload.uf,
     foro_preferencial: payload.foroPreferencial,
   };
 
@@ -67,6 +91,14 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
 
   revalidatePath("/clientes");
   redirect("/clientes");
+}
+
+export async function sincronizarContatosBlingAction(): Promise<{ totalContatos: number; novosClientesRegistrados: number }> {
+  await exigirPapel("vendedor", "admin");
+  const supabase = await createClient();
+  const resultado = await sincronizarContatosBling(supabase);
+  revalidatePath("/clientes");
+  return resultado;
 }
 
 /** Só remove clientes sem pedido vinculado — a FK (sem cascade) é o backstop caso essa checagem seja pulada. */

@@ -60,9 +60,17 @@ export interface Database {
           nome_fantasia: string | null;
           apelido: string | null;
           cnpj: string;
-          endereco: string;
+          endereco: string | null;
+          numero: string | null;
+          complemento: string | null;
+          bairro: string | null;
+          cep: string | null;
+          municipio: string | null;
+          uf: string | null;
+          endereco_legado: string | null;
           foro_preferencial: string;
           logo_path: string | null;
+          bling_contato_id: number | null;
           criado_em: string;
           atualizado_em: string;
         },
@@ -73,9 +81,16 @@ export interface Database {
           nome_fantasia?: string | null;
           apelido?: string | null;
           cnpj: string;
-          endereco: string;
+          endereco?: string | null;
+          numero?: string | null;
+          complemento?: string | null;
+          bairro?: string | null;
+          cep?: string | null;
+          municipio?: string | null;
+          uf?: string | null;
           foro_preferencial?: string;
           logo_path?: string | null;
+          bling_contato_id?: number | null;
         },
         {
           tipo?: TipoCliente;
@@ -83,9 +98,56 @@ export interface Database {
           nome_fantasia?: string | null;
           apelido?: string | null;
           cnpj?: string;
-          endereco?: string;
+          endereco?: string | null;
+          numero?: string | null;
+          complemento?: string | null;
+          bairro?: string | null;
+          cep?: string | null;
+          municipio?: string | null;
+          uf?: string | null;
           foro_preferencial?: string;
           logo_path?: string | null;
+          bling_contato_id?: number | null;
+        }
+      >;
+      bling_contatos: TableDef<
+        {
+          id: number;
+          nome: string;
+          cnpj: string;
+          telefone: string | null;
+          total_pedidos_venda: number;
+          tem_parcela_atrasada: boolean;
+          tem_parcela_a_vencer: boolean;
+          total_parcelas: number;
+          parcelas_emitidas: number;
+          parcelas_atrasadas: number;
+          sincronizado_em: string;
+        },
+        {
+          id: number;
+          nome: string;
+          cnpj: string;
+          telefone?: string | null;
+          total_pedidos_venda?: number;
+          tem_parcela_atrasada?: boolean;
+          tem_parcela_a_vencer?: boolean;
+          total_parcelas?: number;
+          parcelas_emitidas?: number;
+          parcelas_atrasadas?: number;
+          sincronizado_em?: string;
+        },
+        {
+          nome?: string;
+          cnpj?: string;
+          telefone?: string | null;
+          total_pedidos_venda?: number;
+          tem_parcela_atrasada?: boolean;
+          tem_parcela_a_vencer?: boolean;
+          total_parcelas?: number;
+          parcelas_emitidas?: number;
+          parcelas_atrasadas?: number;
+          sincronizado_em?: string;
         }
       >;
       signatarios_cliente: TableDef<

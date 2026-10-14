@@ -32,7 +32,7 @@ export default async function NovoPedidoPage() {
     <div className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">Novo pedido</h1>
       <PedidoForm
-        clientes={clientes.map((c) => ({ id: c.id, tipo: c.tipo, razaoSocial: c.razao_social, cnpj: c.cnpj, endereco: c.endereco }))}
+        clientes={clientes.map((c) => ({ id: c.id, tipo: c.tipo, razaoSocial: c.razao_social, cnpj: c.cnpj }))}
         signatariosPorCliente={signatariosPorCliente}
         representantesFooture={representantesFooture.map((r) => ({ id: r.id, nome: r.nome }))}
         usuarios={usuarios.map((u) => ({ id: u.user_id, nome: u.nome }))}

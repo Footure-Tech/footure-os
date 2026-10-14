@@ -14,6 +14,7 @@ import { BlocoFormulario } from "./bloco-formulario";
 import { ResumoPedido } from "./resumo-pedido";
 import { SignatarioListEditor, type SignatarioForm } from "./signatario-list-editor";
 import { PainelAlertas } from "./painel-alertas";
+import { CamposEndereco } from "@/components/clientes/campos-endereco";
 import { salvarPedido, type SalvarPedidoState } from "@/lib/pedidos/serverActions";
 import { gerarAlertas, FORO_DEFAULT } from "@/lib/validacoes/pedido";
 import { normalizePlan, listarPlanosCanonicos } from "@/lib/plans/normalize";
@@ -26,7 +27,6 @@ export interface ClienteOption {
   tipo: "clube" | "agente";
   razaoSocial: string;
   cnpj: string;
-  endereco: string;
 }
 export interface RepresentanteFoutureOption {
   id: string;
@@ -120,6 +120,12 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
     apelido: "",
     cnpj: "",
     endereco: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
+    cep: "",
+    municipio: "",
+    uf: "",
   });
   const [previewLogoNovoCliente, setPreviewLogoNovoCliente] = useState<string | null>(null);
 
@@ -339,10 +345,10 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                   </div>
                 </div>
               )}
-              <div className="flex flex-col gap-2">
-                <Label>Endereço</Label>
-                <Textarea value={novoCliente.endereco} onChange={(e) => setNovoCliente({ ...novoCliente, endereco: e.target.value })} />
-              </div>
+              <CamposEndereco
+                valores={novoCliente}
+                aoAlterar={(campo, valor) => setNovoCliente({ ...novoCliente, [campo]: valor })}
+              />
               <div className="flex flex-col gap-2">
                 <Label>Logo da agência ou escudo do clube</Label>
                 <div className="flex items-center gap-4">
