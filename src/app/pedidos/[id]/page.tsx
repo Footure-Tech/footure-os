@@ -1,43 +1,47 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Building2, Package, Users, FileStack, History, Pencil, Download } from "lucide-react";
+import { MdAttachMoney, MdBlock, MdBusiness, MdDownload, MdEdit, MdGavel, MdHistory, MdInfo, MdReceipt } from "react-icons/md";
 import { createClient } from "@/lib/supabase/server";
 import { exigirPapel } from "@/lib/auth/session";
 import { buscarPedidoDetalhe } from "@/lib/pedidos/consultas";
 import { pedidoEhEditavel } from "@/lib/pedidos/statusEditavel";
-import { Button } from "@/components/ui/button";
+import { acaoPendente } from "@/lib/pedidos/acaoPendente";
+import { montarEtapasNegocio } from "@/lib/pedidos/etapasNegocio";
 import { urlLogoCliente } from "@/lib/clientes/consultas";
-import { formatarEnderecoCliente } from "@/lib/clientes/formatacao";
-import { LogoCliente } from "@/components/clientes/logo-cliente";
+import { formatarCnpj, formatarEnderecoCliente } from "@/lib/clientes/formatacao";
 import { gerarAlertas } from "@/lib/validacoes/pedido";
 import { buscarPlanoPorKey } from "@/lib/plans/normalize";
-import { ROTULO_MEIO_PAGAMENTO } from "@/lib/contratos/meioPagamento";
 import { nomeArquivoContrato } from "@/lib/contratos/nomeArquivo";
-import { RotuloStatus, ROTULO_STATUS } from "@/components/rotulo-status";
+import { statusPedidoVisual } from "@/lib/status/visual";
+import { formatarDataCurta, formatarMoeda, rotuloPagamento } from "@/lib/formatacao";
+import { Button } from "@/components/ui/button";
+import { BotaoVoltar } from "@/components/shell/page-header";
+import { Avatar } from "@/components/ds/avatar";
+import { BadgeLinha } from "@/components/ds/badge-tom";
+import { StatusPill } from "@/components/ds/status-pill";
+import { Stepper } from "@/components/ds/stepper";
+import { EstadoVazio } from "@/components/ds/estado-vazio";
+import { CardModulo, LinhaChaveValor } from "@/components/negocio/card-modulo";
+import { ListaSignatarios, type SignatarioExibido, type SituacaoSignatario } from "@/components/negocio/lista-signatarios";
 import { PainelAlertas } from "@/components/pedido/painel-alertas";
-import { StepperPedido } from "@/components/pedido/stepper-pedido";
-import { ProximaAcao } from "@/components/pedido/proxima-acao";
+import { AcoesPedido } from "@/components/pedido/acoes-pedido";
 import { CancelarPedidoDialog } from "@/components/pedido/cancelar-pedido-dialog";
-import { BlocoFormulario } from "@/components/pedido/bloco-formulario";
-import { InfoRow } from "@/components/pedido/info-row";
-import { ListaPessoas } from "@/components/pedido/lista-pessoas";
 import { TimelineTransicoes, type EventoTimeline } from "@/components/pedido/timeline-transicoes";
+import { ROTULO_STATUS } from "@/components/rotulo-status";
 
-function formatarMoeda(v: number | null) {
-  if (v == null) return "—";
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-}
-function formatarData(iso: string) {
-  return new Date(iso).toLocaleString("pt-BR");
-}
-/** vigencia_inicio/fim vêm como "aaaa-mm-dd" (coluna `date`) — divide a string em vez de
- * usar Date pra não sofrer o deslocamento de fuso horário do parse UTC-meia-noite. */
-function formatarDataBr(iso: string) {
-  const [ano, mes, dia] = iso.split("-");
-  return `${dia}/${mes}/${ano}`;
+const VOLTAR_POR_PAPEL = { vendedor: "/vendedor", admin: "/admin", juridico: "/juridico" } as const;
+const ROTULO_PERFIL_CLIENTE = { clube: "Clube", agente: "Agente" } as const;
+const MODELO_CONTRATO = { clube: "Footlink Clube", agente: "Footlink Agente" } as const;
+
+function papelSignatario(lado: "cliente" | "footure", representante: boolean) {
+  if (lado === "cliente") return representante ? "Contratante · representante legal" : "Testemunha · contratante";
+  return representante ? "Footure · representante" : "Testemunha · Footure";
 }
 
-export default async function DetalhePedidoPage({ params }: PageProps<"/pedidos/[id]">) {
+// Tela "Negócio" do handoff: visão ponta a ponta de um pedido — cabeçalho
+// com a ação da próxima etapa, stepper do fluxo e os cards de cliente,
+// pedido, contrato (com status por signatário na Clicksign) e parcelas.
+export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">) {
   const { id } = await params;
   const sessao = await exigirPapel("vendedor", "juridico", "admin");
   const supabase = await createClient();
@@ -47,7 +51,9 @@ export default async function DetalhePedidoPage({ params }: PageProps<"/pedidos/
   const { pedido, transicoes, contratos, signatarios, representantesFooture, testemunhasFooture } = detalhe;
 
   const cliente = pedido.clientes as unknown as {
+    id: string;
     razao_social: string;
+    nome_fantasia: string | null;
     cnpj: string;
     endereco: string | null;
     numero: string | null;
@@ -58,14 +64,15 @@ export default async function DetalhePedidoPage({ params }: PageProps<"/pedidos/
     uf: string | null;
     endereco_legado: string | null;
     tipo: "clube" | "agente";
-    foro_preferencial: string;
     logo_path: string | null;
   } | null;
-  const logoClienteUrl = urlLogoCliente(supabase, cliente?.logo_path ?? null);
+  const nomeCliente = cliente?.nome_fantasia || cliente?.razao_social || "Pedido";
   const vendedorNome = (pedido.profiles as unknown as { nome: string } | null)?.nome;
   const sdrNome = (pedido.sdr as unknown as { nome: string } | null)?.nome;
   const closerNome = (pedido.closer as unknown as { nome: string } | null)?.nome;
   const planoLabel = buscarPlanoPorKey(pedido.plano)?.canonical ?? pedido.plano;
+  const produtoLabel = pedido.produtos.includes("api") ? "Footlink + API" : "Footlink";
+  const status = statusPedidoVisual(pedido.status, pedido.geracao_contrato_erro);
 
   const representantesLegais = signatarios.filter((s) => s.tipo === "representante_legal");
   const testemunhasCliente = signatarios.filter((s) => s.tipo === "testemunha");
@@ -76,6 +83,7 @@ export default async function DetalhePedidoPage({ params }: PageProps<"/pedidos/
     pedido.status !== "concluido" &&
     pedido.status !== "cancelado" &&
     (sessao.papel === "admin" || sessao.papel === "juridico" || (sessao.papel === "vendedor" && donoDoRascunho));
+  const proxima = acaoPendente(pedido.status, sessao.papel, donoDoRascunho);
 
   const alertas = gerarAlertas({
     valorMensal: pedido.valor_mensal,
@@ -93,10 +101,7 @@ export default async function DetalhePedidoPage({ params }: PageProps<"/pedidos/
   const contratosComUrl = await Promise.all(
     contratos.map(async (c) => {
       const nomeDownload = nomeArquivoContrato(cliente?.razao_social ?? "Cliente", c.gerado_em, c.versao);
-      const { data } = await supabase.storage
-        .from("contratos")
-        .createSignedUrl(c.arquivo_path, 3600, { download: nomeDownload });
-
+      const { data } = await supabase.storage.from("contratos").createSignedUrl(c.arquivo_path, 3600, { download: nomeDownload });
       let urlAssinado: string | null = null;
       if (c.arquivo_assinado_path) {
         const { data: assinado } = await supabase.storage
@@ -104,11 +109,58 @@ export default async function DetalhePedidoPage({ params }: PageProps<"/pedidos/
           .createSignedUrl(c.arquivo_assinado_path, 3600, { download: nomeDownload.replace(/\.docx$/, ".pdf") });
         urlAssinado = assinado?.signedUrl ?? null;
       }
-
       return { ...c, url: data?.signedUrl ?? null, urlAssinado };
     }),
   );
-  const contratoAssinado = contratosComUrl.some((c) => c.urlAssinado);
+  const contratoAtual = contratosComUrl[0] ?? null;
+
+  // Status por signatário (0027). Sem linhas = contrato ainda não enviado, ou
+  // enviado antes da migration: monta a lista a partir do pedido e usa o
+  // status geral (todos aguardando / todos assinados).
+  const { data: linhasClicksign } = contratoAtual
+    ? await supabase.from("contrato_signatarios").select("*").eq("contrato_id", contratoAtual.id).order("ordem")
+    : { data: null };
+  const situacaoGeral: SituacaoSignatario =
+    pedido.status === "assinado" || pedido.status === "concluido"
+      ? "assinado"
+      : pedido.status === "enviado_para_assinatura"
+        ? "pendente"
+        : "nao_enviado";
+  const signatariosExibidos: SignatarioExibido[] =
+    linhasClicksign && linhasClicksign.length > 0
+      ? linhasClicksign.map((s) => ({
+          nome: s.nome,
+          email: s.email,
+          papel: papelSignatario(s.lado, s.papel === "legal_representative"),
+          situacao: s.status,
+          assinadoEm: s.assinado_em,
+        }))
+      : [
+          ...representantesLegais.map((s) => {
+            const sc = s.signatarios_cliente as unknown as { nome_completo: string; email: string } | null;
+            return { nome: sc?.nome_completo ?? "—", email: sc?.email, papel: papelSignatario("cliente", true), situacao: situacaoGeral };
+          }),
+          ...testemunhasCliente.map((s) => {
+            const sc = s.signatarios_cliente as unknown as { nome_completo: string; email: string } | null;
+            return { nome: sc?.nome_completo ?? "—", email: sc?.email, papel: papelSignatario("cliente", false), situacao: situacaoGeral };
+          }),
+          ...representantesFooture.map((r) => {
+            const rf = r.representantes_footure as unknown as { nome: string; email: string | null } | null;
+            return { nome: rf?.nome ?? "—", email: rf?.email, papel: papelSignatario("footure", true), situacao: situacaoGeral };
+          }),
+          ...testemunhasFooture.map((t) => ({ nome: t.nome_completo, email: t.email, papel: papelSignatario("footure", false), situacao: situacaoGeral })),
+        ];
+  const temStatusPorSignatario = !!linhasClicksign && linhasClicksign.length > 0;
+  const assinados = signatariosExibidos.filter((s) => s.situacao === "assinado").length;
+
+  const { etapas, atual, canceladoEm } = montarEtapasNegocio({
+    status: pedido.status,
+    criadoEm: pedido.criado_em,
+    transicoes,
+    versaoContrato: contratoAtual?.versao ?? null,
+    geracaoContratoErro: pedido.geracao_contrato_erro,
+    assinaturas: temStatusPorSignatario ? { assinados, total: signatariosExibidos.length } : null,
+  });
 
   // "criado" não vira uma linha em `transicoes` (o pedido nasce em rascunho sem RPC) — sintetiza
   // esse evento a partir de pedidos.vendedor_id/criado_em pra não perder quem abriu o pedido no histórico.
@@ -123,148 +175,205 @@ export default async function DetalhePedidoPage({ params }: PageProps<"/pedidos/
     })),
   ].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
 
+  const assinado = pedido.status === "assinado" || pedido.status === "concluido";
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">{cliente?.razao_social ?? "Pedido"}</h1>
-          <p className="text-sm text-muted-foreground capitalize">
-            {pedido.perfil} · {planoLabel} · vendedor: {vendedorNome ?? "—"}
-          </p>
+    <div className="flex max-w-[1400px] flex-col gap-6">
+      {/* Cabeçalho */}
+      <div className="flex flex-wrap items-center gap-4">
+        <BotaoVoltar href={VOLTAR_POR_PAPEL[sessao.papel]} />
+        <Avatar nome={nomeCliente} tamanho={52} src={urlLogoCliente(supabase, cliente?.logo_path ?? null)} className="border border-gray5 bg-surface" />
+        <div className="flex min-w-[240px] flex-1 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-[28px] leading-tight font-bold tracking-[-0.01em] text-darkPurple1">{nomeCliente}</h1>
+            <BadgeLinha />
+            <StatusPill tom={status.tom}>{status.rotulo}</StatusPill>
+          </div>
+          <span className="text-sm text-gray">
+            {ROTULO_PERFIL_CLIENTE[pedido.perfil]} • {planoLabel} • {formatarMoeda(pedido.valor_total)}
+          </span>
         </div>
-        <div className="flex items-center gap-3">
-          <RotuloStatus status={pedido.status} />
+        <div className="flex flex-wrap items-center gap-2.5">
           {podeEditar && (
-            <Button variant="secondary" size="sm" nativeButton={false} render={<Link href={`/vendedor/${pedido.id}/editar`} />}>
-              <Pencil className="size-4" />
-              Editar
+            <Button variant="white" nativeButton={false} render={<Link href={`/vendedor/${pedido.id}/editar`} />}>
+              <MdEdit className="size-4" />
+              Editar dados
             </Button>
           )}
           {podeCancelar && <CancelarPedidoDialog pedidoId={pedido.id} />}
+          <AcoesPedido pedidoId={pedido.id} status={pedido.status} papel={sessao.papel} donoDoRascunho={donoDoRascunho} />
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-5">
-        <StepperPedido status={pedido.status} />
+      {/* Stepper */}
+      <div className="flex flex-col gap-4 rounded-xl border border-gray5 bg-surface p-6 shadow-card">
+        {canceladoEm !== null && (
+          <div className="flex items-center gap-2 text-sm font-bold text-red">
+            <MdBlock className="size-5" />
+            Pedido cancelado — o fluxo parou na etapa destacada.
+          </div>
+        )}
+        <Stepper etapas={etapas} atual={atual} className={canceladoEm !== null ? "opacity-60" : undefined} />
+        {proxima && (
+          <div className="flex items-start gap-2.5 rounded-lg bg-lightPurple4 px-4 py-3 text-sm">
+            <MdInfo className="mt-0.5 size-4 shrink-0 text-purple-text" />
+            <span className="text-darkPurple1">
+              <strong className="font-bold">{proxima.titulo}.</strong> {proxima.descricao}
+            </span>
+          </div>
+        )}
       </div>
-
-      <ProximaAcao pedidoId={pedido.id} status={pedido.status} papel={sessao.papel} donoDoRascunho={donoDoRascunho} />
 
       <PainelAlertas alertas={alertas} />
       {pedido.geracao_contrato_erro && (
-        <p className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+        <p className="rounded-xl border border-red/30 bg-dangerBg px-5 py-4 text-sm text-red">
           Última tentativa de geração falhou: {pedido.geracao_contrato_erro}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <BlocoFormulario numero={1} titulo="Cliente" icon={Building2}>
-          <div className="flex flex-col gap-4">
-            <LogoCliente url={logoClienteUrl} nome={cliente?.razao_social ?? "Cliente"} tamanho="md" />
-            <div className="flex flex-col">
-              <InfoRow label="Razão social" value={cliente?.razao_social} />
-              <InfoRow label="CNPJ" value={cliente?.cnpj} />
-              <InfoRow label="Endereço" value={cliente ? formatarEnderecoCliente(cliente) : undefined} longo />
-            </div>
-          </div>
-        </BlocoFormulario>
-
-        <BlocoFormulario numero={2} titulo="Produto e valores" icon={Package}>
+      {/* Cards */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,360px),1fr))] items-start gap-5">
+        <CardModulo
+          icone={MdBusiness}
+          cor="bg-iconBlue"
+          titulo="Cliente"
+          extra={
+            cliente && sessao.papel !== "juridico" ? (
+              <Link href={`/clientes/${cliente.id}`} className="text-sm font-semibold text-purple-text hover:underline">
+                Ver cliente
+              </Link>
+            ) : undefined
+          }
+        >
           <div className="flex flex-col">
-            <InfoRow label="Produtos" value={pedido.produtos.includes("api") ? "Footlink + API" : "Footlink"} />
-            <InfoRow
-              label="Licenças"
-              value={`${pedido.licencas_pagas} pagas${pedido.licencas_gratuitas > 0 ? ` + ${pedido.licencas_gratuitas} gratuita(s)` : ""}`}
+            <LinhaChaveValor rotulo="Razão social" valor={cliente?.razao_social} />
+            <LinhaChaveValor rotulo="CNPJ" valor={cliente ? formatarCnpj(cliente.cnpj) : null} />
+            <LinhaChaveValor rotulo="Perfil" valor={ROTULO_PERFIL_CLIENTE[pedido.perfil]} />
+            <LinhaChaveValor rotulo="Endereço" valor={cliente ? formatarEnderecoCliente(cliente) : null} longo />
+            <LinhaChaveValor rotulo="Vendedor" valor={vendedorNome} />
+            <LinhaChaveValor rotulo="SDR" valor={sdrNome} />
+            <LinhaChaveValor rotulo="Closer" valor={closerNome} />
+          </div>
+        </CardModulo>
+
+        <CardModulo icone={MdReceipt} cor="bg-iconGreen" titulo="Pedido de venda" extra={<StatusPill tom={status.tom}>{status.rotulo}</StatusPill>}>
+          <div className="flex flex-col">
+            {/* Nº do pedido vem do Bling (decisão de produto); o envio ao Bling ainda é stub. */}
+            <LinhaChaveValor rotulo="Número" valor={<span title="Atribuído pelo Bling quando o pedido for enviado">—</span>} />
+            <LinhaChaveValor rotulo="Emissão" valor={formatarDataCurta(pedido.criado_em)} />
+            <LinhaChaveValor rotulo="Plano" valor={`${produtoLabel} · ${planoLabel}`} />
+            <LinhaChaveValor
+              rotulo="Licenças"
+              valor={`${pedido.licencas_pagas} pagas${pedido.licencas_gratuitas > 0 ? ` + ${pedido.licencas_gratuitas} gratuita(s)` : ""}`}
             />
-            <InfoRow
-              label="Forma de pagamento"
-              value={`${pedido.forma_pagamento === "avista" ? "À vista" : `Parcelado (${pedido.numero_parcelas}x)`} · ${ROTULO_MEIO_PAGAMENTO[pedido.meio_pagamento]}`}
+            <LinhaChaveValor rotulo="Pagamento" valor={rotuloPagamento(pedido.forma_pagamento, pedido.meio_pagamento, pedido.numero_parcelas)} />
+            <LinhaChaveValor
+              rotulo="Parcela"
+              valor={pedido.forma_pagamento === "parcelado" ? `${pedido.numero_parcelas}x de ${formatarMoeda(pedido.valor_mensal)}` : formatarMoeda(pedido.valor_mensal)}
             />
-            <InfoRow label="Valor da parcela" value={formatarMoeda(pedido.valor_mensal)} />
-            <InfoRow label="Valor total" value={formatarMoeda(pedido.valor_total)} />
-            <InfoRow label="SDR" value={sdrNome} />
-            <InfoRow label="Closer" value={closerNome} />
+            <LinhaChaveValor rotulo="Valor total" valor={formatarMoeda(pedido.valor_total)} />
             {pedido.produtos.includes("api") && (
-              <InfoRow
-                label="API / Software"
-                value={`${formatarMoeda(pedido.valor_mensal_api)} / ${formatarMoeda(pedido.valor_mensal_software)}`}
-              />
+              <LinhaChaveValor rotulo="API / Software" valor={`${formatarMoeda(pedido.valor_mensal_api)} / ${formatarMoeda(pedido.valor_mensal_software)}`} />
             )}
-            <InfoRow label="Vigência" value={`${formatarDataBr(pedido.vigencia_inicio)} a ${formatarDataBr(pedido.vigencia_fim)}`} />
-            <InfoRow label="Foro" value={pedido.foro} />
-            <InfoRow label="Multa" value={pedido.multa_texto} longo />
-            {pedido.condicao_especial && <InfoRow label="Condição especial" value={pedido.condicao_especial} longo />}
+            {!!pedido.valor_licenca_adicional && <LinhaChaveValor rotulo="Licença adicional" valor={formatarMoeda(pedido.valor_licenca_adicional)} />}
+            <LinhaChaveValor rotulo="Vigência" valor={`${formatarDataCurta(pedido.vigencia_inicio)} a ${formatarDataCurta(pedido.vigencia_fim)}`} />
+            <LinhaChaveValor rotulo="Foro" valor={pedido.foro} />
+            <LinhaChaveValor rotulo="Multa" valor={pedido.multa_texto} longo />
+            {pedido.condicao_especial && <LinhaChaveValor rotulo="Condição especial" valor={pedido.condicao_especial} longo />}
           </div>
-        </BlocoFormulario>
+        </CardModulo>
 
-        <BlocoFormulario numero={3} titulo="Signatários" icon={Users}>
-          <div className="flex flex-col gap-4">
-            <ListaPessoas
-              titulo="Representantes legais do cliente"
-              pessoas={representantesLegais.map((s) => {
-                const sc = s.signatarios_cliente as unknown as { nome_completo: string; email: string; cpf: string } | null;
-                return { nome: sc?.nome_completo ?? "—", email: sc?.email, cpf: sc?.cpf };
-              })}
+        <CardModulo
+          icone={MdGavel}
+          cor="bg-iconPurple"
+          titulo="Contrato"
+          extra={contratoAtual ? <span className="text-sm font-semibold text-gray3">v{contratoAtual.versao}</span> : undefined}
+        >
+          {!contratoAtual ? (
+            <EstadoVazio
+              compacto
+              icone={MdGavel}
+              titulo="Contrato ainda não gerado"
+              descricao="O contrato é gerado automaticamente do modelo quando a diretoria aprova o pedido."
             />
-            <ListaPessoas
-              titulo="Testemunhas do cliente"
-              pessoas={testemunhasCliente.map((s) => {
-                const sc = s.signatarios_cliente as unknown as { nome_completo: string; email: string; cpf: string } | null;
-                return { nome: sc?.nome_completo ?? "—", email: sc?.email, cpf: sc?.cpf };
-              })}
-              vazio="Nenhuma cadastrada."
-            />
-            <ListaPessoas
-              titulo="Representante(s) da Footure"
-              pessoas={representantesFooture.map((r) => {
-                const rf = r.representantes_footure as unknown as { nome: string; email: string | null; cpf: string | null } | null;
-                return { nome: rf?.nome ?? "—", email: rf?.email, cpf: rf?.cpf };
-              })}
-              vazio="Nenhum selecionado."
-            />
-            <ListaPessoas
-              titulo="Testemunhas da Footure"
-              pessoas={testemunhasFooture.map((t) => ({ nome: t.nome_completo, email: t.email, cpf: t.cpf }))}
-              vazio="Nenhuma cadastrada."
-            />
-          </div>
-        </BlocoFormulario>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col">
+                <LinhaChaveValor rotulo="Modelo" valor={MODELO_CONTRATO[pedido.perfil]} />
+                <LinhaChaveValor rotulo="Gerado em" valor={formatarDataCurta(contratoAtual.gerado_em)} />
+              </div>
 
-        <BlocoFormulario numero={4} titulo={contratoAssinado ? "Contrato assinado" : "Versões do contrato"} icon={FileStack}>
-          <div className="flex flex-col gap-2 text-sm">
-            {contratosComUrl.length === 0 && <p className="text-muted-foreground">Nenhum contrato gerado ainda.</p>}
-            {contratosComUrl.map((c) => (
-              <div key={c.id} className="flex items-center justify-between border-b border-border pb-2 last:border-0">
-                <div>
-                  <p>
-                    Versão {c.versao} · {formatarData(c.gerado_em)}
-                  </p>
-                  {c.motivo_versao && <p className="text-xs text-muted-foreground">{c.motivo_versao}</p>}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Assinaturas · Clicksign</span>
+                  <span className="text-xs font-semibold text-gray2">
+                    {assinados} de {signatariosExibidos.length}
+                  </span>
                 </div>
-                {/* Depois de assinado, só o PDF assinado fica disponível — o .docx
-                    original deixa de ser o documento válido. */}
-                {c.urlAssinado ? (
-                  <Button variant="secondary" size="sm" nativeButton={false} render={<a href={c.urlAssinado} target="_blank" rel="noreferrer" />}>
-                    <Download className="size-4" />
-                    Baixar PDF assinado
-                  </Button>
-                ) : (
-                  c.url && (
-                    <Button variant="secondary" size="sm" nativeButton={false} render={<a href={c.url} target="_blank" rel="noreferrer" />}>
-                      <Download className="size-4" />
-                      Baixar
-                    </Button>
-                  )
+                <ListaSignatarios signatarios={signatariosExibidos} />
+                {!temStatusPorSignatario && pedido.status === "enviado_para_assinatura" && (
+                  <p className="text-xs text-gray3">Enviado antes do acompanhamento individual — o status por pessoa não está disponível para este envio.</p>
                 )}
               </div>
-            ))}
-          </div>
-        </BlocoFormulario>
+
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">
+                  {contratosComUrl.some((c) => c.urlAssinado) ? "Documento assinado" : "Versões"}
+                </span>
+                {contratosComUrl.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-3 border-b border-gray5 pb-2 last:border-0 last:pb-0">
+                    <div className="flex min-w-0 flex-col">
+                      <span className="text-sm font-semibold text-darkPurple1">
+                        Versão {c.versao} · {formatarDataCurta(c.gerado_em)}
+                      </span>
+                      {c.motivo_versao && <span className="truncate text-xs text-gray3">{c.motivo_versao}</span>}
+                    </div>
+                    {/* Depois de assinado, só o PDF assinado fica disponível — o .docx original deixa de ser o documento válido. */}
+                    {c.urlAssinado ? (
+                      <Button variant="secondary" size="sm" nativeButton={false} render={<a href={c.urlAssinado} target="_blank" rel="noreferrer" />}>
+                        <MdDownload className="size-4" />
+                        PDF assinado
+                      </Button>
+                    ) : (
+                      c.url && (
+                        <Button variant="white" size="sm" nativeButton={false} render={<a href={c.url} target="_blank" rel="noreferrer" />}>
+                          <MdDownload className="size-4" />
+                          Baixar
+                        </Button>
+                      )
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardModulo>
+
+        <CardModulo icone={MdAttachMoney} cor="bg-iconYellow" titulo="Parcelas">
+          {/* Ainda não há integração pedido → Bling (bling_pedido_id nunca é
+              preenchido). Pedidos já assinados tiveram as cobranças criadas
+              direto no Bling, fora do sistema. */}
+          {assinado ? (
+            <EstadoVazio
+              compacto
+              icone={MdAttachMoney}
+              titulo="Parcelas geradas fora do sistema"
+              descricao="As cobranças deste pedido foram criadas diretamente no Bling, antes da integração do pedido com o Bling."
+            />
+          ) : (
+            <EstadoVazio
+              compacto
+              icone={MdAttachMoney}
+              titulo="Parcelas não geradas"
+              descricao="As cobranças serão criadas no Bling após a assinatura do contrato."
+            />
+          )}
+        </CardModulo>
       </div>
 
-      <BlocoFormulario numero={5} titulo="Linha do tempo" icon={History}>
+      <CardModulo icone={MdHistory} cor="bg-iconGray" titulo="Linha do tempo">
         <TimelineTransicoes eventos={eventosTimeline} />
-      </BlocoFormulario>
+      </CardModulo>
     </div>
   );
 }

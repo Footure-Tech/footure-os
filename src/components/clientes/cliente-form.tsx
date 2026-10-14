@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import Link from "next/link";
-import { Building2, ImagePlus } from "lucide-react";
+import { ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -117,7 +117,7 @@ export function ClienteForm({
     <form action={formAction} className="flex max-w-2xl flex-col gap-6">
       <input type="hidden" name="payload" value={JSON.stringify(payload)} />
 
-      <BlocoFormulario numero={1} titulo="Dados do cliente" icon={Building2}>
+      <BlocoFormulario titulo="Dados do cliente">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
             <Label>Contato no Bling</Label>
@@ -199,7 +199,7 @@ export function ClienteForm({
         </div>
       </BlocoFormulario>
 
-      <BlocoFormulario numero={2} titulo="Logo" descricao="Logo da agência ou escudo do clube." icon={ImagePlus}>
+      <BlocoFormulario titulo="Logo" descricao="Logo da agência ou escudo do clube.">
         <div className="flex items-center gap-4">
           {previewImagem ? (
             // eslint-disable-next-line @next/next/no-img-element -- prévia local (blob:) ou URL pública do Storage, sem otimização necessária

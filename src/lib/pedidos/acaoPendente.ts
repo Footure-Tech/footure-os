@@ -36,7 +36,7 @@ export function acaoPendente(status: StatusPedido, papel: PapelUsuario, donoDoRa
   if (status === "enviado_para_assinatura" && (papel === "juridico" || papel === "admin")) {
     return {
       titulo: "Aguardando assinatura",
-      descricao: "Cancele o processo se precisar reabrir o pedido para edição — o resto do fluxo (Fase 3) ainda é manual.",
+      descricao: "Acompanhe quem já assinou no card do contrato. Cancele o processo se precisar reabrir o pedido para edição.",
     };
   }
   return null;

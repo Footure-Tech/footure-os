@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Ban } from "lucide-react";
+import { MdBlock } from "react-icons/md";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,8 +56,8 @@ export function CancelarPedidoDialog({ pedidoId }: { pedidoId: string }) {
 
   return (
     <Dialog open={aberto} onOpenChange={aoFechar}>
-      <DialogTrigger render={<Button type="button" variant="destructive" size="sm" />}>
-        <Ban className="size-4" />
+      <DialogTrigger render={<Button type="button" variant="white" className="text-red" />}>
+        <MdBlock className="size-4" />
         Cancelar
       </DialogTrigger>
       <DialogContent>
@@ -89,7 +89,7 @@ export function CancelarPedidoDialog({ pedidoId }: { pedidoId: string }) {
           </div>
         </div>
         <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>Voltar</DialogClose>
+          <DialogClose render={<Button type="button" variant="white" />}>Voltar</DialogClose>
           <Button type="button" variant="destructive" disabled={pendente || !podeConfirmar} onClick={confirmar}>
             {pendente ? "Cancelando…" : "Confirmar cancelamento"}
           </Button>

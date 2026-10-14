@@ -47,47 +47,48 @@ function useAcao() {
 
 function ComComentario({
   rotuloBotao,
+  titulo,
+  descricao,
   placeholder,
   variant,
   onConfirmar,
 }: {
   rotuloBotao: string;
+  titulo: string;
+  descricao: string;
   placeholder: string;
-  variant?: "destructive" | "outline";
+  variant?: "destructive" | "white";
   onConfirmar: (comentario: string) => void;
 }) {
   const [aberto, setAberto] = useState(false);
   const [comentario, setComentario] = useState("");
 
-  if (!aberto) {
-    return (
-      <Button type="button" variant={variant} onClick={() => setAberto(true)}>
-        {rotuloBotao}
-      </Button>
-    );
-  }
   return (
-    <div className="flex flex-col gap-2 rounded-md border p-3">
-      <Textarea placeholder={placeholder} value={comentario} onChange={(e) => setComentario(e.target.value)} rows={2} />
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={() => setAberto(false)}>
-          Cancelar
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={variant}
-          disabled={!comentario.trim()}
-          onClick={() => {
-            onConfirmar(comentario);
-            setAberto(false);
-            setComentario("");
-          }}
-        >
-          Confirmar
-        </Button>
-      </div>
-    </div>
+    <Dialog open={aberto} onOpenChange={setAberto}>
+      <DialogTrigger render={<Button type="button" variant={variant} />}>{rotuloBotao}</DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{titulo}</DialogTitle>
+          <DialogDescription>{descricao}</DialogDescription>
+        </DialogHeader>
+        <Textarea placeholder={placeholder} value={comentario} onChange={(e) => setComentario(e.target.value)} rows={3} />
+        <DialogFooter>
+          <DialogClose render={<Button type="button" variant="white" />}>Voltar</DialogClose>
+          <Button
+            type="button"
+            variant={variant}
+            disabled={!comentario.trim()}
+            onClick={() => {
+              onConfirmar(comentario);
+              setAberto(false);
+              setComentario("");
+            }}
+          >
+            Confirmar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -106,7 +107,7 @@ export function AcoesPedido({
 
   if (status === "rascunho" && donoDoRascunho) {
     return (
-      <Button disabled={pendente} onClick={() => rodar(() => enviarParaAprovacaoAction(pedidoId), "Enviado para aprovação.")}>
+      <Button disabled={pendente} onClick={() => rodar(() => enviarParaAprovacaoAction(pedidoId), "Pedido enviado para aprovação")}>
         Enviar para aprovação
       </Button>
     );
@@ -115,14 +116,16 @@ export function AcoesPedido({
   if (status === "em_aprovacao" && papel === "admin") {
     return (
       <div className="flex flex-wrap gap-2">
-        <Button disabled={pendente} onClick={() => rodar(() => aprovarPedidoAction(pedidoId), "Pedido aprovado — gerando contrato…")}>
+        <Button disabled={pendente} onClick={() => rodar(() => aprovarPedidoAction(pedidoId), "Pedido aprovado · contrato em geração")}>
           Aprovar
         </Button>
         <ComComentario
           rotuloBotao="Reprovar"
+          titulo="Reprovar pedido"
+          descricao="O pedido volta para rascunho e o vendedor vê o motivo no histórico."
           placeholder="Motivo da reprovação (obrigatório)"
           variant="destructive"
-          onConfirmar={(c) => rodar(() => reprovarPedidoAction(pedidoId, c), "Pedido reprovado.")}
+          onConfirmar={(c) => rodar(() => reprovarPedidoAction(pedidoId, c), "Pedido reprovado")}
         />
       </div>
     );
@@ -130,7 +133,7 @@ export function AcoesPedido({
 
   if (status === "aprovado" && (papel === "admin" || papel === "juridico")) {
     return (
-      <Button disabled={pendente} onClick={() => rodar(() => tentarGerarNovamenteAction(pedidoId), "Tentando gerar o contrato novamente…")}>
+      <Button disabled={pendente} onClick={() => rodar(() => tentarGerarNovamenteAction(pedidoId), "Gerando o contrato novamente")}>
         Tentar gerar contrato novamente
       </Button>
     );
@@ -141,7 +144,7 @@ export function AcoesPedido({
       <div className="flex flex-wrap gap-2">
         <Button
           disabled={pendente}
-          onClick={() => rodar(() => liberarParaAssinaturaAction(pedidoId), "Liberado para assinatura.")}
+          onClick={() => rodar(() => liberarParaAssinaturaAction(pedidoId), "Contrato liberado para assinatura")}
         >
           Liberar para assinatura
         </Button>
@@ -156,7 +159,7 @@ export function AcoesPedido({
       <div className="flex flex-wrap gap-2">
         <Button
           disabled={pendente}
-          onClick={() => rodar(() => enviarParaAssinaturaAction(pedidoId), "Enviado para assinatura via Clicksign.")}
+          onClick={() => rodar(() => enviarParaAssinaturaAction(pedidoId), "Contrato enviado para assinatura via Clicksign")}
         >
           Enviar para assinatura
         </Button>
@@ -182,12 +185,12 @@ function CancelarAssinaturaDialog({ pedidoId }: { pedidoId: string }) {
       await cancelarAssinaturaAction(pedidoId, comentario || undefined);
       setAberto(false);
       setComentario("");
-    }, "Processo de assinatura cancelado — pedido voltou para revisão jurídica.");
+    }, "Assinatura cancelada · contrato voltou para validação");
   }
 
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
-      <DialogTrigger render={<Button type="button" variant="outline" />}>Cancelar assinatura</DialogTrigger>
+      <DialogTrigger render={<Button type="button" variant="white" />}>Cancelar assinatura</DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Cancelar processo de assinatura</DialogTitle>
@@ -202,7 +205,7 @@ function CancelarAssinaturaDialog({ pedidoId }: { pedidoId: string }) {
           rows={3}
         />
         <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>Voltar</DialogClose>
+          <DialogClose render={<Button type="button" variant="white" />}>Voltar</DialogClose>
           <Button type="button" variant="destructive" disabled={pendente} onClick={confirmar}>
             {pendente ? "Cancelando…" : "Confirmar cancelamento"}
           </Button>
@@ -222,12 +225,12 @@ function RegenerarContratoDialog({ pedidoId }: { pedidoId: string }) {
       await rejeitarContratoAction(pedidoId, comentario);
       setAberto(false);
       setComentario("");
-    }, "Contrato marcado para regeneração.");
+    }, "Contrato em regeneração");
   }
 
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
-      <DialogTrigger render={<Button type="button" variant="outline" />}>Regenerar</DialogTrigger>
+      <DialogTrigger render={<Button type="button" variant="white" />}>Regenerar</DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Regenerar contrato</DialogTitle>
@@ -242,7 +245,7 @@ function RegenerarContratoDialog({ pedidoId }: { pedidoId: string }) {
           rows={3}
         />
         <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
+          <DialogClose render={<Button type="button" variant="white" />}>Cancelar</DialogClose>
           <Button type="button" disabled={pendente || !comentario.trim()} onClick={confirmar}>
             {pendente ? "Enviando…" : "Confirmar"}
           </Button>
@@ -258,7 +261,7 @@ function SubirNovaVersaoDialog({ pedidoId }: { pedidoId: string }) {
 
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
-      <DialogTrigger render={<Button type="button" variant="outline" />}>Subir nova versão</DialogTrigger>
+      <DialogTrigger render={<Button type="button" variant="white" />}>Subir nova versão</DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Subir nova versão do contrato</DialogTitle>
