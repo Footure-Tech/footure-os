@@ -36,13 +36,24 @@ export function CardModulo({
 
 /** Linha chave/valor: rótulo micro à esquerda, valor 600 à direita, divisor --gray5.
  * `longo` quebra o valor (texto corrido) abaixo do rótulo. */
-export function LinhaChaveValor({ rotulo, valor, longo = false }: { rotulo: string; valor: ReactNode; longo?: boolean }) {
+export function LinhaChaveValor({
+  rotulo,
+  valor,
+  longo = false,
+  className,
+}: {
+  rotulo: string;
+  valor: ReactNode;
+  longo?: boolean;
+  className?: string;
+}) {
   const vazio = valor === null || valor === undefined || valor === "";
   return (
     <div
       className={cn(
         "flex gap-4 border-b border-gray5 py-2.5 last:border-0",
         longo ? "flex-col gap-1" : "items-baseline justify-between",
+        className,
       )}
     >
       <span className="shrink-0 text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">{rotulo}</span>

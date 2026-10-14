@@ -234,170 +234,173 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
         </p>
       )}
 
-      {/* Cards */}
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,360px),1fr))] items-start gap-5">
-        <CardModulo
-          icone={MdBusiness}
-          cor="bg-iconBlue"
-          titulo="Cliente"
-          extra={
-            cliente && sessao.papel !== "juridico" ? (
-              <Link href={`/clientes/${cliente.id}`} className="text-sm font-semibold text-purple-text hover:underline">
-                Ver cliente
-              </Link>
-            ) : undefined
-          }
-        >
-          <div className="flex flex-col">
-            <LinhaChaveValor rotulo="Razão social" valor={cliente?.razao_social} />
-            <LinhaChaveValor rotulo="CNPJ" valor={cliente ? formatarCnpj(cliente.cnpj) : null} />
-            <LinhaChaveValor rotulo="Perfil" valor={ROTULO_PERFIL_CLIENTE[pedido.perfil]} />
-            <LinhaChaveValor rotulo="Endereço" valor={cliente ? formatarEnderecoCliente(cliente) : null} longo />
-            <LinhaChaveValor rotulo="Vendedor" valor={vendedorNome} />
-            <LinhaChaveValor rotulo="SDR" valor={sdrNome} />
-            <LinhaChaveValor rotulo="Closer" valor={closerNome} />
-          </div>
-        </CardModulo>
-
-        <CardModulo icone={MdReceipt} cor="bg-iconGreen" titulo="Pedido de venda" extra={<StatusPill tom={status.tom}>{status.rotulo}</StatusPill>}>
-          <div className="flex flex-col">
-            {/* Nº do pedido vem do Bling (decisão de produto); o envio ao Bling ainda é stub. */}
-            <LinhaChaveValor rotulo="Número" valor={<span title="Atribuído pelo Bling quando o pedido for enviado">—</span>} />
-            <LinhaChaveValor rotulo="Emissão" valor={formatarDataCurta(pedido.criado_em)} />
-            <LinhaChaveValor rotulo="Plano" valor={`${produtoLabel} · ${planoLabel}`} />
-            <LinhaChaveValor
-              rotulo="Licenças"
-              valor={`${pedido.licencas_pagas} pagas${pedido.licencas_gratuitas > 0 ? ` + ${pedido.licencas_gratuitas} gratuita(s)` : ""}`}
-            />
-            <LinhaChaveValor rotulo="Pagamento" valor={rotuloPagamento(pedido.forma_pagamento, pedido.meio_pagamento, pedido.numero_parcelas)} />
-            <LinhaChaveValor
-              rotulo="Parcela"
-              valor={pedido.forma_pagamento === "parcelado" ? `${pedido.numero_parcelas}x de ${formatarMoeda(pedido.valor_mensal)}` : formatarMoeda(pedido.valor_mensal)}
-            />
-            <LinhaChaveValor rotulo="Valor total" valor={formatarMoeda(pedido.valor_total)} />
-            {pedido.produtos.includes("api") && (
-              <LinhaChaveValor rotulo="API / Software" valor={`${formatarMoeda(pedido.valor_mensal_api)} / ${formatarMoeda(pedido.valor_mensal_software)}`} />
-            )}
-            {!!pedido.valor_licenca_adicional && <LinhaChaveValor rotulo="Licença adicional" valor={formatarMoeda(pedido.valor_licenca_adicional)} />}
-            <LinhaChaveValor rotulo="Vigência" valor={`${formatarDataCurta(pedido.vigencia_inicio)} a ${formatarDataCurta(pedido.vigencia_fim)}`} />
-            {pedido.condicao_especial && <LinhaChaveValor rotulo="Condição especial" valor={pedido.condicao_especial} longo />}
-          </div>
-        </CardModulo>
-
-        <CardModulo
-          icone={MdGavel}
-          cor="bg-iconPurple"
-          titulo="Contrato"
-          extra={contratoAtual ? <span className="text-sm font-semibold text-gray3">v{contratoAtual.versao}</span> : undefined}
-        >
-          {!contratoAtual ? (
-            <EstadoVazio
-              compacto
-              icone={MdGavel}
-              titulo={pedido.geracao_contrato_erro ? "Falha ao gerar o contrato" : "Contrato ainda não gerado"}
-              descricao={
-                pedido.geracao_contrato_erro
-                  ? "Corrija o problema indicado acima e tente gerar novamente."
-                  : "O contrato é gerado automaticamente do modelo quando a diretoria aprova o pedido."
-              }
-            />
-          ) : (
-            <div className="flex flex-col gap-4">
-              {assinaturaIncompleta && (
-                <div className="flex items-start gap-2.5 rounded-lg border border-red/30 bg-dangerBg px-4 py-3 text-sm text-red">
-                  <MdWarning className="mt-0.5 size-4 shrink-0" />
-                  <span>
-                    <strong className="font-bold">
-                      Assinatura encerrada sem todas as assinaturas
-                      {contratoAtual.assinatura_encerrada_em ? ` em ${formatarDataCurta(contratoAtual.assinatura_encerrada_em)}` : ""}.
-                    </strong>{" "}
-                    Não assinaram: {naoAssinaram.map((s) => s.nome).join(", ")}.
-                  </span>
-                </div>
+      {/* Coluna principal = o fluxo (pedido → contrato → parcelas); lateral =
+          referência (cliente + histórico). Cada coluna empilha seus cards de
+          forma independente, sem buracos entre cards de alturas diferentes. */}
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="flex min-w-0 flex-col gap-5">
+          <CardModulo icone={MdReceipt} cor="bg-iconGreen" titulo="Pedido de venda" extra={<StatusPill tom={status.tom}>{status.rotulo}</StatusPill>}>
+            <div className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
+              {/* Nº do pedido vem do Bling (decisão de produto); o envio ao Bling ainda é stub. */}
+              <LinhaChaveValor rotulo="Número" valor={<span title="Atribuído pelo Bling quando o pedido for enviado">—</span>} />
+              <LinhaChaveValor rotulo="Emissão" valor={formatarDataCurta(pedido.criado_em)} />
+              <LinhaChaveValor rotulo="Plano" valor={`${produtoLabel} · ${planoLabel}`} />
+              <LinhaChaveValor
+                rotulo="Licenças"
+                valor={`${pedido.licencas_pagas} pagas${pedido.licencas_gratuitas > 0 ? ` + ${pedido.licencas_gratuitas} gratuita(s)` : ""}`}
+              />
+              <LinhaChaveValor rotulo="Pagamento" valor={rotuloPagamento(pedido.forma_pagamento, pedido.meio_pagamento, pedido.numero_parcelas)} />
+              <LinhaChaveValor
+                rotulo="Parcela"
+                valor={pedido.forma_pagamento === "parcelado" ? `${pedido.numero_parcelas}x de ${formatarMoeda(pedido.valor_mensal)}` : formatarMoeda(pedido.valor_mensal)}
+              />
+              <LinhaChaveValor rotulo="Valor total" valor={formatarMoeda(pedido.valor_total)} />
+              {pedido.produtos.includes("api") && (
+                <LinhaChaveValor rotulo="API / Software" valor={`${formatarMoeda(pedido.valor_mensal_api)} / ${formatarMoeda(pedido.valor_mensal_software)}`} />
               )}
-
-              <div className="flex flex-col">
-                <LinhaChaveValor rotulo="Modelo" valor={MODELO_CONTRATO[pedido.perfil]} />
-                <LinhaChaveValor rotulo="Gerado em" valor={formatarDataCurta(contratoAtual.gerado_em)} />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <div className="flex items-baseline justify-between">
-                  <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Assinaturas · Clicksign</span>
-                  <span className="text-xs font-semibold text-gray2">
-                    {assinados} de {signatariosExibidos.length}
-                  </span>
-                </div>
-                <ListaSignatarios signatarios={signatariosExibidos} />
-                {!temStatusPorSignatario && pedido.status === "enviado_para_assinatura" && (
-                  <p className="text-xs text-gray3">Enviado antes do acompanhamento individual — o status por pessoa não está disponível para este envio.</p>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">
-                  {contratosComUrl.some((c) => c.urlAssinado) ? "Documento assinado" : "Versões"}
-                </span>
-                {contratosComUrl.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between gap-3 border-b border-gray5 pb-2 last:border-0 last:pb-0">
-                    <div className="flex min-w-0 flex-col">
-                      <span className="text-sm font-semibold text-darkPurple1">
-                        Versão {c.versao} · {formatarDataCurta(c.gerado_em)}
-                      </span>
-                      {c.motivo_versao && <span className="truncate text-xs text-gray3">{c.motivo_versao}</span>}
-                    </div>
-                    {/* Depois de assinado, só o PDF assinado fica disponível — o .docx original deixa de ser o documento válido. */}
-                    {c.urlAssinado ? (
-                      <Button variant="secondary" size="sm" nativeButton={false} render={<a href={c.urlAssinado} target="_blank" rel="noreferrer" />}>
-                        <MdDownload className="size-4" />
-                        PDF assinado
-                      </Button>
-                    ) : (
-                      c.url && (
-                        <Button variant="white" size="sm" nativeButton={false} render={<a href={c.url} target="_blank" rel="noreferrer" />}>
-                          <MdDownload className="size-4" />
-                          Baixar
-                        </Button>
-                      )
-                    )}
-                  </div>
-                ))}
-              </div>
+              {!!pedido.valor_licenca_adicional && <LinhaChaveValor rotulo="Licença adicional" valor={formatarMoeda(pedido.valor_licenca_adicional)} />}
+              <LinhaChaveValor rotulo="Vigência" valor={`${formatarDataCurta(pedido.vigencia_inicio)} a ${formatarDataCurta(pedido.vigencia_fim)}`} />
+              {pedido.condicao_especial && <LinhaChaveValor rotulo="Condição especial" valor={pedido.condicao_especial} longo className="md:col-span-2" />}
             </div>
-          )}
+          </CardModulo>
 
-          {/* Ações do jurídico sobre o contrato (liberar, regenerar, nova versão, Clicksign) ficam no contexto do contrato. */}
-          <div className="flex flex-wrap gap-2.5 empty:hidden">
-            <AcoesPedido pedidoId={pedido.id} status={pedido.status} papel={sessao.papel} donoDoRascunho={donoDoRascunho} escopo="contrato" />
-          </div>
-        </CardModulo>
-      </div>
+          <CardModulo
+            icone={MdGavel}
+            cor="bg-iconPurple"
+            titulo="Contrato"
+            extra={contratoAtual ? <span className="text-sm font-semibold text-gray3">v{contratoAtual.versao}</span> : undefined}
+          >
+            {!contratoAtual ? (
+              <EstadoVazio
+                compacto
+                icone={MdGavel}
+                titulo={pedido.geracao_contrato_erro ? "Falha ao gerar o contrato" : "Contrato ainda não gerado"}
+                descricao={
+                  pedido.geracao_contrato_erro
+                    ? "Corrija o problema indicado acima e tente gerar novamente."
+                    : "O contrato é gerado automaticamente do modelo quando a diretoria aprova o pedido."
+                }
+              />
+            ) : (
+              <div className="flex flex-col gap-4">
+                {assinaturaIncompleta && (
+                  <div className="flex items-start gap-2.5 rounded-lg border border-red/30 bg-dangerBg px-4 py-3 text-sm text-red">
+                    <MdWarning className="mt-0.5 size-4 shrink-0" />
+                    <span>
+                      <strong className="font-bold">
+                        Assinatura encerrada sem todas as assinaturas
+                        {contratoAtual.assinatura_encerrada_em ? ` em ${formatarDataCurta(contratoAtual.assinatura_encerrada_em)}` : ""}.
+                      </strong>{" "}
+                      Não assinaram: {naoAssinaram.map((s) => s.nome).join(", ")}.
+                    </span>
+                  </div>
+                )}
 
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
-        <CardModulo icone={MdAttachMoney} cor="bg-iconYellow" titulo="Parcelas">
-          {/* Ainda não há integração pedido → Bling (bling_pedido_id nunca é
-              preenchido). Pedidos já assinados tiveram as cobranças criadas
-              direto no Bling, fora do sistema. */}
-          {assinado ? (
-            <EstadoVazio
-              compacto
-              icone={MdAttachMoney}
-              titulo="Parcelas geradas fora do sistema"
-              descricao="As cobranças deste pedido foram criadas diretamente no Bling, antes da integração do pedido com o Bling."
-            />
-          ) : (
-            <EstadoVazio
-              compacto
-              icone={MdAttachMoney}
-              titulo="Parcelas não geradas"
-              descricao="As cobranças serão criadas no Bling após a assinatura do contrato."
-            />
-          )}
-        </CardModulo>
+                <div className="flex flex-col">
+                  <LinhaChaveValor rotulo="Modelo" valor={MODELO_CONTRATO[pedido.perfil]} />
+                  <LinhaChaveValor rotulo="Gerado em" valor={formatarDataCurta(contratoAtual.gerado_em)} />
+                </div>
 
-        <CardModulo icone={MdHistory} cor="bg-iconGray" titulo="Linha do tempo">
-          <TimelineTransicoes eventos={eventosTimeline} />
-        </CardModulo>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Assinaturas · Clicksign</span>
+                    <span className="text-xs font-semibold text-gray2">
+                      {assinados} de {signatariosExibidos.length}
+                    </span>
+                  </div>
+                  <ListaSignatarios signatarios={signatariosExibidos} />
+                  {!temStatusPorSignatario && pedido.status === "enviado_para_assinatura" && (
+                    <p className="text-xs text-gray3">Enviado antes do acompanhamento individual — o status por pessoa não está disponível para este envio.</p>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">
+                    {contratosComUrl.some((c) => c.urlAssinado) ? "Documento assinado" : "Versões"}
+                  </span>
+                  {contratosComUrl.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between gap-3 border-b border-gray5 pb-2 last:border-0 last:pb-0">
+                      <div className="flex min-w-0 flex-col">
+                        <span className="text-sm font-semibold text-darkPurple1">
+                          Versão {c.versao} · {formatarDataCurta(c.gerado_em)}
+                        </span>
+                        {c.motivo_versao && <span className="truncate text-xs text-gray3">{c.motivo_versao}</span>}
+                      </div>
+                      {/* Depois de assinado, só o PDF assinado fica disponível — o .docx original deixa de ser o documento válido. */}
+                      {c.urlAssinado ? (
+                        <Button variant="secondary" size="sm" nativeButton={false} render={<a href={c.urlAssinado} target="_blank" rel="noreferrer" />}>
+                          <MdDownload className="size-4" />
+                          PDF assinado
+                        </Button>
+                      ) : (
+                        c.url && (
+                          <Button variant="white" size="sm" nativeButton={false} render={<a href={c.url} target="_blank" rel="noreferrer" />}>
+                            <MdDownload className="size-4" />
+                            Baixar
+                          </Button>
+                        )
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Ações do jurídico sobre o contrato (liberar, regenerar, nova versão, Clicksign) ficam no contexto do contrato. */}
+            <div className="border-t border-gray5 pt-4 empty:hidden">
+              <AcoesPedido pedidoId={pedido.id} status={pedido.status} papel={sessao.papel} donoDoRascunho={donoDoRascunho} escopo="contrato" />
+            </div>
+          </CardModulo>
+
+          <CardModulo icone={MdAttachMoney} cor="bg-iconYellow" titulo="Parcelas">
+            {/* Ainda não há integração pedido → Bling (bling_pedido_id nunca é
+                preenchido). Pedidos já assinados tiveram as cobranças criadas
+                direto no Bling, fora do sistema. */}
+            {assinado ? (
+              <EstadoVazio
+                compacto
+                icone={MdAttachMoney}
+                titulo="Parcelas geradas fora do sistema"
+                descricao="As cobranças deste pedido foram criadas diretamente no Bling, antes da integração do pedido com o Bling."
+              />
+            ) : (
+              <EstadoVazio
+                compacto
+                icone={MdAttachMoney}
+                titulo="Parcelas não geradas"
+                descricao="As cobranças serão criadas no Bling após a assinatura do contrato."
+              />
+            )}
+          </CardModulo>
+        </div>
+        <div className="flex min-w-0 flex-col gap-5">
+          <CardModulo
+            icone={MdBusiness}
+            cor="bg-iconBlue"
+            titulo="Cliente"
+            extra={
+              cliente && sessao.papel !== "juridico" ? (
+                <Link href={`/clientes/${cliente.id}`} className="text-sm font-semibold text-purple-text hover:underline">
+                  Ver cliente
+                </Link>
+              ) : undefined
+            }
+          >
+            <div className="flex flex-col">
+              <LinhaChaveValor rotulo="Razão social" valor={cliente?.razao_social} />
+              <LinhaChaveValor rotulo="CNPJ" valor={cliente ? formatarCnpj(cliente.cnpj) : null} />
+              <LinhaChaveValor rotulo="Perfil" valor={ROTULO_PERFIL_CLIENTE[pedido.perfil]} />
+              <LinhaChaveValor rotulo="Endereço" valor={cliente ? formatarEnderecoCliente(cliente) : null} longo />
+              <LinhaChaveValor rotulo="Vendedor" valor={vendedorNome} />
+              <LinhaChaveValor rotulo="SDR" valor={sdrNome} />
+              <LinhaChaveValor rotulo="Closer" valor={closerNome} />
+            </div>
+          </CardModulo>
+
+          <CardModulo icone={MdHistory} cor="bg-iconGray" titulo="Linha do tempo">
+            <TimelineTransicoes eventos={eventosTimeline} />
+          </CardModulo>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -141,46 +141,69 @@ export function AcoesPedido({
 
   if (status === "aprovado" && (papel === "admin" || papel === "juridico")) {
     return (
-      <Button disabled={pendente} onClick={() => rodar(() => tentarGerarNovamenteAction(pedidoId), "Gerando o contrato novamente")}>
-        Tentar gerar contrato novamente
-      </Button>
+      <AcoesContrato
+        primaria={
+          <Button disabled={pendente} onClick={() => rodar(() => tentarGerarNovamenteAction(pedidoId), "Gerando o contrato novamente")}>
+            Tentar gerar contrato novamente
+          </Button>
+        }
+      />
     );
   }
 
   if (status === "em_revisao_juridica" && (papel === "juridico" || papel === "admin")) {
     return (
-      <div className="flex flex-wrap gap-2">
-        <Button
-          disabled={pendente}
-          onClick={() => rodar(() => liberarParaAssinaturaAction(pedidoId), "Contrato liberado para assinatura")}
-        >
-          Liberar para assinatura
-        </Button>
-        <RegenerarContratoDialog pedidoId={pedidoId} />
-        <SubirNovaVersaoDialog pedidoId={pedidoId} />
-      </div>
+      <AcoesContrato
+        primaria={
+          <Button
+            disabled={pendente}
+            onClick={() => rodar(() => liberarParaAssinaturaAction(pedidoId), "Contrato liberado para assinatura")}
+          >
+            Liberar para assinatura
+          </Button>
+        }
+        secundarias={
+          <>
+            <RegenerarContratoDialog pedidoId={pedidoId} />
+            <SubirNovaVersaoDialog pedidoId={pedidoId} />
+          </>
+        }
+      />
     );
   }
 
   if (status === "pronto_para_assinatura" && (papel === "juridico" || papel === "admin")) {
     return (
-      <div className="flex flex-wrap gap-2">
-        <Button
-          disabled={pendente}
-          onClick={() => rodar(() => enviarParaAssinaturaAction(pedidoId), "Contrato enviado para assinatura via Clicksign")}
-        >
-          Enviar para assinatura
-        </Button>
-        <CancelarAssinaturaDialog pedidoId={pedidoId} />
-      </div>
+      <AcoesContrato
+        primaria={
+          <Button
+            disabled={pendente}
+            onClick={() => rodar(() => enviarParaAssinaturaAction(pedidoId), "Contrato enviado para assinatura via Clicksign")}
+          >
+            Enviar para assinatura
+          </Button>
+        }
+        secundarias={<CancelarAssinaturaDialog pedidoId={pedidoId} />}
+      />
     );
   }
 
   if (status === "enviado_para_assinatura" && (papel === "juridico" || papel === "admin")) {
-    return <CancelarAssinaturaDialog pedidoId={pedidoId} />;
+    return <AcoesContrato secundarias={<CancelarAssinaturaDialog pedidoId={pedidoId} />} />;
   }
 
   return null;
+}
+
+// Layout das ações dentro do card do contrato: a primária ocupa a largura
+// toda; as secundárias dividem a linha de baixo em partes iguais.
+function AcoesContrato({ primaria, secundarias }: { primaria?: ReactNode; secundarias?: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      {primaria && <div className="flex *:w-full">{primaria}</div>}
+      {secundarias && <div className="flex flex-wrap gap-2.5 *:min-w-[140px] *:flex-1">{secundarias}</div>}
+    </div>
+  );
 }
 
 function CancelarAssinaturaDialog({ pedidoId }: { pedidoId: string }) {
