@@ -56,7 +56,7 @@ export async function obterDadosShell(supabase: Supa, papel: PapelUsuario, usuar
     );
   }
 
-  if (papel === "juridico") {
+  if (papel === "juridico" || papel === "admin") {
     tarefas.push(
       contar(
         supabase.from("pedidos").select("id", { count: "exact", head: true }).in("status", STATUS_CONTRATO_EM_ANDAMENTO),

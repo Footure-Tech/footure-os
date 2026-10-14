@@ -39,6 +39,14 @@ const PEDIDOS_VENDEDOR: SidebarLink = {
   exact: true,
 };
 const CLIENTES: SidebarLink = { href: "/clientes", label: "Clientes", icon: MdBusiness, cor: "bg-iconBlue" };
+const CONTRATOS: SidebarLink = {
+  href: "/juridico",
+  label: "Contratos",
+  icon: MdGavel,
+  cor: "bg-iconPurple",
+  contador: "contratos",
+  exact: true,
+};
 const INADIMPLENCIA: SidebarLink = {
   href: "/inadimplencia",
   label: "Inadimplência",
@@ -57,12 +65,7 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
     { label: "Comercial", links: [PEDIDOS_VENDEDOR, CLIENTES] },
     { label: "Financeiro", links: [INADIMPLENCIA] },
   ],
-  juridico: [
-    {
-      label: "Jurídico",
-      links: [{ href: "/juridico", label: "Contratos", icon: MdGavel, cor: "bg-iconPurple", contador: "contratos", exact: true }],
-    },
-  ],
+  juridico: [{ label: "Jurídico", links: [CONTRATOS] }],
   admin: [
     {
       label: "Comercial",
@@ -72,6 +75,7 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
         CLIENTES,
       ],
     },
+    { label: "Jurídico", links: [CONTRATOS] },
     { label: "Financeiro", links: [INADIMPLENCIA] },
     {
       label: "Administração",
