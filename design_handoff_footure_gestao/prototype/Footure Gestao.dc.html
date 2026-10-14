@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <title>Footure · Gestão</title>
+  <link rel="stylesheet" href="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/tokens/spacing.css">
+  <link rel="stylesheet" href="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/tokens/radius.css">
+  <link rel="stylesheet" href="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/tokens/elevation.css">
+  <link rel="stylesheet" href="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/tokens/motion.css">
+  <link rel="stylesheet" href="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/tokens/semantic.css">
+  <link rel="stylesheet" href="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/tokens/theme-dark.css">
+  <link rel="stylesheet" href="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/tokens/base.css">
+  <link rel="stylesheet" href="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/styles.css">
+  <script src="_ds/footlink-design-system-5f1c43a0-720b-448a-9b06-792e114cf557/_ds_bundle.js"></script>
+  <style>
+    body{margin:0;background:var(--light);font-family:'Barlow',sans-serif;-webkit-font-smoothing:antialiased;transition:background-color .3s ease}
+    a{color:var(--lightPurple1);text-decoration:none}
+    a:hover{color:var(--lightPurple1);text-decoration:underline}
+    @keyframes fadeInAnim{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  </style>
+</helmet>
+<div style="min-height:100vh;background:var(--light);color:var(--black);font-family:'Barlow',sans-serif;font-size:14px;line-height:1.5">
+
+  <!-- AppBar -->
+  <header style="position:sticky;top:0;z-index:1000;height:60px;background:#5a00ff;display:flex;align-items:center;gap:20px;padding:0 24px 0 20px;color:#fff">
+    <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+      <img src="assets/footlink-mark.svg" alt="" style="width:28px;height:28px">
+      <div style="display:flex;flex-direction:column;line-height:1.05">
+        <span style="font-size:18px;font-weight:800;letter-spacing:-0.01em">footure</span>
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;opacity:.75">GESTÃO</span>
+      </div>
+    </div>
+    <div style="flex:1 1 0;min-width:0;max-width:460px;display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;border-radius:8px;background:rgba(255,255,255,.1);overflow:hidden">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="opacity:.8"><path d="{{ ic.search }}"></path></svg>
+      <span style="font-size:14px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">Busque clientes, pedidos ou contratos...</span>
+    </div>
+    <div style="flex:0 1 20px"></div>
+    <div style="display:flex;flex-shrink:0;align-items:center;gap:6px;padding:3px;border-radius:20px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2)">
+      <sc-for list="{{ perfis }}" as="p" hint-placeholder-count="4">
+        <button onClick="{{ p.go }}" style="border:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:700;padding:5px 12px;border-radius:18px;background:{{ p.bg }};color:{{ p.fg }};transition:all .2s ease">{{ p.label }}</button>
+      </sc-for>
+    </div>
+    <button onClick="{{ toggleTheme }}" title="Alternar tema" style="width:38px;height:38px;border-radius:8px;border:none;background:rgba(255,255,255,.1);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center" style-hover="background:rgba(255,255,255,.2)">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="{{ themeIcon }}"></path></svg>
+    </button>
+    <div style="position:relative;width:38px;height:38px;border-radius:8px;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="{{ ic.bell }}"></path></svg>
+      <span style="position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:#ff5252;border:2px solid #5a00ff"></span>
+    </div>
+    <div title="{{ user.name }}" style="display:flex;flex-shrink:0;align-items:center;gap:10px;padding:4px;border-radius:20px;background:rgba(255,255,255,.1)">
+      <span style="width:30px;height:30px;border-radius:50%;background:#fff;color:#5a00ff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800">{{ user.ini }}</span>
+          </div>
+  </header>
+
+  <div style="display:flex;align-items:flex-start">
+    <!-- Sidebar -->
+    <aside style="position:sticky;top:60px;width:248px;flex-shrink:0;height:calc(100vh - 60px);background:var(--white);border-right:1px solid var(--gray5);display:flex;flex-direction:column;padding:20px 0;box-sizing:border-box;transition:background-color .3s ease">
+      <nav style="display:flex;flex-direction:column;gap:18px;flex:1;overflow:auto">
+        <sc-for list="{{ nav }}" as="sec" hint-placeholder-count="4">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="padding:0 24px 6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3)">{{ sec.label }}</span>
+            <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="2">
+              <button onClick="{{ it.go }}" style="display:flex;align-items:center;gap:12px;margin:0 12px;padding:9px 12px 9px {{ it.pl }};border:none;border-left:{{ it.bl }};border-radius:8px;background:{{ it.bg }};color:{{ it.fg }};font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;text-align:left;transition:all .2s ease" style-hover="background:var(--surface-hover)">
+                <span style="width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:{{ it.ibg }};color:#fff;flex-shrink:0">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="{{ it.icon }}"></path></svg>
+                </span>
+                <span style="flex:1">{{ it.label }}</span>
+                <sc-if value="{{ it.count }}" hint-placeholder-val="{{ false }}">
+                  <span style="min-width:18px;height:18px;padding:0 6px;border-radius:9px;background:var(--lightPurple1);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center">{{ it.count }}</span>
+                </sc-if>
+              </button>
+            </sc-for>
+          </div>
+        </sc-for>
+      </nav>
+      <div style="margin:0 20px;padding:14px;border:1px solid var(--gray5);border-radius:10px;display:flex;flex-direction:column;gap:10px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3)">Integrações</span>
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--green2)"></span>
+          <span style="font-weight:600;flex:1">Clicksign</span><span style="color:var(--gray3);font-size:12px">Conectado</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--green2)"></span>
+          <span style="font-weight:600;flex:1">Bling</span><span style="color:var(--gray3);font-size:12px">{{ blingSync }}</span>
+        </div>
+      </div>
+    </aside>
+
+    <main style="flex:1;min-width:0;padding:30px;box-sizing:border-box">
+
+      <!-- ================= DASHBOARD ================= -->
+      <sc-if value="{{ s.dash }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:24px;max-width:1500px;animation:fadeInAnim .35s ease">
+          <div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap">
+            <div style="flex:1;min-width:280px">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lightPurple1)">Gestão</span>
+              <h1 style="margin:2px 0 4px;font-size:28px;font-weight:700;letter-spacing:-0.01em;color:var(--darkPurple1)">Indicadores do negócio</h1>
+              <p style="margin:0;color:var(--gray);font-size:14px">Receita, funil comercial, contratos e recebimentos consolidados de Footlink, Academy e Consultoria.</p>
+            </div>
+            <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.SegmentedToggle" options="{{ periodOpts }}" value="{{ periodo }}" on-change="{{ setPeriodo }}" hint-size="300px,42px"></x-import>
+            <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.SegmentedToggle" options="{{ layoutOpts }}" value="{{ dashLayout }}" on-change="{{ setLayout }}" hint-size="220px,42px"></x-import>
+          </div>
+
+          <!-- KPI row (shared) -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px">
+            <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.02);padding:20px 24px;display:flex;flex-direction:column;gap:6px;transition:all .3s ease" style-hover="box-shadow:0 4px 12px rgba(0,0,0,.05)">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3)">{{ k.label }}</span>
+                <span style="font-size:30px;font-weight:800;letter-spacing:-0.02em;color:var(--darkPurple1);line-height:1.1">{{ k.value }}</span>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+                  <span style="font-weight:700;color:{{ k.dc }}">{{ k.delta }}</span>
+                  <span style="color:var(--gray3)">{{ k.sub }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- Layout A -->
+          <sc-if value="{{ isA }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:20px">
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.02);padding:24px;display:flex;flex-direction:column;gap:20px">
+                <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                  <h3 style="margin:0;font-size:18px;font-weight:700;flex:1;color:var(--darkPurple1)">Receita mensal</h3>
+                  <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray)"><span style="width:10px;height:10px;border-radius:2px;background:var(--lightPurple1)"></span>Realizado</span>
+                  <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray)"><span style="width:10px;height:10px;border-radius:2px;background:var(--lightPurple3)"></span>Previsto</span>
+                </div>
+                <div style="display:flex;gap:10px;height:220px;align-items:stretch">
+                  <div style="display:flex;flex-direction:column;justify-content:space-between;font-size:11px;color:var(--gray3);padding-bottom:22px;text-align:right;width:44px">
+                    <span>600 mil</span><span>400 mil</span><span>200 mil</span><span>0</span>
+                  </div>
+                  <div style="flex:1;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:8px">
+                    <sc-for list="{{ months }}" as="m" hint-placeholder-count="12">
+                      <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+                        <div style="flex:1;display:flex;align-items:flex-end;justify-content:center;gap:3px;border-bottom:1px solid var(--gray5)">
+                          <div title="{{ m.tipR }}" style="width:40%;max-width:16px;height:{{ m.hr }};background:var(--lightPurple1);border-radius:4px 4px 0 0"></div>
+                          <div title="{{ m.tipP }}" style="width:40%;max-width:16px;height:{{ m.hp }};background:var(--lightPurple3);border-radius:4px 4px 0 0"></div>
+                        </div>
+                        <span style="font-size:11px;color:var(--gray3);text-align:center;font-weight:600">{{ m.label }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.02);padding:24px;display:flex;flex-direction:column;gap:18px">
+                <h3 style="margin:0;font-size:18px;font-weight:700;color:var(--darkPurple1)">Receita por linha</h3>
+                <div style="display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px">
+                  <sc-for list="{{ linhas }}" as="l" hint-placeholder-count="3">
+                    <div style="width:{{ l.w }};background:{{ l.c }}"></div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:14px">
+                  <sc-for list="{{ linhas }}" as="l" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--gray5)">
+                      <span style="width:10px;height:10px;border-radius:3px;background:{{ l.c }}"></span>
+                      <div style="flex:1;display:flex;flex-direction:column">
+                        <span style="font-weight:700;color:var(--darkPurple1)">{{ l.nome }}</span>
+                        <span style="font-size:12px;color:var(--gray3)">{{ l.sub }}</span>
+                      </div>
+                      <div style="display:flex;flex-direction:column;align-items:flex-end">
+                        <span style="font-weight:700;color:var(--darkPurple1)">{{ l.valor }}</span>
+                        <span style="font-size:12px;color:var(--gray3)">{{ l.w }}</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px">
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.02);padding:24px;display:flex;flex-direction:column;gap:16px">
+                <h3 style="margin:0;font-size:18px;font-weight:700;color:var(--darkPurple1)">Funil comercial</h3>
+                <sc-for list="{{ funil }}" as="f" hint-placeholder-count="5">
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <div style="display:flex;font-size:13px"><span style="flex:1;font-weight:600">{{ f.label }}</span><span style="font-weight:700;color:var(--darkPurple1)">{{ f.n }}</span><span style="width:54px;text-align:right;color:var(--gray3)">{{ f.conv }}</span></div>
+                    <div style="height:8px;border-radius:4px;background:var(--light)"><div style="height:100%;width:{{ f.w }};border-radius:4px;background:var(--lightPurple1);opacity:{{ f.o }}"></div></div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.02);padding:24px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;align-items:center"><h3 style="margin:0;font-size:18px;font-weight:700;flex:1;color:var(--darkPurple1)">Contratos em andamento</h3><button onClick="{{ goContratos }}" style="border:none;background:none;color:var(--lightPurple1);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer">Ver todos</button></div>
+                <sc-for list="{{ ctPend }}" as="c" hint-placeholder-count="4">
+                  <div onClick="{{ c.open }}" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--gray5);cursor:pointer">
+                    <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Avatar" name="{{ c.cli }}" size="{{ 36 }}" hint-size="36px,36px"></x-import>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-weight:700;color:var(--darkPurple1)">{{ c.cli }}</span><span style="font-size:12px;color:var(--gray3)">{{ c.ctNum }} · {{ c.valorF }}</span></div>
+                    <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.StatusPill" status="{{ c.ctTone }}" hint-size="120px,22px">{{ c.ctLabel }}</x-import>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.02);padding:24px;display:flex;flex-direction:column;gap:16px">
+                <div style="display:flex;align-items:center"><h3 style="margin:0;font-size:18px;font-weight:700;flex:1;color:var(--darkPurple1)">Inadimplência por atraso</h3><button onClick="{{ goInad }}" style="border:none;background:none;color:var(--lightPurple1);font-family:inherit;font-weight:600;font-size:13px;cursor:pointer">Detalhar</button></div>
+                <div style="display:flex;align-items:flex-end;gap:14px;height:150px">
+                  <sc-for list="{{ aging }}" as="a" hint-placeholder-count="4">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end">
+                      <span style="font-size:12px;font-weight:700;color:var(--darkPurple1)">{{ a.valorF }}</span>
+                      <div style="width:100%;height:{{ a.h }};background:{{ a.c }};border-radius:6px 6px 0 0"></div>
+                      <span style="font-size:11px;font-weight:600;color:var(--gray3)">{{ a.label }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- Layout B -->
+          <sc-if value="{{ isB }}" hint-placeholder-val="{{ false }}">
+            <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.02);padding:24px;display:flex;flex-direction:column;gap:20px">
+              <div style="display:flex;align-items:center;gap:12px"><h3 style="margin:0;font-size:18px;font-weight:700;flex:1;color:var(--darkPurple1)">Fluxo de receita</h3><span style="font-size:13px;color:var(--gray3)">Lead → Pedido → Contrato → Assinatura → Parcelas</span></div>
+              <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0">
+                <sc-for list="{{ flow }}" as="f" hint-placeholder-count="5">
+                  <div onClick="{{ f.go }}" style="position:relative;display:flex;flex-direction:column;gap:8px;padding:20px;border:1px solid var(--gray5);margin-left:-1px;background:{{ f.bg }};cursor:pointer;transition:all .2s ease;border-radius:{{ f.r }}" style-hover="background:var(--surface-hover)">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="width:22px;height:22px;border-radius:50%;background:var(--lightPurple1);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">{{ f.n }}</span>
+                      <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">{{ f.label }}</span>
+                    </div>
+                    <span style="font-size:32px;font-weight:800;letter-spacing:-0.02em;color:var(--darkPurple1);line-height:1.1">{{ f.count }}</span>
+                    <span style="font-size:14px;font-weight:600;color:var(--darkPurple1)">{{ f.valor }}</span>
+                    <span style="font-size:12px;color:var(--gray3)">{{ f.sub }}</span>
+                    <div style="height:4px;border-radius:2px;background:var(--light);margin-top:4px"><div style="height:100%;width:{{ f.w }};background:var(--lightPurple1);border-radius:2px"></div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:20px">
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.02);padding:24px;display:flex;flex-direction:column;gap:18px">
+                <h3 style="margin:0;font-size:18px;font-weight:700;color:var(--darkPurple1)">Metas por vendedor · outubro</h3>
+                <sc-for list="{{ metas }}" as="v" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:14px">
+                    <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Avatar" name="{{ v.nome }}" size="{{ 40 }}" hint-size="40px,40px"></x-import>
+                    <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+                      <div style="display:flex;font-size:13px"><span style="flex:1;font-weight:700;color:var(--darkPurple1)">{{ v.nome }}</span><span style="color:var(--gray)">{{ v.real }} de {{ v.meta }}</span></div>
+                      <div style="height:8px;border-radius:4px;background:var(--light)"><div style="height:100%;width:{{ v.w }};background:{{ v.c }};border-radius:4px"></div></div>
+                    </div>
+                    <span style="width:44px;text-align:right;font-weight:800;color:var(--darkPurple1)">{{ v.w }}</span>
+                  </div>
+                </sc-for>
+                <div style="border-top:1px solid var(--gray5);padding-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+                  <sc-for list="{{ linhas }}" as="l" hint-placeholder-count="3">
+                    <div style="display:flex;flex-direction:column;gap:2px">
+                      <span style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3)"><span style="width:8px;height:8px;border-radius:2px;background:{{ l.c }}"></span>{{ l.nome }}</span>
+                      <span style="font-size:20px;font-weight:800;color:var(--darkPurple1)">{{ l.valor }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.02);padding:24px;display:flex;flex-direction:column;gap:6px">
+                <h3 style="margin:0 0 8px;font-size:18px;font-weight:700;color:var(--darkPurple1)">Pontos de atenção</h3>
+                <sc-for list="{{ alertas }}" as="a" hint-placeholder-count="4">
+                  <div onClick="{{ a.go }}" style="display:flex;gap:12px;padding:12px;border-radius:8px;cursor:pointer" style-hover="background:var(--surface-hover)">
+                    <span style="width:32px;height:32px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:{{ a.bg }};color:{{ a.c }}">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="{{ a.icon }}"></path></svg>
+                    </span>
+                    <div style="flex:1;display:flex;flex-direction:column"><span style="font-weight:700;color:var(--darkPurple1)">{{ a.t }}</span><span style="font-size:13px;color:var(--gray)">{{ a.d }}</span></div>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="color:var(--gray3);align-self:center"><path d="{{ ic.chev }}"></path></svg>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ================= LEADS ================= -->
+      <sc-if value="{{ s.leads }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:24px;animation:fadeInAnim .35s ease">
+          <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:280px">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lightPurple1)">Comercial</span>
+              <h1 style="margin:2px 0 4px;font-size:28px;font-weight:700;letter-spacing:-0.01em;color:var(--darkPurple1)">Leads</h1>
+              <p style="margin:0;color:var(--gray)">{{ leadsSummary }}</p>
+            </div>
+            <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.SegmentedToggle" options="{{ linhaOpts }}" value="{{ linhaFiltro }}" on-change="{{ setLinha }}" hint-size="380px,42px"></x-import>
+            <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.SegmentedToggle" options="{{ viewOpts }}" value="{{ leadsView }}" on-change="{{ setView }}" hint-size="190px,42px"></x-import>
+            <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="purple" hint-size="120px,40px">Novo lead</x-import>
+          </div>
+
+          <sc-if value="{{ isKanban }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:16px;overflow-x:auto;padding-bottom:12px;align-items:flex-start">
+              <sc-for list="{{ kanban }}" as="col" hint-placeholder-count="5">
+                <div style="width:290px;flex-shrink:0;background:var(--white);border:1px solid var(--gray5);border-radius:12px;display:flex;flex-direction:column">
+                  <div style="padding:14px 8px 12px 16px;border-bottom:1px solid var(--gray5);display:flex;align-items:center;gap:8px">
+                    <span style="width:8px;height:8px;border-radius:50%;background:{{ col.c }}"></span>
+                    <span style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--darkPurple1);flex:1">{{ col.label }}</span>
+                    <span style="font-size:12px;font-weight:700;color:var(--gray3);padding-right:8px;white-space:nowrap">{{ col.count }} · {{ col.total }}</span>
+                  </div>
+                  <div style="padding:12px;display:flex;flex-direction:column;gap:10px;min-height:120px">
+                    <sc-for list="{{ col.cards }}" as="d" hint-placeholder-count="2">
+                      <div onClick="{{ d.open }}" style="background:var(--kanban-card-bg);border:1px solid var(--kanban-card-border);border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.05);display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:all .2s ease" style-hover="box-shadow:0 4px 12px rgba(0,0,0,.08);border-color:var(--lightPurple8)">
+                        <div style="display:flex;align-items:flex-start;gap:8px">
+                          <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+                            <span style="font-weight:700;color:var(--kanban-name);font-size:15px">{{ d.cli }}</span>
+                            <span style="font-size:12px;color:var(--gray3)">{{ d.tipo }} · {{ d.origem }}</span>
+                          </div>
+                          <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Badge" tone="{{ d.tone }}" hint-size="70px,20px">{{ d.linha }}</x-import>
+                        </div>
+                        <span style="font-size:13px;color:var(--gray2)">{{ d.plano }}</span>
+                        <div style="display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--gray5)">
+                          <span style="font-size:16px;font-weight:800;color:var(--darkPurple1);flex:1">{{ d.valorF }}</span>
+                          <span style="font-size:12px;color:var(--gray3)">{{ d.diasF }}</span>
+                          <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Avatar" name="{{ d.owner }}" size="{{ 26 }}" hint-size="26px,26px"></x-import>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isTabela }}" hint-placeholder-val="{{ false }}">
+            <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,.03);overflow:auto">
+              <div style="min-width:900px">
+                <div style="display:grid;grid-template-columns:2.2fr 1.6fr 1fr 1fr 1.2fr 1fr 40px;border-bottom:2px solid var(--gray5)">
+                  <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Cliente</span>
+                  <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Produto</span>
+                  <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Etapa</span>
+                  <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Valor ⇅</span>
+                  <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Responsável</span>
+                  <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Origem</span>
+                  <span></span>
+                </div>
+                <sc-for list="{{ leadRows }}" as="d" hint-placeholder-count="8">
+                  <div onClick="{{ d.open }}" style="display:grid;grid-template-columns:2.2fr 1.6fr 1fr 1fr 1.2fr 1fr 40px;align-items:center;border-bottom:1px solid var(--gray5);cursor:pointer" style-hover="background:var(--surface-hover)">
+                    <div style="padding:12px 15px;display:flex;align-items:center;gap:12px">
+                      <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Avatar" name="{{ d.cli }}" size="{{ 34 }}" hint-size="34px,34px"></x-import>
+                      <div style="display:flex;flex-direction:column"><span style="font-weight:700;color:var(--lightPurple1)">{{ d.cli }}</span><span style="font-size:12px;color:var(--gray3)">{{ d.tipo }} · {{ d.contato }}</span></div>
+                    </div>
+                    <div style="padding:12px 15px;display:flex;flex-direction:column;gap:4px;align-items:flex-start">
+                      <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Badge" tone="{{ d.tone }}" hint-size="70px,20px">{{ d.linha }}</x-import>
+                      <span style="font-size:12px;color:var(--gray)">{{ d.plano }}</span>
+                    </div>
+                    <span style="padding:12px 15px;font-weight:600">{{ d.etapa }}</span>
+                    <span style="padding:12px 15px;font-weight:700;color:var(--darkPurple1)">{{ d.valorF }}</span>
+                    <span style="padding:12px 15px">{{ d.owner }}</span>
+                    <span style="padding:12px 15px;color:var(--gray)">{{ d.origem }}</span>
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="color:var(--gray3)"><path d="{{ ic.chev }}"></path></svg>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ================= PEDIDOS ================= -->
+      <sc-if value="{{ s.pedidos }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:24px;max-width:1500px;animation:fadeInAnim .35s ease">
+          <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:280px">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lightPurple1)">Comercial</span>
+              <h1 style="margin:2px 0 4px;font-size:28px;font-weight:700;letter-spacing:-0.01em;color:var(--darkPurple1)">Pedidos de venda</h1>
+              <p style="margin:0;color:var(--gray)">Pedidos aprovados seguem automaticamente para geração de contrato no jurídico.</p>
+            </div>
+            <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="purple" on-click="{{ goNovoPedido }}" hint-size="150px,40px">Novo pedido</x-import>
+          </div>
+          <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,.03);overflow:auto">
+            <div style="min-width:960px">
+              <div style="display:grid;grid-template-columns:1fr 2fr 1.8fr 1fr 1.2fr 1.3fr 40px;border-bottom:2px solid var(--gray5)">
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Pedido</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Cliente</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Produto · Plano</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Valor</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Pagamento</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Status</span>
+                <span></span>
+              </div>
+              <sc-for list="{{ pedidoRows }}" as="d" hint-placeholder-count="8">
+                <div onClick="{{ d.open }}" style="display:grid;grid-template-columns:1fr 2fr 1.8fr 1fr 1.2fr 1.3fr 40px;align-items:center;border-bottom:1px solid var(--gray5);cursor:pointer" style-hover="background:var(--surface-hover)">
+                  <div style="padding:12px 15px;display:flex;flex-direction:column"><span style="font-weight:700;color:var(--darkPurple1)">{{ d.pvNum }}</span><span style="font-size:12px;color:var(--gray3)">{{ d.pvData }}</span></div>
+                  <div style="padding:12px 15px;display:flex;flex-direction:column"><span style="font-weight:700;color:var(--lightPurple1)">{{ d.cli }}</span><span style="font-size:12px;color:var(--gray3)">{{ d.tipo }} · {{ d.owner }}</span></div>
+                  <div style="padding:12px 15px;display:flex;align-items:center;gap:8px">
+                    <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Badge" tone="{{ d.tone }}" hint-size="70px,20px">{{ d.linha }}</x-import>
+                    <span style="font-size:13px;color:var(--gray2)">{{ d.plano }}</span>
+                  </div>
+                  <span style="padding:12px 15px;font-weight:700;color:var(--darkPurple1)">{{ d.valorF }}</span>
+                  <span style="padding:12px 15px;color:var(--gray2)">{{ d.pagF }}</span>
+                  <div style="padding:12px 15px"><x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.StatusPill" status="{{ d.pvTone }}" hint-size="120px,22px">{{ d.pvLabel }}</x-import></div>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="color:var(--gray3)"><path d="{{ ic.chev }}"></path></svg>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ================= NOVO PEDIDO ================= -->
+      <sc-if value="{{ s.novoPedido }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:24px;max-width:1300px;animation:fadeInAnim .35s ease">
+          <div style="display:flex;align-items:center;gap:14px">
+            <button onClick="{{ goPedidos }}" style="width:38px;height:38px;border-radius:8px;border:1px solid var(--gray5);background:var(--white);color:var(--darkPurple1);cursor:pointer;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="{{ ic.back }}"></path></svg></button>
+            <div style="flex:1">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lightPurple1)">Comercial · Pedidos de venda</span>
+              <h1 style="margin:2px 0 0;font-size:28px;font-weight:700;letter-spacing:-0.01em;color:var(--darkPurple1)">Novo pedido de venda</h1>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr);gap:20px;align-items:start">
+            <div style="display:flex;flex-direction:column;gap:20px">
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:18px">
+                <h3 style="margin:0;font-size:18px;font-weight:700;color:var(--darkPurple1)">Cliente</h3>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Select" label="Lead de origem" options="{{ leadOpts }}" value="{{ form.lead }}" on-change="{{ fLead }}" hint-size="100%,64px"></x-import>
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Select" label="Perfil" options="{{ perfilOpts }}" value="{{ form.perfil }}" on-change="{{ fPerfil }}" hint-size="100%,64px"></x-import>
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Input" label="Razão social" value="{{ form.razao }}" on-change="{{ fRazao }}" hint-size="100%,64px"></x-import>
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Input" label="CNPJ / CPF" value="{{ form.doc }}" on-change="{{ fDoc }}" hint-size="100%,64px"></x-import>
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Input" label="Responsável pela assinatura" value="{{ form.signer }}" on-change="{{ fSigner }}" hint-size="100%,64px"></x-import>
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Input" label="E-mail do signatário" value="{{ form.email }}" on-change="{{ fEmail }}" hint-size="100%,64px"></x-import>
+                </div>
+              </div>
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:18px">
+                <h3 style="margin:0;font-size:18px;font-weight:700;color:var(--darkPurple1)">Produto</h3>
+                <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.SegmentedToggle" options="{{ linhaFormOpts }}" value="{{ form.linha }}" on-change="{{ fLinha }}" hint-size="100%,42px"></x-import>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Select" label="Plano" options="{{ planoOpts }}" value="{{ form.plano }}" on-change="{{ fPlano }}" hint-size="100%,64px"></x-import>
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Input" label="Licenças / vagas" type="number" value="{{ form.lic }}" on-change="{{ fLic }}" hint-size="100%,64px"></x-import>
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Input" label="Vigência (meses)" type="number" value="{{ form.vig }}" on-change="{{ fVig }}" hint-size="100%,64px"></x-import>
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Input" label="Valor total (R$)" type="number" value="{{ form.valor }}" on-change="{{ fValor }}" hint-size="100%,64px"></x-import>
+                </div>
+              </div>
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:18px">
+                <h3 style="margin:0;font-size:18px;font-weight:700;color:var(--darkPurple1)">Pagamento</h3>
+                <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.SegmentedToggle" options="{{ pagOpts }}" value="{{ form.pag }}" on-change="{{ fPag }}" hint-size="100%,42px"></x-import>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Select" label="Parcelas" options="{{ parcOpts }}" value="{{ form.n }}" on-change="{{ fN }}" hint-size="100%,64px"></x-import>
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Input" label="1º vencimento" value="{{ form.venc }}" on-change="{{ fVenc }}" hint-size="100%,64px"></x-import>
+                </div>
+              </div>
+            </div>
+            <div style="position:sticky;top:90px;background:var(--white);border:1px solid var(--gray5);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:16px;box-shadow:0 2px 8px rgba(0,0,0,.02)">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3)">Resumo do pedido</span>
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <span style="font-size:20px;font-weight:700;color:var(--darkPurple1)">{{ resumo.cli }}</span>
+                <span style="color:var(--gray)">{{ resumo.prod }}</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px;padding:16px 0;border-top:1px solid var(--gray5);border-bottom:1px solid var(--gray5)">
+                <div style="display:flex"><span style="flex:1;color:var(--gray)">Valor total</span><span style="font-weight:700;color:var(--darkPurple1)">{{ resumo.total }}</span></div>
+                <div style="display:flex"><span style="flex:1;color:var(--gray)">Forma</span><span style="font-weight:600">{{ resumo.pag }}</span></div>
+                <div style="display:flex"><span style="flex:1;color:var(--gray)">Parcela</span><span style="font-weight:600">{{ resumo.parc }}</span></div>
+                <div style="display:flex"><span style="flex:1;color:var(--gray)">Vigência</span><span style="font-weight:600">{{ resumo.vig }}</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3)">Próximas etapas</span>
+                <span style="font-size:13px;color:var(--gray2)">1. Jurídico gera o contrato a partir do modelo {{ resumo.modelo }}</span>
+                <span style="font-size:13px;color:var(--gray2)">2. Envio para assinatura via Clicksign</span>
+                <span style="font-size:13px;color:var(--gray2)">3. Parcelas criadas no Bling após assinatura</span>
+              </div>
+              <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="purple" fluid="{{ true }}" on-click="{{ enviarPedido }}" hint-size="100%,40px">Enviar ao jurídico</x-import>
+              <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="white" fluid="{{ true }}" on-click="{{ goPedidos }}" hint-size="100%,40px">Salvar rascunho</x-import>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ================= NEGÓCIO (fluxo) ================= -->
+      <sc-if value="{{ s.negocio }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:24px;max-width:1400px;animation:fadeInAnim .35s ease">
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <button onClick="{{ goBack }}" style="width:38px;height:38px;border-radius:8px;border:1px solid var(--gray5);background:var(--white);color:var(--darkPurple1);cursor:pointer;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="{{ ic.back }}"></path></svg></button>
+            <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Avatar" name="{{ deal.cli }}" size="{{ 52 }}" hint-size="52px,52px"></x-import>
+            <div style="flex:1;min-width:240px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <h1 style="margin:0;font-size:28px;font-weight:700;letter-spacing:-0.01em;color:var(--darkPurple1)">{{ deal.cli }}</h1>
+                <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Badge" tone="{{ deal.tone }}" hint-size="70px,20px">{{ deal.linha }}</x-import>
+              </div>
+              <span style="color:var(--gray)">{{ deal.tipo }} • {{ deal.plano }} • {{ deal.valorF }}</span>
+            </div>
+            <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="white" hint-size="140px,40px">Editar dados</x-import>
+            <sc-if value="{{ deal.nextLabel }}" hint-placeholder-val="{{ false }}">
+              <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="purple" on-click="{{ deal.next }}" hint-size="180px,40px">{{ deal.nextLabel }}</x-import>
+            </sc-if>
+          </div>
+
+          <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;padding:24px 28px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr))">
+            <sc-for list="{{ deal.steps }}" as="st" hint-placeholder-count="5">
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center">
+                  <span style="width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;background:{{ st.bg }};color:{{ st.fg }};border:{{ st.bd }};box-sizing:border-box">{{ st.mark }}</span>
+                  <span style="flex:1;height:2px;margin:0 10px;background:{{ st.line }}"></span>
+                </div>
+                <div style="display:flex;flex-direction:column;padding-right:12px">
+                  <span style="font-weight:700;color:{{ st.tc }}">{{ st.label }}</span>
+                  <span style="font-size:12px;color:var(--gray3)">{{ st.sub }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;align-items:start">
+            <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;align-items:center;gap:10px"><span style="width:30px;height:30px;border-radius:8px;background:var(--iconBlue);color:#fff;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="{{ ic.people }}"></path></svg></span><h3 style="margin:0;font-size:18px;font-weight:700;flex:1;color:var(--darkPurple1)">Lead</h3><span style="font-size:13px;font-weight:600;color:var(--gray)">{{ deal.etapa }}</span></div>
+              <sc-for list="{{ deal.leadInfo }}" as="r" hint-placeholder-count="5">
+                <div style="display:flex;gap:12px;font-size:14px;padding-bottom:10px;border-bottom:1px solid var(--gray5)"><span style="flex:1;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3);padding-top:2px">{{ r.k }}</span><span style="font-weight:600;color:var(--darkPurple1);text-align:right">{{ r.v }}</span></div>
+              </sc-for>
+            </div>
+            <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;align-items:center;gap:10px"><span style="width:30px;height:30px;border-radius:8px;background:var(--green1);color:#fff;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="{{ ic.receipt }}"></path></svg></span><h3 style="margin:0;font-size:18px;font-weight:700;flex:1;color:var(--darkPurple1)">Pedido de venda</h3>
+                <sc-if value="{{ deal.hasPv }}" hint-placeholder-val="{{ false }}"><x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.StatusPill" status="{{ deal.pvTone }}" hint-size="120px,22px">{{ deal.pvLabel }}</x-import></sc-if>
+              </div>
+              <sc-if value="{{ deal.hasPv }}" hint-placeholder-val="{{ false }}">
+                <sc-for list="{{ deal.pvInfo }}" as="r" hint-placeholder-count="5">
+                  <div style="display:flex;gap:12px;font-size:14px;padding-bottom:10px;border-bottom:1px solid var(--gray5)"><span style="flex:1;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3);padding-top:2px">{{ r.k }}</span><span style="font-weight:600;color:var(--darkPurple1);text-align:right">{{ r.v }}</span></div>
+                </sc-for>
+              </sc-if>
+              <sc-if value="{{ deal.noPv }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:24px 12px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center"><span style="font-weight:700;color:var(--darkPurple1)">Nenhum pedido emitido</span><span style="font-size:13px;color:var(--gray)">Converta o lead para gerar o pedido de venda.</span></div>
+              </sc-if>
+            </div>
+            <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:14px">
+              <div style="display:flex;align-items:center;gap:10px"><span style="width:30px;height:30px;border-radius:8px;background:var(--lightPurple1);color:#fff;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="{{ ic.gavel }}"></path></svg></span><h3 style="margin:0;font-size:18px;font-weight:700;flex:1;color:var(--darkPurple1)">Contrato</h3>
+                <sc-if value="{{ deal.hasCt }}" hint-placeholder-val="{{ false }}"><x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.StatusPill" status="{{ deal.ctTone }}" hint-size="120px,22px">{{ deal.ctLabel }}</x-import></sc-if>
+              </div>
+              <sc-if value="{{ deal.hasCt }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column"><span style="font-weight:700;color:var(--darkPurple1)">{{ deal.ctNum }}</span><span style="font-size:13px;color:var(--gray)">{{ deal.modelo }}</span></div>
+                <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3)">Signatários · Clicksign</span>
+                <sc-for list="{{ deal.signers }}" as="sg" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:{{ sg.bg }};color:{{ sg.fg }}"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="{{ sg.icon }}"></path></svg></span>
+                    <div style="flex:1;display:flex;flex-direction:column;line-height:1.3"><span style="font-weight:600;color:var(--darkPurple1)">{{ sg.n }}</span><span style="font-size:12px;color:var(--gray3)">{{ sg.r }}</span></div>
+                    <span style="font-size:12px;color:var(--gray)">{{ sg.st }}</span>
+                  </div>
+                </sc-for>
+              </sc-if>
+              <sc-if value="{{ deal.noCt }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:24px 12px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center"><span style="font-weight:700;color:var(--darkPurple1)">Contrato ainda não gerado</span><span style="font-size:13px;color:var(--gray)">O jurídico recebe o pedido após o envio pelo comercial.</span></div>
+              </sc-if>
+            </div>
+            <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:center;gap:10px"><span style="width:30px;height:30px;border-radius:8px;background:var(--orange2);color:#fff;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="{{ ic.money }}"></path></svg></span><h3 style="margin:0;font-size:18px;font-weight:700;flex:1;color:var(--darkPurple1)">Parcelas</h3><span style="font-size:12px;color:var(--gray3)">{{ deal.parcSummary }}</span></div>
+              <sc-if value="{{ deal.hasParc }}" hint-placeholder-val="{{ false }}">
+                <div style="height:6px;border-radius:3px;background:var(--light)"><div style="height:100%;width:{{ deal.paidW }};background:var(--green2);border-radius:3px"></div></div>
+                <div style="display:flex;flex-direction:column;max-height:300px;overflow:auto">
+                  <sc-for list="{{ deal.parcelas }}" as="p" hint-placeholder-count="6">
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--gray5);font-size:13px">
+                      <span style="width:44px;color:var(--gray3);font-weight:600">{{ p.i }}</span>
+                      <span style="flex:1">{{ p.venc }}</span>
+                      <span style="font-weight:700;color:var(--darkPurple1)">{{ p.valorF }}</span>
+                      <span style="width:92px;display:flex;justify-content:flex-end"><x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.StatusPill" status="{{ p.tone }}" hint-size="80px,22px">{{ p.st }}</x-import></span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ deal.noParc }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:24px 12px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center"><span style="font-weight:700;color:var(--darkPurple1)">Parcelas não geradas</span><span style="font-size:13px;color:var(--gray)">As cobranças são criadas no Bling após a assinatura do contrato.</span></div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ================= CONTRATOS (JURÍDICO) ================= -->
+      <sc-if value="{{ s.contratos }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:24px;max-width:1500px;animation:fadeInAnim .35s ease">
+          <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:280px">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lightPurple1)">Jurídico</span>
+              <h1 style="margin:2px 0 4px;font-size:28px;font-weight:700;letter-spacing:-0.01em;color:var(--darkPurple1)">Contratos</h1>
+              <p style="margin:0;color:var(--gray)">Geração a partir do pedido de venda, validação jurídica e assinatura eletrônica via Clicksign.</p>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <sc-for list="{{ ctTabs }}" as="t" hint-placeholder-count="5">
+              <button onClick="{{ t.go }}" style="display:flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:8px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;border:{{ t.bd }};background:{{ t.bg }};color:{{ t.fg }};transition:all .2s ease">{{ t.label }}<span style="font-size:12px;font-weight:800;opacity:.8">{{ t.n }}</span></button>
+            </sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:20px;align-items:start">
+            <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,.03);overflow:hidden">
+              <div style="display:grid;grid-template-columns:2fr 1.2fr 1fr 1.3fr;border-bottom:2px solid var(--gray5)">
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Contrato</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Produto</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Valor</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Status</span>
+              </div>
+              <sc-for list="{{ ctRows }}" as="c" hint-placeholder-count="6">
+                <div onClick="{{ c.sel }}" style="display:grid;grid-template-columns:2fr 1.2fr 1fr 1.3fr;align-items:center;border-bottom:1px solid var(--gray5);cursor:pointer;background:{{ c.rowBg }};border-left:{{ c.rowBl }}" style-hover="background:var(--surface-hover)">
+                  <div style="padding:12px 15px;display:flex;flex-direction:column"><span style="font-weight:700;color:var(--lightPurple1)">{{ c.cli }}</span><span style="font-size:12px;color:var(--gray3)">{{ c.ctNum }} · {{ c.ctData }}</span></div>
+                  <div style="padding:12px 15px"><x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Badge" tone="{{ c.tone }}" hint-size="70px,20px">{{ c.linha }}</x-import></div>
+                  <span style="padding:12px 15px;font-weight:700;color:var(--darkPurple1)">{{ c.valorF }}</span>
+                  <div style="padding:12px 15px"><x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.StatusPill" status="{{ c.ctTone }}" hint-size="120px,22px">{{ c.ctLabel }}</x-import></div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="position:sticky;top:90px;background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.02);display:flex;flex-direction:column">
+              <div style="padding:20px 24px;border-bottom:1px solid var(--gray5);display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;font-weight:700;color:var(--gray3);flex:1">{{ ct.ctNum }}</span><x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.StatusPill" status="{{ ct.ctTone }}" hint-size="120px,22px">{{ ct.ctLabel }}</x-import></div>
+                <span style="font-size:20px;font-weight:700;color:var(--darkPurple1)">{{ ct.cli }}</span>
+                <span style="font-size:13px;color:var(--gray)">{{ ct.modelo }}</span>
+                <div style="display:flex;gap:16px;font-size:13px;margin-top:4px"><span style="color:var(--gray)">Pedido <strong style="color:var(--darkPurple1)">{{ ct.pvNum }}</strong></span><span style="color:var(--gray)">Valor <strong style="color:var(--darkPurple1)">{{ ct.valorF }}</strong></span></div>
+              </div>
+              <div style="padding:20px 24px;border-bottom:1px solid var(--gray5);display:flex;flex-direction:column;gap:10px">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3)">Validação jurídica</span>
+                <sc-for list="{{ ct.checks }}" as="ck" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:10px;font-size:14px">
+                    <span style="width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:{{ ck.bg }};color:#fff;border:{{ ck.bd }};box-sizing:border-box"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="opacity:{{ ck.o }}"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg></span>
+                    <span style="color:var(--gray2)">{{ ck.t }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="padding:20px 24px;border-bottom:1px solid var(--gray5);display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;align-items:center"><span style="flex:1;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3)">Assinaturas · Clicksign</span><span style="font-size:12px;font-weight:700;color:var(--darkPurple1)">{{ ct.signCount }}</span></div>
+                <sc-for list="{{ ct.signers }}" as="sg" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <span style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:{{ sg.bg }};color:{{ sg.fg }}"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="{{ sg.icon }}"></path></svg></span>
+                    <div style="flex:1;display:flex;flex-direction:column;line-height:1.3"><span style="font-weight:600;color:var(--darkPurple1)">{{ sg.n }}</span><span style="font-size:12px;color:var(--gray3)">{{ sg.r }}</span></div>
+                    <span style="font-size:12px;color:var(--gray)">{{ sg.st }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="padding:20px 24px;display:flex;flex-direction:column;gap:10px">
+                <sc-if value="{{ ct.actionLabel }}" hint-placeholder-val="{{ true }}">
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="purple" fluid="{{ true }}" on-click="{{ ct.action }}" hint-size="100%,40px">{{ ct.actionLabel }}</x-import>
+                </sc-if>
+                <div style="display:flex;gap:10px">
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="white" fluid="{{ true }}" on-click="{{ ct.open }}" style="{{ flex1 }}" hint-size="50%,40px">Ver negócio</x-import>
+                  <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="white" fluid="{{ true }}" style="{{ flex1 }}" hint-size="50%,40px">Baixar PDF</x-import>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ================= FINANCEIRO ================= -->
+      <sc-if value="{{ s.financeiro }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:24px;max-width:1500px;animation:fadeInAnim .35s ease">
+          <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:280px">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lightPurple1)">Financeiro</span>
+              <h1 style="margin:2px 0 4px;font-size:28px;font-weight:700;letter-spacing:-0.01em;color:var(--darkPurple1)">Contratos e parcelas</h1>
+              <p style="margin:0;color:var(--gray)">Carteira de contratos assinados e cobranças sincronizadas com o Bling.</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;height:40px;padding:0 14px;border:1px solid var(--gray5);border-radius:8px;background:var(--white);font-size:13px">
+              <span style="width:8px;height:8px;border-radius:50%;background:var(--green2)"></span>
+              <span style="color:var(--gray2)">Bling · {{ blingSync }}</span>
+            </div>
+            <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="secondary" on-click="{{ syncBling }}" hint-size="140px,40px">Sincronizar</x-import>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px">
+            <sc-for list="{{ finKpis }}" as="k" hint-placeholder-count="4">
+              <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.02);padding:20px 24px;display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3)">{{ k.label }}</span>
+                <span style="font-size:28px;font-weight:800;letter-spacing:-0.02em;color:{{ k.c }};line-height:1.1">{{ k.value }}</span>
+                <span style="font-size:13px;color:var(--gray3)">{{ k.sub }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,.03);overflow:auto">
+            <div style="padding:18px 20px;display:flex;align-items:center;border-bottom:1px solid var(--gray5)"><h3 style="margin:0;font-size:18px;font-weight:700;flex:1;color:var(--darkPurple1)">Carteira de contratos</h3></div>
+            <div style="min-width:900px">
+              <div style="display:grid;grid-template-columns:2fr 1.3fr 1fr 1.8fr 1fr 1fr;border-bottom:2px solid var(--gray5)">
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Cliente</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Produto</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Valor</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Parcelas pagas</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Próx. venc.</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Situação</span>
+              </div>
+              <sc-for list="{{ finRows }}" as="d" hint-placeholder-count="6">
+                <div onClick="{{ d.open }}" style="display:grid;grid-template-columns:2fr 1.3fr 1fr 1.8fr 1fr 1fr;align-items:center;border-bottom:1px solid var(--gray5);cursor:pointer" style-hover="background:var(--surface-hover)">
+                  <div style="padding:12px 15px;display:flex;flex-direction:column"><span style="font-weight:700;color:var(--lightPurple1)">{{ d.cli }}</span><span style="font-size:12px;color:var(--gray3)">{{ d.ctNum }}</span></div>
+                  <div style="padding:12px 15px"><x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Badge" tone="{{ d.tone }}" hint-size="70px,20px">{{ d.linha }}</x-import></div>
+                  <span style="padding:12px 15px;font-weight:700;color:var(--darkPurple1)">{{ d.valorF }}</span>
+                  <div style="padding:12px 15px;display:flex;align-items:center;gap:10px">
+                    <div style="flex:1;height:6px;border-radius:3px;background:var(--light)"><div style="height:100%;width:{{ d.paidW }};background:var(--green2);border-radius:3px"></div></div>
+                    <span style="font-size:13px;font-weight:600;width:44px">{{ d.paid }}/{{ d.n }}</span>
+                  </div>
+                  <span style="padding:12px 15px">{{ d.prox }}</span>
+                  <div style="padding:12px 15px"><x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.StatusPill" status="{{ d.sitTone }}" hint-size="90px,22px">{{ d.sit }}</x-import></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,.03);overflow:auto">
+            <div style="padding:18px 20px;display:flex;align-items:center;border-bottom:1px solid var(--gray5)"><h3 style="margin:0;font-size:18px;font-weight:700;flex:1;color:var(--darkPurple1)">Parcelas · outubro/2026</h3></div>
+            <div style="min-width:860px">
+              <div style="display:grid;grid-template-columns:2fr .8fr 1fr 1fr 1fr 1.1fr 1fr;border-bottom:2px solid var(--gray5)">
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Cliente</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Parcela</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Vencimento</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Valor</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Forma</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">ID Bling</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Status</span>
+              </div>
+              <sc-for list="{{ parcMes }}" as="p" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:2fr .8fr 1fr 1fr 1fr 1.1fr 1fr;align-items:center;border-bottom:1px solid var(--gray5)" style-hover="background:var(--surface-hover)">
+                  <span style="padding:12px 15px;font-weight:700;color:var(--darkPurple1)">{{ p.cli }}</span>
+                  <span style="padding:12px 15px;color:var(--gray2)">{{ p.i }}</span>
+                  <span style="padding:12px 15px">{{ p.venc }}</span>
+                  <span style="padding:12px 15px;font-weight:700;color:var(--darkPurple1)">{{ p.valorF }}</span>
+                  <span style="padding:12px 15px;color:var(--gray2)">{{ p.pag }}</span>
+                  <span style="padding:12px 15px;color:var(--gray3);font-size:13px">{{ p.bling }}</span>
+                  <div style="padding:12px 15px"><x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.StatusPill" status="{{ p.tone }}" hint-size="80px,22px">{{ p.st }}</x-import></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ================= INADIMPLÊNCIA ================= -->
+      <sc-if value="{{ s.inad }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:24px;max-width:1500px;animation:fadeInAnim .35s ease">
+          <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:280px">
+              <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lightPurple1)">Financeiro</span>
+              <h1 style="margin:2px 0 4px;font-size:28px;font-weight:700;letter-spacing:-0.01em;color:var(--darkPurple1)">Inadimplência</h1>
+              <p style="margin:0;color:var(--gray)">Parcelas vencidas, faixa de atraso e etapa da régua de cobrança de cada cliente.</p>
+            </div>
+            <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="white" hint-size="140px,40px">Exportar</x-import>
+            <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="purple" on-click="{{ notifyAll }}" hint-size="170px,40px">Notificar todos</x-import>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:20px">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:20px">
+              <sc-for list="{{ inadKpis }}" as="k" hint-placeholder-count="4">
+                <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;padding:20px 24px;display:flex;flex-direction:column;gap:6px">
+                  <span style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray3)">{{ k.label }}</span>
+                  <span style="font-size:28px;font-weight:800;letter-spacing:-0.02em;color:{{ k.c }};line-height:1.1">{{ k.value }}</span>
+                  <span style="font-size:13px;color:var(--gray3)">{{ k.sub }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:16px">
+              <h3 style="margin:0;font-size:18px;font-weight:700;color:var(--darkPurple1)">Valor vencido por faixa de atraso</h3>
+              <sc-for list="{{ aging }}" as="a" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:14px">
+                  <span style="width:76px;flex-shrink:0;font-size:13px;font-weight:600;color:var(--gray2)">{{ a.label }}</span>
+                  <div style="flex:1;min-width:80px;height:22px;border-radius:6px;background:var(--light)"><div style="height:100%;width:{{ a.h }};background:{{ a.c }};border-radius:6px"></div></div>
+                  <span style="width:84px;flex-shrink:0;text-align:right;font-weight:700;color:var(--darkPurple1)">{{ a.valorF }}</span>
+                  <span style="width:70px;flex-shrink:0;text-align:right;font-size:12px;color:var(--gray3)">{{ a.n }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:var(--white);border:1px solid var(--gray5);border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,.03);overflow:auto">
+            <div style="min-width:1000px">
+              <div style="display:grid;grid-template-columns:2fr 1fr 1fr .9fr 1.6fr 1.6fr;border-bottom:2px solid var(--gray5)">
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Cliente</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Em atraso</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Vencido desde</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Dias ↓</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Régua de cobrança</span>
+                <span style="padding:12px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--gray)">Ações</span>
+              </div>
+              <sc-for list="{{ inadRows }}" as="d" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:2fr 1fr 1fr .9fr 1.6fr 1.6fr;align-items:center;border-bottom:1px solid var(--gray5)" style-hover="background:var(--surface-hover)">
+                  <div onClick="{{ d.open }}" style="padding:12px 15px;display:flex;align-items:center;gap:12px;cursor:pointer">
+                    <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Avatar" name="{{ d.cli }}" size="{{ 34 }}" hint-size="34px,34px"></x-import>
+                    <div style="display:flex;flex-direction:column"><span style="font-weight:700;color:var(--lightPurple1)">{{ d.cli }}</span><span style="font-size:12px;color:var(--gray3)">{{ d.linha }} · {{ d.ctNum }}</span></div>
+                  </div>
+                  <span style="padding:12px 15px;font-weight:700;color:var(--red)">{{ d.atrasoF }}</span>
+                  <span style="padding:12px 15px">{{ d.desde }}</span>
+                  <div style="padding:12px 15px"><x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.StatusPill" status="{{ d.diasTone }}" hint-size="70px,22px">{{ d.diasF }}</x-import></div>
+                  <span style="padding:12px 15px;font-size:13px;color:var(--gray2)">{{ d.regua }}</span>
+                  <div style="padding:12px 15px;display:flex;gap:8px">
+                    <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="secondary" smaller="{{ true }}" on-click="{{ d.notify }}" hint-size="90px,30px">{{ d.notifyLabel }}</x-import>
+                    <x-import component-from-global-scope="FootlinkDesignSystem_5f1c43.Button" color="white" smaller="{{ true }}" hint-size="100px,30px">Renegociar</x-import>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </main>
+  </div>
+
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:1100;display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:8px;background:#09001a;color:#fff;font-size:14px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);animation:fadeInAnim .3s ease">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="#6fcf97"><path d="{{ ic.check }}"></path></svg>{{ toast }}
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;dashLayout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;A&quot;,&quot;B&quot;],&quot;default&quot;:&quot;A&quot;,&quot;tsType&quot;:&quot;'A'|'B'&quot;,&quot;section&quot;:&quot;Dashboard&quot;},&quot;perfil&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Diretoria&quot;,&quot;Comercial&quot;,&quot;Jurídico&quot;,&quot;Financeiro&quot;],&quot;default&quot;:&quot;Diretoria&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Acesso&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;,&quot;section&quot;:&quot;Tema&quot;}}">
+const IC = {
+  dash: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
+  people: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',
+  receipt: 'M18 17H6v-2h12v2zm0-4H6v-2h12v2zm0-4H6V7h12v2zM3 22l1.5-1.5L6 22l1.5-1.5L9 22l1.5-1.5L12 22l1.5-1.5L15 22l1.5-1.5L18 22l1.5-1.5L21 22V2l-1.5 1.5L18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2 4.5 3.5 3 2v20z',
+  gavel: 'M1 21h12v2H1zM5.245 8.07l2.83-2.827 14.14 14.142-2.828 2.828zM12.317 1l5.657 5.656-2.83 2.83-5.654-5.66zM3.825 9.485l5.657 5.657-2.828 2.828-5.657-5.657z',
+  money: 'M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z',
+  warn: 'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z',
+  search: 'M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
+  moon: 'M10 2c-1.82 0-3.53.5-5 1.35C7.99 5.08 10 8.3 10 12s-2.01 6.92-5 8.65C6.47 21.5 8.18 22 10 22c5.52 0 10-4.48 10-10S15.52 2 10 2z',
+  sun: 'M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z',
+  chev: 'M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z',
+  check: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z',
+  tick: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+  clock: 'M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z',
+  bell: 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z',
+  back: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z',
+  doc: 'M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z'
+};
+const brl = v => 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+const kbrl = v => v >= 1e6 ? 'R$ ' + (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' mi' : v >= 1e3 ? 'R$ ' + Math.round(v / 1e3) + ' mil' : brl(v);
+const LINHA = {
+  Footlink: { c: 'var(--lightPurple1)', tone: 'purple' },
+  Academy: { c: 'var(--iconBlue)', tone: 'latam' },
+  Consultoria: { c: 'var(--orange2)', tone: 'fifa' }
+};
+const ETAPAS = ['Novo', 'Qualificação', 'Proposta', 'Negociação'];
+const D = (id, cli, tipo, contato, linha, plano, valor, n, pag, owner, extra) => Object.assign({ id, cli, tipo, contato, linha, plano, valor, n, pag, owner, stage: 0, etapa: 'Novo', paid: 0, atraso: 0, origem: 'Inbound', dias: 3, regua: 0 }, extra);
+const DEALS = [
+  D(1, 'Fortaleza EC', 'Clube', 'Marcelo Paz', 'Footlink', 'Scout Elite · 5 licenças', 168000, 12, 'Boleto', 'Rafael Lima', { stage: 4, paid: 5, origem: 'Indicação' }),
+  D(2, 'Grêmio Novorizontino', 'Clube', 'Rodrigo Saad', 'Footlink', 'Scout Essential · 3 licenças', 72000, 12, 'Boleto', 'Camila Torres', { stage: 4, paid: 3, atraso: 18, regua: 2, origem: 'Evento' }),
+  D(3, 'ROC Nation Sports BR', 'Agência', 'Thiago Freitas', 'Footlink', 'Scout Prime · API', 54000, 6, 'PIX', 'Rafael Lima', { stage: 4, paid: 2, atraso: 47, regua: 3, origem: 'Outbound' }),
+  D(4, 'Avaí FC', 'Clube', 'Júlio Heerdt', 'Footlink', 'Scout Basic · 2 licenças', 36000, 12, 'Boleto', 'Diego Santos', { stage: 4, paid: 8, atraso: 72, regua: 4, origem: 'Inbound' }),
+  D(5, 'Bruno Carvalho', 'Aluno', 'Bruno Carvalho', 'Academy', 'Formação em Análise de Mercado', 3600, 12, 'Cartão', 'Camila Torres', { stage: 4, paid: 4, origem: 'Site' }),
+  D(6, 'Lucas Teixeira', 'Aluno', 'Lucas Teixeira', 'Academy', 'Scouting Profissional', 4200, 10, 'Boleto', 'Camila Torres', { stage: 4, paid: 2, atraso: 9, regua: 1, origem: 'Site' }),
+  D(7, 'EC Bahia', 'Clube', 'Carlos Santoro', 'Consultoria', 'Estruturação do departamento de scouting', 120000, 6, 'Boleto', 'Diego Santos', { stage: 4, paid: 1, origem: 'Indicação' }),
+  D(8, 'Ceará SC', 'Clube', 'Aury Ferreira', 'Consultoria', 'Diagnóstico de mercado · 4 meses', 96000, 4, 'Boleto', 'Diego Santos', { stage: 3, origem: 'Indicação' }),
+  D(9, 'Athletico Paranaense', 'Clube', 'Alexandre Mattos', 'Academy', 'Turma in company · 25 vagas', 48000, 3, 'PIX', 'Camila Torres', { stage: 2, ct: 'validacao', origem: 'Outbound' }),
+  D(10, 'EC Juventude', 'Clube', 'Fábio Pizzamiglio', 'Footlink', 'Scout Basic · 2 licenças', 36000, 12, 'Boleto', 'Rafael Lima', { stage: 2, ct: 'geracao', origem: 'Evento' }),
+  D(11, 'Fut360 Agency', 'Agência', 'Renata Lopes', 'Footlink', 'Scout Essential (agente)', 24000, 12, 'Boleto', 'Rafael Lima', { stage: 1, pv: 'enviado', origem: 'Inbound' }),
+  D(12, 'Vila Nova FC', 'Clube', 'Hugo Jorge Bravo', 'Consultoria', 'Análise de elenco · 2 meses', 60000, 2, 'PIX', 'Diego Santos', { stage: 1, pv: 'rascunho', origem: 'Outbound' }),
+  D(13, 'Santos FC', 'Clube', 'Marcelo Teixeira', 'Footlink', 'Multi-Club · 12 licenças', 240000, 12, 'Boleto', 'Rafael Lima', { etapa: 'Negociação', dias: 6, origem: 'Indicação' }),
+  D(14, 'Sport Recife', 'Clube', 'Yuri Romão', 'Footlink', 'Scout Elite · 5 licenças', 168000, 12, 'Boleto', 'Rafael Lima', { etapa: 'Proposta', dias: 4, origem: 'Evento' }),
+  D(15, 'Goiás EC', 'Clube', 'Paulo Rogério', 'Footlink', 'Scout Essential · 3 licenças', 72000, 12, 'Boleto', 'Camila Torres', { etapa: 'Proposta', dias: 11, origem: 'Outbound' }),
+  D(16, 'CRB', 'Clube', 'Mário Marroquim', 'Consultoria', 'Plano de captação de atletas', 45000, 3, 'PIX', 'Diego Santos', { etapa: 'Qualificação', dias: 2, origem: 'Inbound' }),
+  D(17, 'Elenko Agency', 'Agência', 'Pedro Arantes', 'Footlink', 'Scout Prime (agente)', 54000, 12, 'Boleto', 'Rafael Lima', { etapa: 'Qualificação', dias: 5, origem: 'Inbound' }),
+  D(18, 'Mariana Couto', 'Aluno', 'Mariana Couto', 'Academy', 'Scouting Profissional', 4200, 10, 'Cartão', 'Camila Torres', { etapa: 'Novo', dias: 1, origem: 'Site' }),
+  D(19, 'Paysandu SC', 'Clube', 'Roger Aguilera', 'Footlink', 'Scout Basic · 2 licenças', 36000, 12, 'Boleto', 'Diego Santos', { etapa: 'Novo', dias: 1, origem: 'Inbound' }),
+  D(20, 'Gabriel Nunes', 'Aluno', 'Gabriel Nunes', 'Academy', 'Formação em Análise de Desempenho', 3900, 12, 'Cartão', 'Camila Torres', { etapa: 'Negociação', dias: 3, origem: 'Site' })
+];
+const CT_ORDER = ['geracao', 'validacao', 'assinatura', 'assinado'];
+const CT_META = {
+  geracao: { label: 'Em geração', tone: 'not_started' },
+  validacao: { label: 'Em validação', tone: 'pending' },
+  assinatura: { label: 'Aguard. assinatura', tone: 'in_progress' },
+  assinado: { label: 'Assinado', tone: 'completed' }
+};
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const pad = n => String(n).padStart(2, '0');
+const PERFIS = {
+  Diretoria: { name: 'Felipe Andrade', role: 'Diretoria', ini: 'FA', home: 'dash' },
+  Comercial: { name: 'Rafael Lima', role: 'Comercial', ini: 'RL', home: 'leads' },
+  'Jurídico': { name: 'Ana Ribeiro', role: 'Jurídico', ini: 'AR', home: 'contratos' },
+  Financeiro: { name: 'Marcos Vieira', role: 'Financeiro', ini: 'MV', home: 'financeiro' }
+};
+const PLANOS = {
+  Footlink: ['Scout Starter', 'Scout Basic', 'Scout Essential', 'Scout Elite', 'Multi-Club', 'Scout Prime (agente)'],
+  Academy: ['Scouting Profissional', 'Análise de Mercado', 'Análise de Desempenho', 'Turma in company'],
+  Consultoria: ['Estruturação de scouting', 'Diagnóstico de mercado', 'Análise de elenco']
+};
+
+class Component extends DCLogic {
+  state = {
+    screen: null, prev: 'dash', perfil: this.props.perfil ?? 'Diretoria',
+    theme: 'light', dashLayout: this.props.dashLayout ?? 'A', periodo: '12m',
+    leadsView: 'Kanban', linhaFiltro: 'Todas', dealId: 1, ctFilter: 'todos', ctSel: 9,
+    ov: {}, notified: {}, toast: '', blingMin: 4,
+    form: { lead: '13', perfil: 'Clube', razao: 'Santos Futebol Clube', doc: '58.196.684/0001-29', signer: 'Marcelo Teixeira', email: 'presidencia@santosfc.com.br', linha: 'Footlink', plano: 'Multi-Club', lic: '12', vig: '12', valor: '240000', pag: 'Boleto', n: '12', venc: '10/11/2026' }
+  };
+
+  componentDidMount() {
+    let t = this.props.theme;
+    if (!t) { try { t = localStorage.getItem('footlink_theme'); } catch (e) {} }
+    this.applyTheme(t === 'dark' ? 'dark' : 'light');
+  }
+  componentDidUpdate(pp) {
+    if (pp.theme !== this.props.theme && this.props.theme) this.applyTheme(this.props.theme);
+    if (pp.dashLayout !== this.props.dashLayout && this.props.dashLayout) this.setState({ dashLayout: this.props.dashLayout });
+    if (pp.perfil !== this.props.perfil && this.props.perfil) this.setPerfil(this.props.perfil);
+  }
+  componentWillUnmount() { clearTimeout(this._t); }
+  applyTheme(t) {
+    document.body.setAttribute('data-theme', t);
+    try { localStorage.setItem('footlink_theme', t); } catch (e) {}
+    this.setState({ theme: t });
+  }
+  flash(msg) { clearTimeout(this._t); this.setState({ toast: msg }); this._t = setTimeout(() => this.setState({ toast: '' }), 2600); }
+  setPerfil(p) { this.setState({ perfil: p, screen: PERFIS[p].home }); }
+  go(screen) { this.setState(s => ({ screen, prev: screen === 'negocio' ? (s.screen || PERFIS[s.perfil].home) : s.prev })); try { document.querySelector('main') && window.scrollTo(0, 0); } catch (e) {} }
+  open(id) { this.setState({ dealId: id }); this.go('negocio'); }
+
+  deal(d) {
+    const ov = this.state.ov[d.id];
+    const x = Object.assign({}, d, ov || {});
+    if (x.stage >= 3 && !x.ct) x.ct = x.stage === 3 ? 'assinatura' : 'assinado';
+    if (x.stage >= 2 && !x.pv) x.pv = 'aprovado';
+    x.valorF = brl(x.valor);
+    x.tone = LINHA[x.linha].tone;
+    x.pvNum = 'PV-2026-' + pad(100 + x.id * 3);
+    x.ctNum = 'CT-2026-' + pad(60 + x.id * 2);
+    const mo = 3 + (x.id % 6);
+    x.pvData = pad(5 + x.id) + '/' + pad(mo) + '/26';
+    x.ctData = pad(8 + x.id) + '/' + pad(mo) + '/26';
+    x.pagF = x.n > 1 ? x.pag + ' · ' + x.n + 'x' : x.pag + ' · à vista';
+    x.pvLabel = { rascunho: 'Rascunho', enviado: 'No jurídico', aprovado: 'Aprovado' }[x.pv] || '';
+    x.pvTone = { rascunho: 'not_started', enviado: 'pending', aprovado: 'completed' }[x.pv] || 'not_started';
+    if (x.ct) { x.ctLabel = CT_META[x.ct].label; x.ctTone = CT_META[x.ct].tone; }
+    x.modelo = x.linha === 'Footlink' ? 'Instrumento particular de uso · Footlink ' + (x.tipo === 'Agência' ? 'Agente' : 'Clube') : x.linha === 'Academy' ? 'Contrato de prestação de serviços educacionais' : 'Contrato de consultoria técnica';
+    x.diasF = x.dias + 'd na etapa';
+    x.etapaF = x.stage === 0 ? x.etapa : 'Ganho';
+    x.open = () => this.open(x.id);
+    return x;
+  }
+  parcelas(x) {
+    const out = [];
+    const k = Math.max(1, Math.floor(x.atraso / 30));
+    const base = x.atraso > 0 ? 9 - k : 9;
+    for (let i = 1; i <= x.n; i++) {
+      const mIdx = base + (i - (x.paid + 1));
+      const yr = 2026 + Math.floor(mIdx / 12);
+      const m = ((mIdx % 12) + 12) % 12;
+      let st = 'Em aberto', tone = 'not_started';
+      if (i <= x.paid) { st = 'Paga'; tone = 'completed'; }
+      else if (x.atraso > 0 && i <= x.paid + k) { st = 'Vencida'; tone = 'inactive'; }
+      out.push({ i: i + '/' + x.n, venc: '20/' + pad(m + 1) + '/' + String(yr).slice(2), valorF: brl(x.valor / x.n), st, tone, v: x.valor / x.n });
+    }
+    return out;
+  }
+  signers(x) {
+    const signed = x.ct === 'assinado' ? 3 : x.ct === 'assinatura' ? 1 : 0;
+    const base = [{ n: 'Felipe Andrade', r: 'Footure · Diretor' }, { n: x.contato, r: 'Contratante' }, { n: 'Ana Ribeiro', r: 'Testemunha' }];
+    return base.map((b, i) => {
+      const ok = i < signed;
+      const wait = !ok && x.ct === 'assinatura';
+      return Object.assign(b, { st: ok ? 'Assinou ' + pad(9 + i) + '/10' : wait ? 'Pendente' : 'Não enviado', bg: ok ? 'var(--green1)' : wait ? 'var(--orange3)' : 'var(--light)', fg: ok ? '#fff' : wait ? '#ce9232' : 'var(--gray3)', icon: ok ? IC.tick : IC.clock });
+    });
+  }
+  advance(x) {
+    const ov = Object.assign({}, this.state.ov);
+    const cur = Object.assign({}, ov[x.id] || {});
+    let msg = '';
+    if (x.stage === 0) { cur.stage = 1; cur.pv = 'rascunho'; msg = 'Pedido de venda criado para ' + x.cli; }
+    else if (x.stage === 1) { cur.stage = 2; cur.pv = 'aprovado'; cur.ct = 'geracao'; msg = 'Pedido enviado ao jurídico'; }
+    else if (x.ct === 'geracao') { cur.ct = 'validacao'; msg = 'Contrato ' + x.ctNum + ' gerado a partir do modelo'; }
+    else if (x.ct === 'validacao') { cur.ct = 'assinatura'; cur.stage = 3; msg = 'Contrato enviado para assinatura via Clicksign'; }
+    else if (x.ct === 'assinatura') { cur.ct = 'assinado'; cur.stage = 4; msg = 'Assinatura concluída · ' + x.n + ' parcelas criadas no Bling'; }
+    ov[x.id] = cur;
+    this.setState({ ov });
+    this.flash(msg);
+  }
+  nextLabel(x) {
+    if (x.stage === 0) return 'Converter em pedido';
+    if (x.stage === 1) return 'Enviar ao jurídico';
+    if (x.ct === 'geracao') return 'Gerar contrato';
+    if (x.ct === 'validacao') return 'Aprovar e enviar à Clicksign';
+    if (x.ct === 'assinatura') return 'Simular assinatura concluída';
+    return '';
+  }
+
+  renderVals() {
+    const st = this.state;
+    const P = PERFIS[st.perfil];
+    const screen = st.screen || P.home;
+    const all = DEALS.map(d => this.deal(d));
+    const leads = all.filter(d => d.stage === 0);
+    const pedidos = all.filter(d => d.stage >= 1);
+    const contratos = all.filter(d => d.stage >= 2);
+    const ativos = all.filter(d => d.stage === 4);
+    const devedores = ativos.filter(d => d.atraso > 0).sort((a, b) => b.atraso - a.atraso);
+    const dark = st.theme === 'dark';
+
+    // nav
+    const allow = { Diretoria: ['g', 'c', 'j', 'f'], Comercial: ['c'], 'Jurídico': ['j'], Financeiro: ['f'] }[st.perfil];
+    const ctPendN = contratos.filter(d => d.ct !== 'assinado').length;
+    const secs = [
+      { k: 'g', label: 'Gestão', items: [{ id: 'dash', label: 'Dashboard', icon: IC.dash, c: 'var(--iconPurple)' }] },
+      { k: 'c', label: 'Comercial', items: [{ id: 'leads', label: 'Leads', icon: IC.people, c: 'var(--iconBlue)', count: leads.length }, { id: 'pedidos', label: 'Pedidos de venda', icon: IC.receipt, c: 'var(--iconGreen)', count: pedidos.filter(d => d.stage === 1).length }] },
+      { k: 'j', label: 'Jurídico', items: [{ id: 'contratos', label: 'Contratos', icon: IC.gavel, c: 'var(--iconPurple)', count: ctPendN }] },
+      { k: 'f', label: 'Financeiro', items: [{ id: 'financeiro', label: 'Contratos e parcelas', icon: IC.money, c: 'var(--iconYellow)' }, { id: 'inad', label: 'Inadimplência', icon: IC.warn, c: 'var(--iconRed)', count: devedores.length }] }
+    ];
+    const activeNav = screen === 'novoPedido' ? 'pedidos' : screen === 'negocio' ? st.prev : screen;
+    const nav = secs.filter(s => allow.includes(s.k)).map(s => ({
+      label: s.label,
+      items: s.items.map(it => {
+        const on = it.id === activeNav;
+        return Object.assign({}, it, { ibg: it.c, go: () => this.go(it.id), bg: on ? 'var(--nav-active-bg, rgba(90,0,255,.08))' : 'transparent', fg: on ? 'var(--lightPurple1)' : 'var(--darkPurple1)', bl: on ? '3px solid var(--lightPurple1)' : '3px solid transparent', pl: '9px', count: it.count || 0 });
+      })
+    }));
+    const perfis = Object.keys(PERFIS).map(p => ({ label: p, go: () => this.setPerfil(p), bg: p === st.perfil ? '#ffffff' : 'transparent', fg: p === st.perfil ? '#5a00ff' : 'rgba(255,255,255,.85)' }));
+
+    // dashboard
+    const real = [312, 298, 341, 356, 372, 389, 402, 418, 436, 451, 0, 0];
+    const prev = [300, 310, 330, 350, 365, 380, 395, 410, 430, 455, 470, 490];
+    const order = [10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const realS = [470, 488, 312, 298, 341, 356, 372, 389, 402, 418, 436, 451];
+    const prevS = [460, 480, 300, 310, 330, 350, 365, 380, 395, 410, 430, 455];
+    const months = order.map((m, i) => ({ label: MESES[m], hr: (realS[i] / 600 * 100) + '%', hp: (prevS[i] / 600 * 100) + '%', tipR: 'Realizado R$ ' + realS[i] + ' mil', tipP: 'Previsto R$ ' + prevS[i] + ' mil' }));
+    const pipeline = leads.reduce((a, d) => a + d.valor, 0);
+    const vencido = devedores.reduce((a, d) => a + (d.valor / d.n) * Math.max(1, Math.floor(d.atraso / 30)), 0);
+    const kpis = [
+      { label: 'Receita contratada · 12m', value: 'R$ 4,93 mi', delta: '+18%', sub: 'vs. 12m anteriores', dc: 'var(--green1)' },
+      { label: 'MRR Footlink', value: 'R$ 286 mil', delta: '+6,4%', sub: 'vs. setembro', dc: 'var(--green1)' },
+      { label: 'Pipeline aberto', value: kbrl(pipeline), delta: leads.length + ' leads', sub: 'em negociação', dc: 'var(--lightPurple1)' },
+      { label: 'Inadimplência', value: '4,2%', delta: kbrl(vencido), sub: 'vencido em carteira', dc: 'var(--red)' }
+    ];
+    const linhas = [
+      { nome: 'Footlink', sub: 'SaaS · clubes e agentes', valor: 'R$ 3,06 mi', w: '62%', c: LINHA.Footlink.c },
+      { nome: 'Academy', sub: 'Cursos e turmas in company', valor: 'R$ 1,04 mi', w: '21%', c: LINHA.Academy.c },
+      { nome: 'Consultoria', sub: 'Projetos e serviços', valor: 'R$ 0,83 mi', w: '17%', c: LINHA.Consultoria.c }
+    ];
+    const fn = [['Leads recebidos', 214], ['Qualificados', 96], ['Propostas enviadas', 41], ['Pedidos emitidos', 23], ['Contratos assinados', 19]];
+    const funil = fn.map((f, i) => ({ label: f[0], n: f[1], w: (f[1] / 214 * 100) + '%', o: 1 - i * 0.15, conv: i === 0 ? '' : Math.round(f[1] / fn[i - 1][1] * 100) + '%' }));
+    const ctPend = contratos.filter(d => d.ct !== 'assinado').slice(0, 4).map(d => Object.assign(d, { open: () => { this.setState({ ctSel: d.id }); this.go('contratos'); } }));
+    const buckets = [['1–30 dias', 0, 30, 'var(--orange)'], ['31–60 dias', 31, 60, 'var(--orange2)'], ['61–90 dias', 61, 90, 'var(--red)'], ['+90 dias', 91, 9999, '#b71c1c']];
+    const bvals = buckets.map(b => { const ds = devedores.filter(d => d.atraso >= b[1] && d.atraso <= b[2]); return { v: ds.reduce((a, d) => a + (d.valor / d.n) * Math.max(1, Math.floor(d.atraso / 30)), 0) + (b[1] === 91 ? 0 : 0), n: ds.length }; });
+    const extra = [18400, 9600, 7200, 12000];
+    const bmax = Math.max(...bvals.map((b, i) => b.v + extra[i]));
+    const aging = buckets.map((b, i) => ({ label: b[0], c: b[3], valorF: kbrl(bvals[i].v + extra[i]), h: ((bvals[i].v + extra[i]) / bmax * 85) + '%', n: (bvals[i].n + [3, 1, 1, 1][i]) + ' clientes' }));
+
+    const stageSum = k => all.filter(d => d.stage === k);
+    const fl = [
+      { label: 'Leads', ds: leads, sub: 'Valor em pipeline', go: 'leads' },
+      { label: 'Pedidos', ds: stageSum(1), sub: 'Aguardando jurídico', go: 'pedidos' },
+      { label: 'Contratos', ds: stageSum(2), sub: 'Geração e validação', go: 'contratos' },
+      { label: 'Assinatura', ds: stageSum(3), sub: 'Pendentes na Clicksign', go: 'contratos' },
+      { label: 'Parcelas', ds: ativos, sub: 'Contratos em cobrança', go: 'financeiro' }
+    ];
+    const flmax = Math.max(...fl.map(f => f.ds.reduce((a, d) => a + d.valor, 0)));
+    const flow = fl.map((f, i) => { const v = f.ds.reduce((a, d) => a + d.valor, 0); return { n: i + 1, label: f.label, count: f.ds.length, valor: kbrl(v), sub: f.sub, w: (v / flmax * 100) + '%', go: () => this.go(f.go), bg: 'var(--white)', r: i === 0 ? '12px 0 0 12px' : i === 4 ? '0 12px 12px 0' : '0' }; });
+    const metas = [['Rafael Lima', 412000, 500000], ['Camila Torres', 192000, 300000], ['Diego Santos', 141000, 300000]].map(m => { const p = Math.round(m[1] / m[2] * 100); return { nome: m[0], real: kbrl(m[1]), meta: kbrl(m[2]), w: p + '%', c: p >= 75 ? 'var(--green2)' : p >= 55 ? 'var(--lightPurple1)' : 'var(--orange2)' }; });
+    const stuck = contratos.find(d => d.ct === 'validacao');
+    const sig = contratos.find(d => d.ct === 'assinatura');
+    const alertas = [
+      devedores[0] && { t: devedores[0].cli + ' com ' + devedores[0].atraso + ' dias de atraso', d: 'Régua de cobrança na etapa final. Avaliar renegociação.', icon: IC.warn, c: 'var(--red)', bg: 'var(--dangerBg)', go: () => this.go('inad') },
+      sig && { t: 'Assinatura pendente · ' + sig.cli, d: sig.ctNum + ' aguardando o contratante há 3 dias na Clicksign.', icon: IC.gavel, c: 'var(--lightPurple1)', bg: 'var(--lightPurple4)', go: () => { this.setState({ ctSel: sig.id }); this.go('contratos'); } },
+      stuck && { t: 'Contrato parado em validação', d: stuck.cli + ' · ' + stuck.ctNum + ' sem movimentação há 5 dias.', icon: IC.doc, c: '#ce9232', bg: 'var(--orange3)', go: () => { this.setState({ ctSel: stuck.id }); this.go('contratos'); } },
+      { t: 'Santos FC em negociação', d: 'Maior oportunidade do pipeline · R$ 240 mil em Footlink Multi-Club.', icon: IC.people, c: 'var(--iconBlue)', bg: 'rgba(47,128,237,.12)', go: () => this.open(13) }
+    ].filter(Boolean);
+
+    // leads
+    const lf = st.linhaFiltro;
+    const leadsF = all.filter(d => lf === 'Todas' || d.linha === lf);
+    const cols = ETAPAS.map((e, i) => ({ label: e, ds: leadsF.filter(d => d.stage === 0 && d.etapa === e), c: ['var(--gray3)', 'var(--iconBlue)', 'var(--orange2)', 'var(--lightPurple1)'][i] }));
+    cols.push({ label: 'Ganho', ds: leadsF.filter(d => d.stage >= 1 && d.stage <= 3), c: 'var(--green2)' });
+    const kanban = cols.map(c => ({ label: c.label, c: c.c, count: c.ds.length, total: kbrl(c.ds.reduce((a, d) => a + d.valor, 0)), cards: c.ds }));
+    const leadRows = leadsF.filter(d => d.stage <= 3).map(d => Object.assign(d, { etapa: d.etapaF }));
+
+    // novo pedido
+    const f = st.form;
+    const setF = k => e => { const v = e && e.target ? e.target.value : e; this.setState(s => ({ form: Object.assign({}, s.form, { [k]: v }) })); };
+    const valorN = parseFloat(f.valor) || 0;
+    const nN = parseInt(f.n) || 1;
+    const leadSel = all.find(d => String(d.id) === String(f.lead));
+    const resumo = {
+      cli: f.razao || (leadSel && leadSel.cli) || '—', prod: f.linha + ' · ' + f.plano + ' · ' + f.lic + ' licenças',
+      total: brl(valorN), pag: f.pag, parc: nN > 1 ? nN + 'x de ' + brl(valorN / nN) : 'À vista', vig: f.vig + ' meses',
+      modelo: f.linha === 'Footlink' ? (f.perfil === 'Agente' ? 'Footlink Agente' : 'Footlink Clube') : f.linha === 'Academy' ? 'Academy' : 'Consultoria'
+    };
+
+    // negócio
+    const cur = all.find(d => d.id === st.dealId) || all[0];
+    const parcs = cur.stage === 4 ? this.parcelas(cur) : [];
+    const stepDefs = [['Lead', cur.origem + ' · ' + cur.owner], ['Pedido', cur.stage >= 1 ? cur.pvNum : 'Pendente'], ['Contrato', cur.stage >= 2 ? (cur.ct === 'geracao' ? 'Em geração' : cur.ct === 'validacao' ? 'Em validação' : 'Validado') : 'Pendente'], ['Assinatura', cur.ct === 'assinado' ? 'Concluída' : cur.ct === 'assinatura' ? 'Clicksign · 1/3' : 'Pendente'], ['Parcelas', cur.stage === 4 ? cur.paid + '/' + cur.n + ' pagas' : 'Pendente']];
+    const curIdx = cur.stage === 2 ? 2 : cur.stage;
+    const steps = stepDefs.map((s, i) => {
+      const done = i < curIdx || (i === 4 && cur.stage === 4 && cur.paid === cur.n);
+      const now = i === curIdx && !done;
+      return { label: s[0], sub: s[1], mark: done ? '✓' : String(i + 1), bg: done ? 'var(--lightPurple1)' : now ? 'var(--lightPurple4)' : 'var(--white)', fg: done ? '#fff' : now ? 'var(--lightPurple1)' : 'var(--gray3)', bd: done ? 'none' : now ? '2px solid var(--lightPurple1)' : '1.5px solid var(--gray5)', line: i === 4 ? 'transparent' : i < curIdx ? 'var(--lightPurple1)' : 'var(--gray5)', tc: done || now ? 'var(--darkPurple1)' : 'var(--gray3)' };
+    });
+    const nl = this.nextLabel(cur);
+    const deal = Object.assign({}, cur, {
+      steps, etapa: cur.etapaF,
+      leadInfo: [{ k: 'Contato', v: cur.contato }, { k: 'Perfil', v: cur.tipo }, { k: 'Origem', v: cur.origem }, { k: 'Responsável', v: cur.owner }, { k: 'Valor estimado', v: cur.valorF }],
+      hasPv: cur.stage >= 1, noPv: cur.stage < 1,
+      pvInfo: [{ k: 'Número', v: cur.pvNum }, { k: 'Emissão', v: cur.pvData }, { k: 'Plano', v: cur.plano }, { k: 'Pagamento', v: cur.pagF }, { k: 'Parcela', v: brl(cur.valor / cur.n) }],
+      hasCt: cur.stage >= 2, noCt: cur.stage < 2, signers: cur.stage >= 2 ? this.signers(cur) : [],
+      hasParc: parcs.length > 0, noParc: parcs.length === 0, parcelas: parcs,
+      paidW: (cur.paid / cur.n * 100) + '%', parcSummary: parcs.length ? 'Bling · ' + cur.paid + ' de ' + cur.n + ' pagas' : '',
+      nextLabel: nl, next: () => this.advance(cur)
+    });
+
+    // contratos
+    const fmap = { todos: null, geracao: ['geracao'], validacao: ['validacao'], assinatura: ['assinatura'], assinado: ['assinado'] };
+    const tabsDef = [['todos', 'Todos'], ['geracao', 'Em geração'], ['validacao', 'Em validação'], ['assinatura', 'Aguardando assinatura'], ['assinado', 'Assinados']];
+    const ctTabs = tabsDef.map(t => { const on = st.ctFilter === t[0]; return { label: t[1], n: t[0] === 'todos' ? contratos.length : contratos.filter(d => d.ct === t[0]).length, go: () => this.setState({ ctFilter: t[0] }), bg: on ? 'var(--segment-active-bg)' : 'var(--white)', fg: on ? 'var(--segment-active-text)' : 'var(--dark)', bd: on ? '1px solid transparent' : '1px solid var(--lightBorder)' }; });
+    const ctList = contratos.filter(d => !fmap[st.ctFilter] || fmap[st.ctFilter].includes(d.ct)).sort((a, b) => CT_ORDER.indexOf(a.ct) - CT_ORDER.indexOf(b.ct));
+    const sel = contratos.find(d => d.id === st.ctSel) || ctList[0] || contratos[0];
+    const ctRows = ctList.map(d => Object.assign(d, { sel: () => this.setState({ ctSel: d.id }), rowBg: d.id === sel.id ? 'var(--lightPurple4)' : 'transparent', rowBl: d.id === sel.id ? '3px solid var(--lightPurple1)' : '3px solid transparent' }));
+    const ci = CT_ORDER.indexOf(sel.ct);
+    const checkT = ['Dados cadastrais e CNPJ conferidos', 'Valores e parcelas conforme ' + sel.pvNum, 'Cláusulas padrão do modelo mantidas', 'Anexo de plano e licenças incluído'];
+    const ct = Object.assign({}, sel, {
+      checks: checkT.map((t, i) => { const ok = ci >= 2 || (ci === 1 && i < 2); return { t, bg: ok ? 'var(--green1)' : 'transparent', bd: ok ? 'none' : '1.5px solid var(--gray5)', o: ok ? 1 : 0 }; }),
+      signers: this.signers(sel), signCount: (sel.ct === 'assinado' ? 3 : sel.ct === 'assinatura' ? 1 : 0) + ' de 3',
+      actionLabel: { geracao: 'Gerar contrato do modelo', validacao: 'Aprovar e enviar à Clicksign', assinatura: 'Reenviar lembrete aos signatários' }[sel.ct] || '',
+      action: () => sel.ct === 'assinatura' ? this.flash('Lembrete enviado via Clicksign') : this.advance(sel),
+      open: () => this.open(sel.id)
+    });
+
+    // financeiro
+    const finRows = ativos.map(d => {
+      const ps = this.parcelas(d);
+      const nx = ps.find(p => p.st !== 'Paga');
+      return Object.assign(d, { paidW: (d.paid / d.n * 100) + '%', prox: nx ? nx.venc : '—', sit: d.atraso > 0 ? 'Atrasado' : 'Em dia', sitTone: d.atraso > 0 ? 'inactive' : 'active' });
+    });
+    const parcMes = [];
+    ativos.forEach(d => {
+      const ps = this.parcelas(d);
+      ps.filter(p => /\/10\/26$/.test(p.venc)).forEach(p => parcMes.push(Object.assign({}, p, { cli: d.cli, pag: d.pag, bling: 'BL-' + (48210 + d.id * 17 + parseInt(p.i)) })));
+      if (!ps.some(p => /\/10\/26$/.test(p.venc)) && ps[d.paid]) parcMes.push(Object.assign({}, ps[d.paid], { cli: d.cli, pag: d.pag, bling: 'BL-' + (48210 + d.id * 17) }));
+    });
+    const carteira = ativos.reduce((a, d) => a + d.valor, 0);
+    const finKpis = [
+      { label: 'Carteira ativa', value: kbrl(carteira + 2410000), sub: ativos.length + 38 + ' contratos assinados', c: 'var(--darkPurple1)' },
+      { label: 'A receber · outubro', value: 'R$ 468 mil', sub: '61 parcelas no mês', c: 'var(--darkPurple1)' },
+      { label: 'Recebido · outubro', value: 'R$ 312 mil', sub: '67% do previsto', c: 'var(--green1)' },
+      { label: 'Vencido', value: kbrl(vencido + 47200), sub: devedores.length + 6 + ' parcelas em atraso', c: 'var(--red)' }
+    ];
+
+    // inadimplência
+    const REGUA = ['—', 'D+3 · e-mail automático', 'D+15 · WhatsApp enviado', 'D+30 · contato do financeiro', 'D+60 · notificação extrajudicial'];
+    const inadRows = devedores.map(d => {
+      const k = Math.max(1, Math.floor(d.atraso / 30));
+      const notified = st.notified[d.id];
+      const dt = new Date(2026, 9, 14 - d.atraso);
+      return Object.assign(d, { atrasoF: brl(d.valor / d.n * k), desde: pad(dt.getDate()) + '/' + pad(dt.getMonth() + 1) + '/26', diasF: d.atraso + ' dias', diasTone: d.atraso > 60 ? 'inactive' : 'pending', regua: notified ? 'Notificado hoje · e-mail e WhatsApp' : REGUA[d.regua], notifyLabel: notified ? 'Notificado' : 'Notificar', notify: () => { this.setState(s => ({ notified: Object.assign({}, s.notified, { [d.id]: true }) })); this.flash('Cobrança enviada para ' + d.cli); } });
+    });
+    const inadKpis = [
+      { label: 'Total vencido', value: kbrl(vencido + 47200), sub: 'em ' + (devedores.length + 6) + ' parcelas', c: 'var(--red)' },
+      { label: 'Taxa de inadimplência', value: '4,2%', sub: 'meta: abaixo de 3%', c: 'var(--darkPurple1)' },
+      { label: 'Clientes inadimplentes', value: String(devedores.length + 6), sub: 'de ' + (ativos.length + 38) + ' contratos ativos', c: 'var(--darkPurple1)' },
+      { label: 'Recuperado no mês', value: 'R$ 38 mil', sub: '9 parcelas renegociadas', c: 'var(--green1)' }
+    ];
+
+    return {
+      ic: IC, themeIcon: dark ? IC.sun : IC.moon, toggleTheme: () => this.applyTheme(dark ? 'light' : 'dark'),
+      user: P, perfis, nav, blingSync: 'há ' + st.blingMin + ' min', toast: st.toast, flex1: { flex: 1 },
+      s: { dash: screen === 'dash', leads: screen === 'leads', pedidos: screen === 'pedidos', novoPedido: screen === 'novoPedido', negocio: screen === 'negocio', contratos: screen === 'contratos', financeiro: screen === 'financeiro', inad: screen === 'inad' },
+      periodOpts: [{ value: 'mes', label: 'Mês' }, { value: 'tri', label: 'Trimestre' }, { value: '12m', label: '12 meses' }], periodo: st.periodo, setPeriodo: v => this.setState({ periodo: v }),
+      layoutOpts: [{ value: 'A', label: 'Visão geral' }, { value: 'B', label: 'Fluxo' }], dashLayout: st.dashLayout, setLayout: v => this.setState({ dashLayout: v }),
+      isA: st.dashLayout === 'A', isB: st.dashLayout === 'B',
+      kpis, months, linhas, funil, ctPend, aging, flow, metas, alertas,
+      goContratos: () => this.go('contratos'), goInad: () => this.go('inad'),
+      leadsSummary: leads.length + ' oportunidades abertas · ' + kbrl(pipeline) + ' em pipeline nas três linhas de receita.',
+      linhaOpts: ['Todas', 'Footlink', 'Academy', 'Consultoria'], linhaFiltro: lf, setLinha: v => this.setState({ linhaFiltro: v }),
+      viewOpts: ['Kanban', 'Tabela'], leadsView: st.leadsView, setView: v => this.setState({ leadsView: v }),
+      isKanban: st.leadsView === 'Kanban', isTabela: st.leadsView === 'Tabela', kanban, leadRows,
+      pedidoRows: pedidos.sort((a, b) => a.stage - b.stage), goNovoPedido: () => this.go('novoPedido'), goPedidos: () => this.go('pedidos'),
+      form: f, resumo,
+      leadOpts: leads.map(d => ({ value: String(d.id), label: d.cli })), perfilOpts: ['Clube', 'Agente', 'Aluno', 'Empresa'],
+      linhaFormOpts: ['Footlink', 'Academy', 'Consultoria'], planoOpts: PLANOS[f.linha] || [], pagOpts: ['Boleto', 'PIX', 'Cartão'],
+      parcOpts: ['1', '2', '3', '4', '6', '10', '12'].map(v => ({ value: v, label: v === '1' ? 'À vista' : v + 'x' })),
+      fLead: e => { const id = e.target.value; const d = all.find(x => String(x.id) === id); this.setState(s => ({ form: Object.assign({}, s.form, { lead: id, razao: d ? d.cli : '', signer: d ? d.contato : '', linha: d ? d.linha : s.form.linha, plano: d ? (PLANOS[d.linha].find(p => d.plano.startsWith(p.split(' (')[0])) || PLANOS[d.linha][0]) : s.form.plano, valor: d ? String(d.valor) : s.form.valor, n: d ? String(d.n) : s.form.n, pag: d ? d.pag : s.form.pag }) })); },
+      fPerfil: setF('perfil'), fRazao: setF('razao'), fDoc: setF('doc'), fSigner: setF('signer'), fEmail: setF('email'),
+      fLinha: v => this.setState(s => ({ form: Object.assign({}, s.form, { linha: v, plano: PLANOS[v][0] }) })), fPlano: setF('plano'), fLic: setF('lic'), fVig: setF('vig'), fValor: setF('valor'), fPag: setF('pag'), fN: setF('n'), fVenc: setF('venc'),
+      enviarPedido: () => { const id = parseInt(f.lead); if (id) { const ov = Object.assign({}, st.ov, { [id]: { stage: 2, pv: 'aprovado', ct: 'geracao' } }); this.setState({ ov }); } this.flash('Pedido enviado ao jurídico para geração do contrato'); this.go('pedidos'); },
+      deal, goBack: () => this.go(st.prev || P.home),
+      ctTabs, ctRows, ct,
+      finKpis, finRows, parcMes, syncBling: () => { this.setState({ blingMin: 0 }); this.flash('Bling sincronizado · 3 baixas de pagamento importadas'); },
+      inadRows, inadKpis, notifyAll: () => { const n = {}; devedores.forEach(d => n[d.id] = true); this.setState({ notified: n }); this.flash(devedores.length + ' clientes notificados por e-mail e WhatsApp'); }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+/* Shadows — Footlink's elevation is very shallow. Nothing above 0 10px 30px. */
+:root{
+--shadow-card:0 2px 8px rgba(0,0,0,.02);
+--shadow-card-hover:0 4px 12px rgba(0,0,0,.05);
+--shadow-soft:1px 1px 3px rgba(0,0,0,.25);
+--shadow-table:0 4px 15px rgba(0,0,0,.03);
+--shadow-profile-card:0 4px 15px rgba(0,0,0,.05);
+--shadow-kanban-card:0 1px 4px rgba(0,0,0,.05);
+--shadow-kanban-card-hover:0 4px 12px rgba(0,0,0,.08);
+--shadow-btn-hover:0 4px 12px rgba(0,0,0,.05);
+--shadow-monitor-hover:0 4px 12px rgba(0,0,0,.15);
+--shadow-context-menu:0 8px 24px rgba(0,0,0,.12);
+--shadow-dropdown:0 10px 30px rgba(0,0,0,.15);
+--shadow-suggestions:0 10px 25px rgba(0,0,0,.10);
+--shadow-tooltip:0 4px 16px rgba(0,0,0,.25);
+--shadow-nav-drawer:4px 0 24px rgba(0,0,0,.05);
+--shadow-flag:0 1px 3px rgba(0,0,0,.18);
+--shadow-avatar-ring:0 4px 15px rgba(0,0,0,.10);
+--focus-ring:0 0 0 3px rgba(90,0,255,.12);
+--focus-ring-error:0 0 0 3px rgba(235,87,87,.12);
+}

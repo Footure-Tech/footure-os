@@ -1,0 +1,14 @@
+/* Corner radii as used in the source — not a uniform ramp. */
+:root{
+--radius-xs:2px;   /* flag thumbnails */
+--radius-sm:3px;   /* club-shield overlays */
+--radius-4:4px;    /* XL flags, chat club shield */
+--radius-6:6px;    /* small icon buttons, tooltips, mini buttons */
+--radius-7:7px;    /* kanban card action icons */
+--radius-8:8px;    /* DEFAULT — buttons, inputs, nav items, dialogs */
+--radius-10:10px;  /* kanban athlete card, context menu, module icon box */
+--radius-12:12px;  /* cards, tables, panels, rounded buttons */
+--radius-15:15px;  /* profile / config cards */
+--radius-pill:20px;/* badges, date pills */
+--radius-full:50%; /* avatars */
+}

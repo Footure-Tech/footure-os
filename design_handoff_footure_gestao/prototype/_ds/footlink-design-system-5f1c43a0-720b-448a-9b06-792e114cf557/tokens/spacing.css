@@ -1,0 +1,13 @@
+/* Spacing + layout constants observed in the source (DESIGN.md §12/§13). */
+:root{
+--space-1:2px;--space-2:4px;--space-3:6px;--space-4:8px;--space-5:10px;--space-6:12px;
+--space-7:15px;--space-8:16px;--space-9:20px;--space-10:24px;--space-11:30px;--space-12:40px;
+/* Layout */
+--appbar-height:60px;--nav-drawer-width:320px;
+--page-padding-x:30px;--card-padding:24px;
+--grid-gap-module:30px;--grid-gap-profile:24px;--grid-gap-cards:20px;
+--container-default:1624px;--container-messages:1720px;--container-page:1400px;
+--kanban-column-width:320px;--sticky-header-offset:60px;
+/* Breakpoints (values only; SCSS $maxSmall/$maxMedium/$minVeryLarge) */
+--bp-small:499px; /* @kind other */--bp-medium:769px; /* @kind other */--bp-very-large:1920px; /* @kind other */
+}

@@ -1,0 +1,21 @@
+/* Type scale — see DESIGN.md §1. Barlow only, weights 100–900. */
+:root{
+--text-h1:48px;--text-h1-weight:800; /* @kind font */--text-h1-lh:1.10; /* @kind font */--text-h1-ls:-0.03em; /* @kind font */
+--text-h2:36px;--text-h2-weight:700; /* @kind font */--text-h2-lh:1.15; /* @kind font */--text-h2-ls:-0.02em; /* @kind font */
+--text-h3:28px;--text-h3-weight:700; /* @kind font */--text-h3-lh:1.20; /* @kind font */--text-h3-ls:-0.01em; /* @kind font */
+--text-h4:22px;--text-h4-weight:700; /* @kind font */--text-h4-lh:1.25; /* @kind font */--text-h4-ls:0; /* @kind font */
+--text-h5:18px;--text-h5-weight:700; /* @kind font */--text-h5-lh:1.30; /* @kind font */
+--text-h6:16px;--text-h6-weight:600; /* @kind font */--text-h6-lh:1.35; /* @kind font */
+--text-body-lg:18px;--text-body-lg-lh:1.60; /* @kind font */
+--text-body:16px;--text-body-lh:1.50; /* @kind font */
+--text-body-sm:14px;--text-body-sm-lh:1.50; /* @kind font */
+--text-caption:12px;--text-caption-lh:1.40; /* @kind font */
+--text-label:12px;--text-label-weight:700; /* @kind font */--text-label-ls:0.06em; /* @kind font */
+--text-helper:11px;--text-helper-weight:600; /* @kind font */--text-helper-ls:0.05em; /* @kind font */
+/* Weights */
+--fw-regular:400; /* @kind font */
+--fw-medium:500; /* @kind font */
+--fw-semibold:600; /* @kind font */
+--fw-bold:700; /* @kind font */
+--fw-extrabold:800; /* @kind font */
+}

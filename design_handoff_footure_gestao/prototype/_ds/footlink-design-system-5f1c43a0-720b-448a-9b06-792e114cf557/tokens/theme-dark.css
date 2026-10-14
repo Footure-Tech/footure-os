@@ -1,0 +1,20 @@
+/* Dark mode — activated with body[data-theme="dark"]. Stored in localStorage as footlink_theme.
+   Note: --darkPurple1 flips to #ffffff because the app uses it as a TEXT colour.
+   Elements that use it as a background (hero, sidenav, dark sections) hardcode #09001a. */
+body[data-theme="dark"]{
+--black:#ffffff;--darker:#f0f0f0;--dark:#e0e0e0;
+--gray:#9899ad;--gray2:#b5b5c3;--gray3:#7e8299;--gray5:#2b2b40;--lightBorder:#323248;
+--white:#1e1e2d;--light:#151521;--lightPurple4:#212e48;--darkPurple1:#ffffff;
+--surface-hover:#212130;--link-color:#ffffff;--text-link:#ffffff;
+--segment-active-bg:var(--lightPurple1);--segment-active-text:#ffffff;
+--nav-active-bg:rgba(90,0,255,.20);--nav-active-text:var(--lightPurple1);
+--menu-link-color:#ffffff;--gender-active-color:#ffffff;
+--text-strong:#ffffff;--text-body-color:#ffffff;--surface-card:#1e1e2d;--surface-page:#151521;
+--kanban-card-bg:#252538;--kanban-card-border:#2b2b40;--kanban-name:#a06bff;
+--bubble-sent-bg:var(--lightPurple1);--bubble-sent-text:#ffffff;
+--bubble-received-bg:#2b2b40;--bubble-received-text:#ffffff;
+--chat-footer-bg:#1a1a2e;
+--empty-state-bg:rgba(90,0,255,.15);--empty-state-icon:#a06bff;
+}
+:root{--kanban-card-bg:var(--white);--kanban-card-border:var(--gray5);--kanban-name:var(--lightPurple1);
+--empty-state-bg:rgba(90,0,255,.07);--empty-state-icon:#5a00ff}

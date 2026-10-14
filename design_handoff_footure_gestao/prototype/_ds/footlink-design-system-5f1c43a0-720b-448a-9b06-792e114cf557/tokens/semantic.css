@@ -1,0 +1,27 @@
+/* Semantic aliases. These are the names to reach for in new work;
+   the raw --lightPurple1 / --gray5 names exist because the source uses them. */
+:root{
+/* Text */
+--text-strong:var(--darkPurple1);--text-body-color:var(--black);--text-secondary:var(--dark);
+--text-muted:var(--gray);--text-subtle:var(--gray3);--text-on-primary:#ffffff;
+--text-link:var(--darkPurple9);--link-color:var(--darkPurple9);--text-accent:var(--lightPurple1);
+/* Surfaces */
+--surface-page:var(--light);--surface-card:var(--white);--surface-raised:var(--white);
+--surface-hover:#f9f9f9;--surface-active:var(--lightPurple4);--surface-inverse:var(--darkPurple1);
+--surface-appbar:#5a00ff;
+/* Borders */
+--border-default:var(--gray5);--border-soft:var(--gray6);--border-strong:var(--lightBorder);
+--border-focus:var(--lightPurple1);--border-error:var(--red);
+/* Action */
+--action-primary:var(--lightPurple1);--action-primary-hover:var(--lightPurple2);
+--action-danger:var(--red);--action-warning:var(--orange);--action-success:var(--green1);
+--action-monitoring:var(--orange2);
+/* Segmented / nav active state — inverted in dark mode */
+--segment-active-bg:var(--lightPurple4);--segment-active-text:var(--lightPurple1);
+--nav-active-bg:var(--lightPurple4);--nav-active-text:var(--lightPurple1);
+--menu-link-color:var(--lightPurple1);--gender-active-color:var(--lightPurple1);
+/* Chat */
+--bubble-sent-bg:var(--lightPurple4);--bubble-sent-text:var(--darkPurple1);
+--bubble-received-bg:#eaeaf2;--bubble-received-text:var(--darkPurple1);
+--chat-footer-bg:var(--gray6);
+}

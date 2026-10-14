@@ -1,0 +1,20 @@
+/* Motion — DESIGN.md §11. Two easings only: `ease` and the Material standard curve. */
+:root{
+--ease-standard:cubic-bezier(0.4,0,0.2,1); /* @kind other */
+--ease-default:ease; /* @kind other */
+--dur-fast:180ms; /* @kind other */--dur-btn:200ms; /* @kind other */--dur-base:300ms; /* @kind other */--dur-slow:350ms; /* @kind other */--dur-reveal:500ms; /* @kind other */
+--transition-button:all 200ms ease; /* @kind other */
+--transition-input:border-color 300ms,background-color 300ms,box-shadow 200ms; /* @kind other */
+--transition-card:box-shadow 300ms,background-color 300ms,border-color 300ms; /* @kind other */
+--transition-drawer:transform 300ms cubic-bezier(0.4,0,0.2,1); /* @kind other */
+--transition-tooltip:opacity 180ms ease,transform 180ms ease; /* @kind other */
+--transition-monitor:all 300ms cubic-bezier(0.4,0,0.2,1); /* @kind other */
+}
+@keyframes fl-fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fl-slideDown{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+@keyframes fl-slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+@keyframes fl-spin{to{transform:rotate(360deg)}}
+@keyframes fl-pulse{0%,100%{opacity:1}50%{opacity:.55}}
+@keyframes fl-chipPop{from{opacity:0;transform:scale(.7) translateY(8px)}to{opacity:1;transform:none}}
+@keyframes fl-shimmer{to{background-position:200% center}}
+@keyframes fl-navIndicator{from{transform:scaleY(0)}to{transform:scaleY(1)}}
