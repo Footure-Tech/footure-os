@@ -33,6 +33,9 @@ export type BaseCalculoComissao = "valor_total" | "valor_recebido";
 export type EscopoComissao = "global" | "por_vendedor" | "por_plano" | "por_pagamento";
 export type StatusComissao = "previsto" | "confirmado" | "pago";
 export type Produto = "footlink" | "api";
+export type PapelAssinaturaClicksign = "legal_representative" | "witness";
+export type LadoSignatario = "cliente" | "footure";
+export type StatusAssinaturaSignatario = "pendente" | "assinado" | "recusado";
 
 // supabase-js exige Row/Insert/Update/Relationships em cada tabela, e
 // Tables/Views/Functions como irmãos no schema — sem isso a inferência de
@@ -342,6 +345,35 @@ export interface Database {
           clicksign_document_id?: string | null;
           arquivo_assinado_path?: string | null;
         }
+      >;
+      // supabase/migrations/0027_contrato_signatarios_clicksign.sql
+      contrato_signatarios: TableDef<
+        {
+          id: string;
+          contrato_id: string;
+          clicksign_signer_id: string | null;
+          nome: string;
+          email: string;
+          papel: PapelAssinaturaClicksign;
+          lado: LadoSignatario;
+          status: StatusAssinaturaSignatario;
+          assinado_em: string | null;
+          ordem: number;
+          criado_em: string;
+        },
+        {
+          id?: string;
+          contrato_id: string;
+          clicksign_signer_id?: string | null;
+          nome: string;
+          email: string;
+          papel: PapelAssinaturaClicksign;
+          lado: LadoSignatario;
+          status?: StatusAssinaturaSignatario;
+          assinado_em?: string | null;
+          ordem?: number;
+        },
+        Partial<{ status: StatusAssinaturaSignatario; assinado_em: string | null; clicksign_signer_id: string | null }>
       >;
       transicoes: TableDef<
         {

@@ -33,7 +33,11 @@ export async function POST(request: Request) {
   }
 
   const payload = JSON.parse(corpoBruto);
-  if (payload?.event?.name !== "document_closed") {
+  const evento: string | undefined = payload?.event?.name;
+  if (evento === "sign" || evento === "refusal") {
+    return registrarEventoSignatario(payload, evento);
+  }
+  if (evento !== "document_closed") {
     return NextResponse.json({ status: "evento ignorado" }, { status: 200 });
   }
 
@@ -81,6 +85,14 @@ export async function POST(request: Request) {
     console.error("[webhook clicksign] erro ao baixar/guardar arquivo assinado:", erro);
   }
 
+  // Documento fechado = todos assinaram. Cobre signatários cujo evento `sign`
+  // se perdeu (ou chegou antes de o webhook ter esse evento habilitado).
+  await supabase
+    .from("contrato_signatarios")
+    .update({ status: "assinado", assinado_em: new Date().toISOString() })
+    .eq("contrato_id", contrato.id)
+    .eq("status", "pendente");
+
   const { error: erroTransicao } = await supabase.rpc("registrar_transicao", {
     p_pedido_id: contrato.pedido_id,
     p_para: "assinado",
@@ -89,6 +101,59 @@ export async function POST(request: Request) {
   if (erroTransicao) {
     return NextResponse.json({ error: erroTransicao.message }, { status: 500 });
   }
+
+  return NextResponse.json({ status: "processado" }, { status: 200 });
+}
+
+/**
+ * Eventos `sign` (um signatário assinou) e `refusal` (recusou) — formato da
+ * doc da Clicksign (/docs/evento-sign): `event.data.signer.{email,key}` e o
+ * documento em `document.key`, o mesmo id que já usamos no document_closed.
+ * O casamento é por documento + e-mail: o `key` do signer no webhook não tem
+ * garantia de ser o mesmo id devolvido pelo POST /signers da v3 (a mesma
+ * divergência já vista entre document e envelope), então só é usado como
+ * desempate. Sempre responde 200 quando não reconhece — não é motivo pra
+ * Clicksign ficar retentando.
+ */
+async function registrarEventoSignatario(payload: Record<string, unknown>, evento: "sign" | "refusal") {
+  const p = payload as {
+    event?: { occurred_at?: string; data?: { signer?: { email?: string; key?: string } } };
+    document?: { key?: string };
+  };
+  const documentId = p.document?.key;
+  const email = p.event?.data?.signer?.email?.trim().toLowerCase();
+  const signerKey = p.event?.data?.signer?.key;
+  if (!documentId || !email) {
+    console.error(`[webhook clicksign] evento ${evento} sem document.key ou signer.email — ignorado.`);
+    return NextResponse.json({ status: "evento sem dados suficientes, ignorado" }, { status: 200 });
+  }
+
+  const supabase = createServiceClient();
+  const { data: contrato } = await supabase.from("contratos").select("id").eq("clicksign_document_id", documentId).maybeSingle();
+  if (!contrato) return NextResponse.json({ status: "documento não reconhecido, ignorado" }, { status: 200 });
+
+  const { data: candidatos } = await supabase
+    .from("contrato_signatarios")
+    .select("id, clicksign_signer_id, status")
+    .eq("contrato_id", contrato.id)
+    .eq("email", email)
+    .order("ordem");
+  const alvo =
+    candidatos?.find((c) => c.clicksign_signer_id === signerKey) ?? candidatos?.find((c) => c.status === "pendente") ?? candidatos?.[0];
+  if (!alvo) {
+    // Contrato enviado antes da 0027 (sem linhas) ou e-mail alterado na Clicksign.
+    console.error(`[webhook clicksign] ${evento}: signatário ${email} não encontrado no contrato ${contrato.id}.`);
+    return NextResponse.json({ status: "signatário não reconhecido, ignorado" }, { status: 200 });
+  }
+
+  const { error } = await supabase
+    .from("contrato_signatarios")
+    .update({
+      status: evento === "sign" ? "assinado" : "recusado",
+      assinado_em: evento === "sign" ? (p.event?.occurred_at ?? new Date().toISOString()) : null,
+    })
+    .eq("id", alvo.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ status: "processado" }, { status: 200 });
 }

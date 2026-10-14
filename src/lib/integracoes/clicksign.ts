@@ -5,7 +5,7 @@
 // e-mails). O webhook que fecha o ciclo (enviado_para_assinatura -> assinado)
 // vive em src/app/api/webhooks/clicksign/route.ts.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/supabase/database.types";
+import type { Database, LadoSignatario, PapelAssinaturaClicksign } from "@/lib/supabase/database.types";
 import { nomeArquivoContrato } from "@/lib/contratos/nomeArquivo";
 
 type Supa = SupabaseClient<Database>;
@@ -20,13 +20,14 @@ export interface ContratoParaAssinatura {
 // Clicksign (/reference/tipos-de-requisitos-de-qualificacao) — combinado com o
 // usuário: representantes (do cliente e da Footure) assinam como
 // legal_representative, testemunhas (dos dois lados) como witness.
-type PapelAssinatura = "legal_representative" | "witness";
+type PapelAssinatura = PapelAssinaturaClicksign;
 
 interface SignatarioEnvelope {
   nomeCompleto: string;
   email: string;
   cpf: string;
   papel: PapelAssinatura;
+  lado: LadoSignatario;
 }
 
 function baseUrl(): string {
@@ -81,11 +82,11 @@ async function buscarSignatariosDoPedido(supabase: Supa, pedidoId: string): Prom
   ]);
 
   const doCliente: SignatarioEnvelope[] = (signatariosCliente ?? [])
-    .map((r) => {
+    .map((r): SignatarioEnvelope | null => {
       const s = r.signatarios_cliente as unknown as { nome_completo: string; email: string; cpf: string } | null;
       if (!s) return null;
       const papel: PapelAssinatura = r.tipo === "representante_legal" ? "legal_representative" : "witness";
-      return { nomeCompleto: s.nome_completo, email: s.email, cpf: s.cpf, papel };
+      return { nomeCompleto: s.nome_completo, email: s.email, cpf: s.cpf, papel, lado: "cliente" };
     })
     .filter((s): s is SignatarioEnvelope => !!s);
 
@@ -95,7 +96,7 @@ async function buscarSignatariosDoPedido(supabase: Supa, pedidoId: string): Prom
     if (!rep.email || !rep.cpf) {
       throw new Error(`Representante da Footure "${rep.nome}" está sem e-mail/CPF cadastrado — obrigatório para assinatura via Clicksign.`);
     }
-    return { nomeCompleto: rep.nome, email: rep.email, cpf: rep.cpf, papel: "legal_representative" as const };
+    return { nomeCompleto: rep.nome, email: rep.email, cpf: rep.cpf, papel: "legal_representative" as const, lado: "footure" as const };
   });
 
   const testemunhasDaFooture: SignatarioEnvelope[] = (testemunhasFooture ?? []).map((t) => ({
@@ -103,6 +104,7 @@ async function buscarSignatariosDoPedido(supabase: Supa, pedidoId: string): Prom
     email: t.email,
     cpf: t.cpf,
     papel: "witness" as const,
+    lado: "footure" as const,
   }));
 
   return [...doCliente, ...daFooture, ...testemunhasDaFooture];
@@ -166,6 +168,7 @@ export async function enviarParaAssinatura(supabase: Supa, contrato: ContratoPar
   });
   const documentId = documento.data.id;
 
+  const criados: { signatario: SignatarioEnvelope; signerId: string }[] = [];
   for (const signatario of signatarios) {
     const signer = await clicksign<{ data: { id: string } }>(`/envelopes/${envelopeId}/signers`, {
       method: "POST",
@@ -182,6 +185,7 @@ export async function enviarParaAssinatura(supabase: Supa, contrato: ContratoPar
       },
     });
     const signerId = signer.data.id;
+    criados.push({ signatario, signerId });
 
     await clicksign(`/envelopes/${envelopeId}/requirements`, {
       method: "POST",
@@ -231,6 +235,25 @@ export async function enviarParaAssinatura(supabase: Supa, contrato: ContratoPar
     .from("contratos")
     .update({ clicksign_envelope_id: envelopeId, clicksign_document_id: documentId })
     .eq("id", contrato.contratoId);
+
+  // Status por signatário (0027): o webhook `sign` marca cada um como
+  // assinado. Falha aqui não desfaz o envio — o envelope já foi disparado; a
+  // tela só perde o detalhe por pessoa e cai no status geral do pedido.
+  // Reenvio do mesmo contrato (cancelou a assinatura e mandou de novo) = envelope
+  // novo: os signatários do envelope anterior deixam de valer.
+  await supabase.from("contrato_signatarios").delete().eq("contrato_id", contrato.contratoId);
+  const { error: erroSignatarios } = await supabase.from("contrato_signatarios").insert(
+    criados.map(({ signatario, signerId }, ordem) => ({
+      contrato_id: contrato.contratoId,
+      clicksign_signer_id: signerId,
+      nome: signatario.nomeCompleto,
+      email: signatario.email.trim().toLowerCase(),
+      papel: signatario.papel,
+      lado: signatario.lado,
+      ordem,
+    })),
+  );
+  if (erroSignatarios) console.error("[clicksign] envelope enviado, mas falhou ao gravar os signatários:", erroSignatarios.message);
 
   return { envelopeId };
 }
