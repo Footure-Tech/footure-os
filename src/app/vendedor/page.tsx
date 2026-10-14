@@ -7,6 +7,7 @@ import { abaValida } from "@/lib/pedidos/abas";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shell/page-header";
 import { ListaPedidos } from "@/components/pedido/lista-pedidos";
+import { urlLogoCliente } from "@/lib/clientes/consultas";
 
 export default async function VendedorPage({ searchParams }: PageProps<"/vendedor">) {
   const sessao = await exigirPapel("vendedor");
@@ -27,7 +28,7 @@ export default async function VendedorPage({ searchParams }: PageProps<"/vendedo
           </Button>
         }
       />
-      <ListaPedidos pedidos={pedidos} aba={abaValida(typeof aba === "string" ? aba : undefined, "todos")} caminho="/vendedor" />
+      <ListaPedidos pedidos={pedidos} aba={abaValida(typeof aba === "string" ? aba : undefined, "todos")} urlLogo={(path) => urlLogoCliente(supabase, path)} caminho="/vendedor" />
     </div>
   );
 }

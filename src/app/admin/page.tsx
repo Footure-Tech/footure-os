@@ -7,6 +7,7 @@ import { buscarPlanoPorKey } from "@/lib/plans/normalize";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shell/page-header";
 import { ListaPedidos } from "@/components/pedido/lista-pedidos";
+import { urlLogoCliente } from "@/lib/clientes/consultas";
 
 // Diretoria: todos os pedidos de venda, abrindo na fila de aprovação.
 export default async function AdminPedidosPage({ searchParams }: PageProps<"/admin">) {
@@ -47,7 +48,7 @@ export default async function AdminPedidosPage({ searchParams }: PageProps<"/adm
         );
       })}
 
-      <ListaPedidos pedidos={pedidos} aba={abaValida(typeof aba === "string" ? aba : undefined, "aprovacao")} caminho="/admin" />
+      <ListaPedidos pedidos={pedidos} aba={abaValida(typeof aba === "string" ? aba : undefined, "aprovacao")} urlLogo={(path) => urlLogoCliente(supabase, path)} caminho="/admin" />
     </div>
   );
 }

@@ -47,7 +47,7 @@ export function montarEtapasNegocio({
   versaoContrato: number | null;
   geracaoContratoErro: string | null;
   /** null = contrato sem status por signatário (enviado antes da 0027 ou ainda não enviado). */
-  assinaturas: { assinados: number; total: number } | null;
+  assinaturas: { assinados: number; total: number; encerrada?: boolean } | null;
 }): { etapas: EtapaNegocio[]; atual: number; canceladoEm: number | null } {
   // Cancelado: o stepper congela na etapa em que o pedido estava ao ser cancelado.
   let statusEfetivo: StatusPedido = status;
@@ -70,7 +70,9 @@ export function montarEtapasNegocio({
 
   let subtituloAssinatura: string | undefined;
   if (atual >= 3) {
-    subtituloAssinatura = assinaturas ? `Clicksign · ${assinaturas.assinados}/${assinaturas.total}` : "Clicksign";
+    subtituloAssinatura = assinaturas
+      ? `${assinaturas.encerrada ? "Encerrada" : "Clicksign"} · ${assinaturas.assinados}/${assinaturas.total}`
+      : "Clicksign";
   }
 
   const assinadoEm = ultimaData(transicoes, "assinado");

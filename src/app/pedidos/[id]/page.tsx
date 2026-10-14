@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { MdAttachMoney, MdBlock, MdBusiness, MdDownload, MdEdit, MdGavel, MdHistory, MdInfo, MdReceipt } from "react-icons/md";
+import { MdAttachMoney, MdBlock, MdBusiness, MdDownload, MdEdit, MdGavel, MdHistory, MdInfo, MdReceipt, MdWarning } from "react-icons/md";
 import { createClient } from "@/lib/supabase/server";
 import { exigirPapel } from "@/lib/auth/session";
 import { buscarPedidoDetalhe } from "@/lib/pedidos/consultas";
@@ -16,7 +16,7 @@ import { statusPedidoVisual } from "@/lib/status/visual";
 import { formatarDataCurta, formatarMoeda, rotuloPagamento } from "@/lib/formatacao";
 import { Button } from "@/components/ui/button";
 import { BotaoVoltar } from "@/components/shell/page-header";
-import { Avatar } from "@/components/ds/avatar";
+import { LogoCliente } from "@/components/clientes/logo-cliente";
 import { BadgeLinha } from "@/components/ds/badge-tom";
 import { StatusPill } from "@/components/ds/status-pill";
 import { Stepper } from "@/components/ds/stepper";
@@ -113,6 +113,8 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
     }),
   );
   const contratoAtual = contratosComUrl[0] ?? null;
+  // Prazo expirou / documento finalizado com signatários pendentes (0028).
+  const assinaturaIncompleta = !!contratoAtual?.assinatura_incompleta;
 
   // Status por signatário (0027). Sem linhas = contrato ainda não enviado, ou
   // enviado antes da migration: monta a lista a partir do pedido e usa o
@@ -132,7 +134,7 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
           nome: s.nome,
           email: s.email,
           papel: papelSignatario(s.lado, s.papel === "legal_representative"),
-          situacao: s.status,
+          situacao: assinaturaIncompleta && s.status === "pendente" ? ("nao_assinou" as const) : s.status,
           assinadoEm: s.assinado_em,
         }))
       : [
@@ -152,6 +154,7 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
         ];
   const temStatusPorSignatario = !!linhasClicksign && linhasClicksign.length > 0;
   const assinados = signatariosExibidos.filter((s) => s.situacao === "assinado").length;
+  const naoAssinaram = signatariosExibidos.filter((s) => s.situacao === "nao_assinou");
 
   const { etapas, atual, canceladoEm } = montarEtapasNegocio({
     status: pedido.status,
@@ -159,7 +162,7 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
     transicoes,
     versaoContrato: contratoAtual?.versao ?? null,
     geracaoContratoErro: pedido.geracao_contrato_erro,
-    assinaturas: temStatusPorSignatario ? { assinados, total: signatariosExibidos.length } : null,
+    assinaturas: temStatusPorSignatario ? { assinados, total: signatariosExibidos.length, encerrada: assinaturaIncompleta } : null,
   });
 
   // "criado" não vira uma linha em `transicoes` (o pedido nasce em rascunho sem RPC) — sintetiza
@@ -182,7 +185,7 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-center gap-4">
         <BotaoVoltar href={VOLTAR_POR_PAPEL[sessao.papel]} />
-        <Avatar nome={nomeCliente} tamanho={52} src={urlLogoCliente(supabase, cliente?.logo_path ?? null)} className="border border-gray5 bg-surface" />
+        <LogoCliente url={urlLogoCliente(supabase, cliente?.logo_path ?? null)} nome={nomeCliente} tamanho="lg" />
         <div className="flex min-w-[240px] flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-[28px] leading-tight font-bold tracking-[-0.01em] text-darkPurple1">{nomeCliente}</h1>
@@ -201,7 +204,7 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
             </Button>
           )}
           {podeCancelar && <CancelarPedidoDialog pedidoId={pedido.id} />}
-          <AcoesPedido pedidoId={pedido.id} status={pedido.status} papel={sessao.papel} donoDoRascunho={donoDoRascunho} />
+          <AcoesPedido pedidoId={pedido.id} status={pedido.status} papel={sessao.papel} donoDoRascunho={donoDoRascunho} escopo="pedido" />
         </div>
       </div>
 
@@ -277,8 +280,6 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
             )}
             {!!pedido.valor_licenca_adicional && <LinhaChaveValor rotulo="Licença adicional" valor={formatarMoeda(pedido.valor_licenca_adicional)} />}
             <LinhaChaveValor rotulo="Vigência" valor={`${formatarDataCurta(pedido.vigencia_inicio)} a ${formatarDataCurta(pedido.vigencia_fim)}`} />
-            <LinhaChaveValor rotulo="Foro" valor={pedido.foro} />
-            <LinhaChaveValor rotulo="Multa" valor={pedido.multa_texto} longo />
             {pedido.condicao_especial && <LinhaChaveValor rotulo="Condição especial" valor={pedido.condicao_especial} longo />}
           </div>
         </CardModulo>
@@ -293,11 +294,28 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
             <EstadoVazio
               compacto
               icone={MdGavel}
-              titulo="Contrato ainda não gerado"
-              descricao="O contrato é gerado automaticamente do modelo quando a diretoria aprova o pedido."
+              titulo={pedido.geracao_contrato_erro ? "Falha ao gerar o contrato" : "Contrato ainda não gerado"}
+              descricao={
+                pedido.geracao_contrato_erro
+                  ? "Corrija o problema indicado acima e tente gerar novamente."
+                  : "O contrato é gerado automaticamente do modelo quando a diretoria aprova o pedido."
+              }
             />
           ) : (
             <div className="flex flex-col gap-4">
+              {assinaturaIncompleta && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-red/30 bg-dangerBg px-4 py-3 text-sm text-red">
+                  <MdWarning className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    <strong className="font-bold">
+                      Assinatura encerrada sem todas as assinaturas
+                      {contratoAtual.assinatura_encerrada_em ? ` em ${formatarDataCurta(contratoAtual.assinatura_encerrada_em)}` : ""}.
+                    </strong>{" "}
+                    Não assinaram: {naoAssinaram.map((s) => s.nome).join(", ")}.
+                  </span>
+                </div>
+              )}
+
               <div className="flex flex-col">
                 <LinhaChaveValor rotulo="Modelo" valor={MODELO_CONTRATO[pedido.perfil]} />
                 <LinhaChaveValor rotulo="Gerado em" valor={formatarDataCurta(contratoAtual.gerado_em)} />
@@ -347,8 +365,15 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
               </div>
             </div>
           )}
-        </CardModulo>
 
+          {/* Ações do jurídico sobre o contrato (liberar, regenerar, nova versão, Clicksign) ficam no contexto do contrato. */}
+          <div className="flex flex-wrap gap-2.5 empty:hidden">
+            <AcoesPedido pedidoId={pedido.id} status={pedido.status} papel={sessao.papel} donoDoRascunho={donoDoRascunho} escopo="contrato" />
+          </div>
+        </CardModulo>
+      </div>
+
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
         <CardModulo icone={MdAttachMoney} cor="bg-iconYellow" titulo="Parcelas">
           {/* Ainda não há integração pedido → Bling (bling_pedido_id nunca é
               preenchido). Pedidos já assinados tiveram as cobranças criadas
@@ -369,11 +394,11 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
             />
           )}
         </CardModulo>
-      </div>
 
-      <CardModulo icone={MdHistory} cor="bg-iconGray" titulo="Linha do tempo">
-        <TimelineTransicoes eventos={eventosTimeline} />
-      </CardModulo>
+        <CardModulo icone={MdHistory} cor="bg-iconGray" titulo="Linha do tempo">
+          <TimelineTransicoes eventos={eventosTimeline} />
+        </CardModulo>
+      </div>
     </div>
   );
 }

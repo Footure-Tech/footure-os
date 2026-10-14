@@ -233,7 +233,8 @@ export async function enviarParaAssinatura(supabase: Supa, contrato: ContratoPar
   // `envelope` — são recursos diferentes na v3 — por isso guardamos os dois.
   await supabase
     .from("contratos")
-    .update({ clicksign_envelope_id: envelopeId, clicksign_document_id: documentId })
+    // Envelope novo zera um encerramento incompleto anterior (0028).
+    .update({ clicksign_envelope_id: envelopeId, clicksign_document_id: documentId, assinatura_incompleta: false, assinatura_encerrada_em: null })
     .eq("id", contrato.contratoId);
 
   // Status por signatário (0027): o webhook `sign` marca cada um como

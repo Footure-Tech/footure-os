@@ -6,7 +6,6 @@
 import type { Signatario } from "@/lib/contratos/gerarContrato";
 
 export type CodigoAlerta =
-  | "dados_cadastrais"
   | "representante_ausente"
   | "plano_legado"
   | "valor_incoerente"
@@ -43,14 +42,6 @@ export interface DadosParaAlertas {
  */
 export function gerarAlertas(dados: DadosParaAlertas): AlertaPedido[] {
   const alertas: AlertaPedido[] = [];
-
-  // Item 1 — lembrete permanente, não condicional: o pedido é rascunho até
-  // ser revisado, e o dado do cliente historicamente diverge do correto.
-  alertas.push({
-    codigo: "dados_cadastrais",
-    mensagem: "Confira razão social, CNPJ e endereço do cliente antes de aprovar — esses dados vão para o contrato.",
-    severidade: "aviso",
-  });
 
   if (!dados.temRepresentanteLegal) {
     alertas.push({

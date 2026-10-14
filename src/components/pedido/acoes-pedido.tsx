@@ -92,18 +92,26 @@ function ComComentario({
   );
 }
 
+// Status em que a próxima ação é sobre o CONTRATO (renderizadas dentro do
+// card do contrato na tela Negócio); as demais são sobre o pedido (cabeçalho).
+const STATUS_ACAO_CONTRATO: StatusPedido[] = ["aprovado", "em_revisao_juridica", "pronto_para_assinatura", "enviado_para_assinatura"];
+
 export function AcoesPedido({
   pedidoId,
   status,
   papel,
   donoDoRascunho,
+  escopo,
 }: {
   pedidoId: string;
   status: StatusPedido;
   papel: PapelUsuario;
   donoDoRascunho: boolean;
+  escopo: "pedido" | "contrato";
 }) {
   const { pendente, rodar } = useAcao();
+
+  if (STATUS_ACAO_CONTRATO.includes(status) !== (escopo === "contrato")) return null;
 
   if (status === "rascunho" && donoDoRascunho) {
     return (

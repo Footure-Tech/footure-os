@@ -1,8 +1,9 @@
-import { MdCancel, MdCheck, MdRadioButtonUnchecked, MdSchedule } from "react-icons/md";
+import { MdCancel, MdCheck, MdPriorityHigh, MdRadioButtonUnchecked, MdSchedule } from "react-icons/md";
 import { cn } from "@/lib/utils";
 import { formatarDataCurta } from "@/lib/formatacao";
 
-export type SituacaoSignatario = "assinado" | "pendente" | "recusado" | "nao_enviado";
+/** nao_assinou = estava pendente quando o processo de assinatura foi encerrado (prazo/finalização). */
+export type SituacaoSignatario = "assinado" | "pendente" | "recusado" | "nao_assinou" | "nao_enviado";
 
 export interface SignatarioExibido {
   nome: string;
@@ -17,6 +18,7 @@ const VISUAL: Record<SituacaoSignatario, { icone: typeof MdCheck; caixa: string;
   assinado: { icone: MdCheck, caixa: "bg-green2 text-white", texto: "text-green1", rotulo: "Assinou" },
   pendente: { icone: MdSchedule, caixa: "bg-orange3 text-[#ce9232]", texto: "text-[#ce9232]", rotulo: "Aguardando assinatura" },
   recusado: { icone: MdCancel, caixa: "bg-dangerBg text-red", texto: "text-red", rotulo: "Recusou" },
+  nao_assinou: { icone: MdPriorityHigh, caixa: "bg-dangerBg text-red", texto: "text-red", rotulo: "Não assinou" },
   nao_enviado: { icone: MdRadioButtonUnchecked, caixa: "bg-light text-gray3", texto: "text-gray3", rotulo: "Não enviado" },
 };
 

@@ -1,8 +1,10 @@
 // Fase 3 (PROMPT.md seção 8) — webhook real da Clicksign. Assinado com HMAC
 // SHA-256 (header `Content-Hmac: sha256=<hex>`, calculado sobre o corpo BRUTO
 // da requisição — https://developers.clicksign.com "Segurança de Webhooks").
-// Só o evento `document_closed` (todos assinaram) importa aqui: baixa o PDF
-// assinado, guarda no Storage e move ENVIADO_PARA_ASSINATURA -> ASSINADO.
+// Eventos tratados: `sign`/`refusal` (status por signatário, 0027),
+// `deadline` e `document_closed`. O fechamento só move
+// ENVIADO_PARA_ASSINATURA -> ASSINADO (baixando o PDF assinado) quando todos
+// os signatários assinaram; senão registra o encerramento incompleto (0028).
 //
 // `document.key` no payload é o id do recurso `document` da v3 (POST
 // /envelopes/:id/documents) — testado contra o sandbox real: NÃO é o id do
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
   if (evento === "sign" || evento === "refusal") {
     return registrarEventoSignatario(payload, evento);
   }
-  if (evento !== "document_closed") {
+  if (evento !== "document_closed" && evento !== "deadline") {
     return NextResponse.json({ status: "evento ignorado" }, { status: 200 });
   }
 
@@ -65,6 +67,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "já processado" }, { status: 200 });
   }
 
+  // Encerrar (prazo expirado ou documento finalizado) NÃO significa que todos
+  // assinaram. Se algum signatário registrado (0027) não assinou, o pedido
+  // fica em enviado_para_assinatura com o encerramento incompleto registrado
+  // (0028) — a tela mostra quem faltou e o jurídico decide entre reenviar ou
+  // estender o prazo. Contratos sem signatários registrados (enviados antes da
+  // 0027) seguem o fluxo antigo: document_closed = assinado.
+  await conciliarAssinaturasDoPayload(supabase, contrato.id, (payload.document as { signers?: unknown } | undefined)?.signers);
+  const { data: linhas } = await supabase.from("contrato_signatarios").select("status").eq("contrato_id", contrato.id);
+  const faltando = (linhas ?? []).filter((l) => l.status !== "assinado");
+  if ((linhas ?? []).length > 0 && faltando.length > 0) {
+    await supabase
+      .from("contratos")
+      .update({ assinatura_incompleta: true, assinatura_encerrada_em: payload.event?.occurred_at ?? new Date().toISOString() })
+      .eq("id", contrato.id);
+    return NextResponse.json({ status: `encerrado sem todas as assinaturas (${faltando.length} pendente(s))` }, { status: 200 });
+  }
+  if (evento === "deadline") {
+    // Prazo chegou com todos já assinados: o document_closed que vem em seguida fecha o ciclo.
+    return NextResponse.json({ status: "prazo encerrado, aguardando document_closed" }, { status: 200 });
+  }
+
   try {
     const bufferAssinado = await buscarArquivoAssinado(contrato.clicksign_envelope_id, documentId);
     if (bufferAssinado) {
@@ -84,14 +107,6 @@ export async function POST(request: Request) {
     // arquivamento — o mesmo padrão usado no stub do Bling em acoes.ts.
     console.error("[webhook clicksign] erro ao baixar/guardar arquivo assinado:", erro);
   }
-
-  // Documento fechado = todos assinaram. Cobre signatários cujo evento `sign`
-  // se perdeu (ou chegou antes de o webhook ter esse evento habilitado).
-  await supabase
-    .from("contrato_signatarios")
-    .update({ status: "assinado", assinado_em: new Date().toISOString() })
-    .eq("contrato_id", contrato.id)
-    .eq("status", "pendente");
 
   const { error: erroTransicao } = await supabase.rpc("registrar_transicao", {
     p_pedido_id: contrato.pedido_id,
@@ -156,4 +171,29 @@ async function registrarEventoSignatario(payload: Record<string, unknown>, event
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ status: "processado" }, { status: 200 });
+}
+
+/**
+ * Se o objeto `document` do webhook trouxer o status de cada signatário, usa
+ * isso para marcar assinaturas cujo evento `sign` não chegou. A doc pública
+ * da Clicksign não mostra esses campos no exemplo de signer, então a leitura
+ * é defensiva (signature.signed_at ou signed_at); sem eles, não faz nada.
+ */
+async function conciliarAssinaturasDoPayload(
+  supabase: ReturnType<typeof createServiceClient>,
+  contratoId: string,
+  signers: unknown,
+) {
+  if (!Array.isArray(signers)) return;
+  for (const signer of signers as Array<{ email?: string; signed_at?: string; signature?: { signed_at?: string } }>) {
+    const assinadoEm = signer.signature?.signed_at ?? signer.signed_at;
+    const email = signer.email?.trim().toLowerCase();
+    if (!assinadoEm || !email) continue;
+    await supabase
+      .from("contrato_signatarios")
+      .update({ status: "assinado", assinado_em: assinadoEm })
+      .eq("contrato_id", contratoId)
+      .eq("email", email)
+      .eq("status", "pendente");
+  }
 }

@@ -326,6 +326,9 @@ export interface Database {
           clicksign_envelope_id: string | null;
           clicksign_document_id: string | null;
           arquivo_assinado_path: string | null;
+          // 0028_contratos_assinatura_incompleta.sql
+          assinatura_encerrada_em: string | null;
+          assinatura_incompleta: boolean;
         },
         {
           id?: string;
@@ -344,6 +347,8 @@ export interface Database {
           clicksign_envelope_id?: string | null;
           clicksign_document_id?: string | null;
           arquivo_assinado_path?: string | null;
+          assinatura_encerrada_em?: string | null;
+          assinatura_incompleta?: boolean;
         }
       >;
       // supabase/migrations/0027_contrato_signatarios_clicksign.sql
