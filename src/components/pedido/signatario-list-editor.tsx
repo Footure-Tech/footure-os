@@ -44,9 +44,9 @@ export function SignatarioListEditor({ titulo, itens, onChange, disponiveisParaR
   const reaproveitaveis = (disponiveisParaReaproveitar ?? []).filter((d) => !itens.some((i) => i.id === d.id));
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border p-3">
+    <div className="flex flex-col gap-3 rounded-lg border border-gray5 p-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">{titulo}</h3>
+        <h3 className="text-sm font-bold text-darkPurple1">{titulo}</h3>
         {reaproveitaveis.length > 0 && (
           <select
             className="h-8 rounded-md border bg-background px-2 text-xs"
@@ -66,17 +66,17 @@ export function SignatarioListEditor({ titulo, itens, onChange, disponiveisParaR
       {itens.length === 0 && <p className="text-xs text-muted-foreground">Nenhum cadastrado ainda.</p>}
 
       {itens.map((item, idx) => (
-        <div key={idx} className="grid grid-cols-1 gap-2 rounded border p-2 sm:grid-cols-[1fr_1fr_140px_auto]">
+        <div key={idx} className="grid grid-cols-1 gap-2 rounded-lg border border-gray5 p-3 sm:grid-cols-[1fr_1fr_140px_auto]">
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">Nome completo</Label>
+            <Label variante="campo">Nome completo</Label>
             <Input value={item.nomeCompleto} onChange={(e) => atualizar(idx, "nomeCompleto", e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">E-mail</Label>
+            <Label variante="campo">E-mail</Label>
             <Input type="email" value={item.email} onChange={(e) => atualizar(idx, "email", e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <Label className="text-xs">CPF</Label>
+            <Label variante="campo">CPF</Label>
             <Input value={item.cpf} onChange={(e) => atualizar(idx, "cpf", e.target.value)} />
           </div>
           <div className="flex items-end">

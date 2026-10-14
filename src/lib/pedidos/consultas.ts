@@ -13,35 +13,19 @@ function logSeErro(contexto: string, error: { message: string } | null) {
   if (error) console.error(`[consultas] ${contexto}:`, error.message);
 }
 
-export async function listarPedidosDoVendedor(supabase: Supa, vendedorId: string) {
-  const { data, error } = await supabase
-    .from("pedidos")
-    .select("id, status, perfil, plano, valor_total, criado_em, clientes(razao_social, logo_path)")
-    .eq("vendedor_id", vendedorId)
-    .order("criado_em", { ascending: false });
-  logSeErro("listarPedidosDoVendedor", error);
-  return data ?? [];
-}
-
-export async function listarFilaAprovacao(supabase: Supa) {
-  const { data, error } = await supabase
+/** Lista de "Pedidos de venda" (redesign): colunas de pagamento e vendedor
+ * inclusas. Sem filtro de vendedor — a RLS já restringe o vendedor aos
+ * próprios pedidos; admin/jurídico enxergam todos. */
+export async function listarPedidosDeVenda(supabase: Supa, filtro?: { vendedorId?: string }) {
+  let consulta = supabase
     .from("pedidos")
     .select(
-      "id, status, perfil, plano, valor_total, criado_em, clientes(razao_social, logo_path), profiles!pedidos_vendedor_id_profiles_fkey(nome)",
+      "id, status, perfil, plano, valor_total, forma_pagamento, meio_pagamento, numero_parcelas, geracao_contrato_erro, bling_pedido_id, criado_em, clientes(razao_social, nome_fantasia, logo_path), profiles!pedidos_vendedor_id_profiles_fkey(nome)",
     )
-    .eq("status", "em_aprovacao")
-    .order("criado_em", { ascending: true });
-  logSeErro("listarFilaAprovacao", error);
-  return data ?? [];
-}
-
-export async function listarPedidosAprovadosComErro(supabase: Supa) {
-  const { data, error } = await supabase
-    .from("pedidos")
-    .select("id, plano, clientes(razao_social), geracao_contrato_erro")
-    .eq("status", "aprovado")
-    .not("geracao_contrato_erro", "is", null);
-  logSeErro("listarPedidosAprovadosComErro", error);
+    .order("criado_em", { ascending: false });
+  if (filtro?.vendedorId) consulta = consulta.eq("vendedor_id", filtro.vendedorId);
+  const { data, error } = await consulta;
+  logSeErro("listarPedidosDeVenda", error);
   return data ?? [];
 }
 

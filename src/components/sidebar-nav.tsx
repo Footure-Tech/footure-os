@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { IconType } from "react-icons";
-import { MdBusiness, MdFactCheck, MdGavel, MdManageAccounts, MdNoteAdd, MdReceipt, MdSettings, MdWarning } from "react-icons/md";
+import { MdBusiness, MdGavel, MdManageAccounts, MdReceipt, MdSettings, MdWarning } from "react-icons/md";
 import { cn } from "@/lib/utils";
 import type { PapelUsuario } from "@/lib/supabase/database.types";
 import type { ChaveContador } from "@/lib/shell/dadosShell";
@@ -17,6 +17,9 @@ interface SidebarLink {
   contador?: ChaveContador;
   /** Ativo também quando a rota atual é uma sub-rota deste link (ex.: /vendedor/novo). */
   exact?: boolean;
+  /** Prefixos de rota que também marcam o link como ativo (ex.: o detalhe
+   * /pedidos/[id] destaca a lista de onde o usuário veio). */
+  ativoEm?: string[];
 }
 
 interface SidebarGroup {
@@ -37,6 +40,12 @@ const PEDIDOS_VENDEDOR: SidebarLink = {
   cor: "bg-iconGreen",
   contador: "pedidosRascunho",
   exact: true,
+  ativoEm: ["/vendedor/", "/pedidos/"],
+};
+const PEDIDOS_ADMIN: SidebarLink = {
+  ...PEDIDOS_VENDEDOR,
+  href: "/admin",
+  contador: "aprovacao",
 };
 const CLIENTES: SidebarLink = { href: "/clientes", label: "Clientes", icon: MdBusiness, cor: "bg-iconBlue" };
 const CONTRATOS: SidebarLink = {
@@ -65,15 +74,11 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
     { label: "Comercial", links: [PEDIDOS_VENDEDOR, CLIENTES] },
     { label: "Financeiro", links: [INADIMPLENCIA] },
   ],
-  juridico: [{ label: "Jurídico", links: [CONTRATOS] }],
+  juridico: [{ label: "Jurídico", links: [{ ...CONTRATOS, ativoEm: ["/pedidos/"] }] }],
   admin: [
     {
       label: "Comercial",
-      links: [
-        { href: "/admin", label: "Aprovação", icon: MdFactCheck, cor: "bg-iconGreen", contador: "aprovacao", exact: true },
-        { href: "/vendedor/novo", label: "Novo pedido", icon: MdNoteAdd, cor: "bg-iconGreen" },
-        CLIENTES,
-      ],
+      links: [PEDIDOS_ADMIN, CLIENTES],
     },
     { label: "Jurídico", links: [CONTRATOS] },
     { label: "Financeiro", links: [INADIMPLENCIA] },
@@ -110,7 +115,9 @@ export function SidebarNav({
           <div key={group.label} className="flex flex-col gap-0.5">
             <span className="hidden px-6 pb-1.5 text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase lg:block">{group.label}</span>
             {group.links.map((link) => {
-              const ativo = link.exact ? pathname === link.href : pathname.startsWith(link.href);
+              const ativo =
+                (link.exact ? pathname === link.href : pathname.startsWith(link.href)) ||
+                !!link.ativoEm?.some((prefixo) => pathname.startsWith(prefixo));
               const Icon = link.icon;
               const contagem = link.contador ? (contadores[link.contador] ?? 0) : 0;
               return (

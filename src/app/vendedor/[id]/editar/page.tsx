@@ -10,6 +10,7 @@ import {
 } from "@/lib/pedidos/consultas";
 import { pedidoEhEditavel } from "@/lib/pedidos/statusEditavel";
 import { PedidoForm, type DadosIniciaisPedido } from "@/components/pedido/pedido-form";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default async function EditarPedidoPage({ params }: PageProps<"/vendedor/[id]/editar">) {
   const { id } = await params;
@@ -87,10 +88,10 @@ export default async function EditarPedidoPage({ params }: PageProps<"/vendedor/
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">Editar pedido</h1>
+    <div className="flex max-w-[1300px] flex-col gap-6">
+      <PageHeader modulo="Comercial · Pedidos de venda" titulo="Editar pedido de venda" voltarHref={`/pedidos/${pedido.id}`} />
       {pedido.status !== "rascunho" && (
-        <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+        <p className="rounded-lg border border-orange/40 bg-orange3 px-4 py-3 text-sm font-semibold text-[#ce9232]">
           Este pedido já saiu de rascunho. Ao salvar, ele volta para rascunho e precisa passar por aprovação de novo.
         </p>
       )}

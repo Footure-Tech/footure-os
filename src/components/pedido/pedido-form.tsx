@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useMemo, useState, type FocusEvent } from "react";
-import { Building2, Package, CreditCard, CalendarRange, ScrollText, Users, Handshake } from "lucide-react";
+import { useActionState, useMemo, useRef, useState, type FocusEvent } from "react";
+import { MdBusiness } from "react-icons/md";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Combobox, ComboboxInputGroup, ComboboxInput, ComboboxClear, ComboboxIcon, ComboboxPopup, ComboboxList, ComboboxEmpty, ComboboxItem } from "@/components/ui/combobox";
 import { Separator } from "@/components/ui/separator";
 import { BlocoFormulario } from "./bloco-formulario";
-import { ResumoPedido } from "./resumo-pedido";
+import { ResumoPedido, type IntencaoEnvio } from "./resumo-pedido";
 import { SignatarioListEditor, type SignatarioForm } from "./signatario-list-editor";
 import { PainelAlertas } from "./painel-alertas";
 import { CamposEndereco } from "@/components/clientes/campos-endereco";
@@ -106,10 +106,33 @@ function somarMeses(dataISO: string, meses: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// Rótulos exibidos no gatilho dos selects (sem `items`, o Select do base-ui
+// mostra o valor cru, ex.: "parcelado" em vez de "Parcelado").
+const ROTULOS_PERFIL = { clube: "Clube", agente: "Agente" };
+const ROTULOS_FORMA = { parcelado: "Parcelado", avista: "À vista" };
+const ROTULOS_API_MODELO = {
+  combinado: "Combinado (um boleto só, valor somado)",
+  distintos: "Boletos distintos (API e software separados)",
+};
+const ROTULOS_CONVENCAO = { calendario: "Calendário (padrão)", ciclo: "Ciclo" };
+const ROTULOS_DIVULGACAO = {
+  nenhuma: "Nenhuma",
+  simples: "Simples (cliente autoriza citar como referência)",
+  obrigacao: "Divulgação mútua (desconto opcional)",
+};
+
 const ESTADO_INICIAL: SalvarPedidoState = {};
 
 export function PedidoForm({ clientes, signatariosPorCliente, representantesFooture, usuarios, pedidoId, dadosIniciais: d }: Props) {
   const [estado, formAction, pendente] = useActionState(salvarPedido, ESTADO_INICIAL);
+  // Qual botão do resumo submeteu: o ref é lido no submit (síncrono, antes de
+  // qualquer re-render); o state só alimenta o rótulo "Enviando…/Salvando…".
+  const intencaoRef = useRef<IntencaoEnvio>("rascunho");
+  const [intencao, setIntencao] = useState<IntencaoEnvio>("rascunho");
+  function escolherIntencao(valor: IntencaoEnvio) {
+    intencaoRef.current = valor;
+    setIntencao(valor);
+  }
 
   const [clienteId, setClienteId] = useState<string>(d?.clienteId ?? "");
   const [cadastrandoNovo, setCadastrandoNovo] = useState(!d && clientes.length === 0);
@@ -221,6 +244,8 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
   );
 
   const planosDisponiveis = useMemo(() => listarPlanosCanonicos(perfil), [perfil]);
+  const rotulosPlano = useMemo(() => Object.fromEntries(planosDisponiveis.map((p) => [p.key, p.canonical])), [planosDisponiveis]);
+  const rotulosUsuarios = useMemo(() => Object.fromEntries(usuarios.map((u) => [u.id, u.nome])), [usuarios]);
   const signatariosDoClienteSelecionado = clienteId ? (signatariosPorCliente[clienteId] ?? []) : [];
 
   function aoEnviar(formData: FormData) {
@@ -265,23 +290,24 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
       closerId,
     };
     formData.set("payload", JSON.stringify(payload));
+    formData.set("intencao", intencaoRef.current);
     return formAction(formData);
   }
 
   const clienteNome = cadastrandoNovo ? novoCliente.razaoSocial : (clienteSelecionado?.razaoSocial ?? "");
 
   return (
-    <form action={aoEnviar} className="grid grid-cols-1 items-start gap-6 pb-16 lg:grid-cols-[1fr_320px] lg:gap-8">
-      <div className="flex flex-col gap-6">
+    <form action={aoEnviar} className="grid grid-cols-1 items-start gap-5 pb-16 lg:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
+      <div className="flex flex-col gap-5">
         <PainelAlertas alertas={alertas} />
         {estado.erro && (
           <p className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">{estado.erro}</p>
         )}
 
-        <BlocoFormulario numero={1} titulo="Cliente" descricao="Quem está contratando o Footlink." icon={Building2}>
+        <BlocoFormulario titulo="Cliente" descricao="Quem está contratando o Footlink.">
           {!cadastrandoNovo ? (
             <div className="flex flex-col gap-2">
-              <Label>Cliente existente</Label>
+              <Label variante="campo">Cliente existente</Label>
               <Combobox items={clienteItens} value={clienteComboboxValue} onValueChange={(item) => setClienteId(item?.value ?? "")}>
                 <ComboboxInputGroup>
                   <ComboboxInput placeholder="Buscar cliente por nome..." />
@@ -305,10 +331,10 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
                 <div className="flex flex-col gap-2">
-                  <Label>Perfil</Label>
-                  <Select value={novoCliente.tipo} onValueChange={(v) => setNovoCliente({ ...novoCliente, tipo: v as "clube" | "agente" })}>
+                  <Label variante="campo">Perfil</Label>
+                  <Select items={ROTULOS_PERFIL} value={novoCliente.tipo} onValueChange={(v) => setNovoCliente({ ...novoCliente, tipo: v as "clube" | "agente" })}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
@@ -319,24 +345,24 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                   </Select>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label>CNPJ</Label>
+                  <Label variante="campo">CNPJ</Label>
                   <Input value={novoCliente.cnpj} onChange={(e) => setNovoCliente({ ...novoCliente, cnpj: e.target.value })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
                 <div className="flex flex-col gap-2">
-                  <Label>Razão social</Label>
+                  <Label variante="campo">Razão social</Label>
                   <Input value={novoCliente.razaoSocial} onChange={(e) => setNovoCliente({ ...novoCliente, razaoSocial: e.target.value })} />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label>Nome fantasia</Label>
+                  <Label variante="campo">Nome fantasia</Label>
                   <Input value={novoCliente.nomeFantasia} onChange={(e) => setNovoCliente({ ...novoCliente, nomeFantasia: e.target.value })} />
                 </div>
               </div>
               {novoCliente.tipo === "clube" && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
                   <div className="flex flex-col gap-2">
-                    <Label>Apelido</Label>
+                    <Label variante="campo">Apelido</Label>
                     <Input
                       value={novoCliente.apelido}
                       onChange={(e) => setNovoCliente({ ...novoCliente, apelido: e.target.value })}
@@ -350,7 +376,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                 aoAlterar={(campo, valor) => setNovoCliente({ ...novoCliente, [campo]: valor })}
               />
               <div className="flex flex-col gap-2">
-                <Label>Logo da agência ou escudo do clube</Label>
+                <Label variante="campo">Logo da agência ou escudo do clube</Label>
                 <div className="flex items-center gap-4">
                   {previewLogoNovoCliente ? (
                     // eslint-disable-next-line @next/next/no-img-element -- prévia local (blob:), sem otimização necessária
@@ -361,7 +387,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                     />
                   ) : (
                     <div className="flex size-16 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-muted text-muted-foreground">
-                      <Building2 className="size-5" />
+                      <MdBusiness className="size-5" />
                     </div>
                   )}
                   <Input
@@ -384,7 +410,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           )}
         </BlocoFormulario>
 
-        <BlocoFormulario numero={2} titulo="Produto e plano" descricao="O que foi vendido e em qual escala." icon={Package}>
+        <BlocoFormulario titulo="Produto e plano" descricao="O que foi vendido e em qual escala.">
           <div className="flex items-center gap-2">
             <Checkbox checked disabled />
             <Label>Assinatura Footlink (sempre incluída)</Label>
@@ -396,7 +422,8 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
 
           {perfil === "agente" && (
             <div className="flex flex-col gap-2">
-              <Label>Nome do plano no pedido original (se veio de um pedido antigo/legado)</Label>
+              <Label variante="campo">Plano no pedido original</Label>
+              <p className="-mt-1 text-xs text-gray3">Preencha só se o pedido veio de um contrato antigo/legado.</p>
               <Input
                 value={nomePlanoImportado}
                 onChange={(e) => {
@@ -406,7 +433,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                 placeholder="ex.: Latam"
               />
               {normalizado?.status === "needs_confirmation" && (
-                <div className="flex flex-col gap-2 rounded-md border border-amber-400 bg-amber-50 p-2 text-sm dark:bg-amber-950">
+                <div className="flex flex-col gap-2 rounded-lg border border-orange/40 bg-orange3 p-3 text-sm text-gray2">
                   <span>{normalizado.reason}</span>
                   <div className="flex flex-wrap gap-2">
                     {normalizado.candidates.map((c) => (
@@ -432,9 +459,9 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           )}
 
           <div className="flex flex-col gap-2">
-            <Label>Plano</Label>
-            <Select value={plano} onValueChange={(v) => setPlano(v ?? "")}>
-              <SelectTrigger className="w-56">
+            <Label variante="campo">Plano</Label>
+            <Select items={rotulosPlano} value={plano} onValueChange={(v) => setPlano(v ?? "")}>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione o plano" />
               </SelectTrigger>
               <SelectContent>
@@ -447,9 +474,9 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
             <div className="flex flex-col gap-2">
-              <Label>Licenças pagas</Label>
+              <Label variante="campo">Licenças pagas</Label>
               <Input
                 type="text"
                 inputMode="numeric"
@@ -459,7 +486,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Licenças gratuitas</Label>
+              <Label variante="campo">Licenças gratuitas</Label>
               <Input
                 type="text"
                 inputMode="numeric"
@@ -471,12 +498,12 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           </div>
         </BlocoFormulario>
 
-        <BlocoFormulario numero={3} titulo="Pagamento" descricao="Como e quando o cliente paga." icon={CreditCard}>
-          <div className="grid grid-cols-2 gap-4">
+        <BlocoFormulario titulo="Pagamento" descricao="Como e quando o cliente paga.">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
             <div className="flex flex-col gap-2">
-              <Label>Forma de pagamento</Label>
-              <Select value={formaPagamento} onValueChange={(v) => setFormaPagamento(v as "avista" | "parcelado")}>
-                <SelectTrigger className="w-48">
+              <Label variante="campo">Forma de pagamento</Label>
+              <Select items={ROTULOS_FORMA} value={formaPagamento} onValueChange={(v) => setFormaPagamento(v as "avista" | "parcelado")}>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -486,9 +513,9 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
               </Select>
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Meio de pagamento</Label>
-              <Select value={meioPagamento} onValueChange={(v) => v && setMeioPagamento(v as MeioPagamento)}>
-                <SelectTrigger className="w-56">
+              <Label variante="campo">Meio de pagamento</Label>
+              <Select items={ROTULO_MEIO_PAGAMENTO} value={meioPagamento} onValueChange={(v) => v && setMeioPagamento(v as MeioPagamento)}>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -503,11 +530,11 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           </div>
 
           {incluiApi && (
-            <div className="grid grid-cols-2 gap-4 rounded-md border p-3">
-              <div className="col-span-2 flex flex-col gap-2">
-                <Label>Modelo de cobrança da API</Label>
-                <Select value={apiModelo} onValueChange={(v) => v && setApiModelo(v as ApiModelo)}>
-                  <SelectTrigger className="w-64">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 rounded-lg border border-gray5 p-4">
+              <div className="col-span-full flex flex-col gap-2">
+                <Label variante="campo">Modelo de cobrança da API</Label>
+                <Select items={ROTULOS_API_MODELO} value={apiModelo} onValueChange={(v) => v && setApiModelo(v as ApiModelo)}>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -517,7 +544,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                 </Select>
               </div>
               <div className="flex flex-col gap-2">
-                <Label>Valor mensal da API</Label>
+                <Label variante="campo">Valor mensal da API</Label>
                 <Input
                   type="text"
                   inputMode="decimal"
@@ -531,7 +558,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label>Valor mensal do software</Label>
+                <Label variante="campo">Valor mensal do software</Label>
                 <Input
                   type="text"
                   inputMode="decimal"
@@ -544,7 +571,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                   onFocus={selecionarConteudo}
                 />
               </div>
-              <p className="col-span-2 text-xs text-muted-foreground">
+              <p className="col-span-full text-xs text-gray3">
                 {apiModelo === "distintos"
                   ? "API e software aparecem discriminados no contrato, cada um com seu boleto."
                   : "API e software aparecem somados num único valor mensal no contrato."}
@@ -552,10 +579,10 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
             {formaPagamento === "parcelado" && (
               <div className="flex flex-col gap-2">
-                <Label>Número de parcelas</Label>
+                <Label variante="campo">Número de parcelas</Label>
                 <Input
                   type="text"
                   inputMode="numeric"
@@ -566,7 +593,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
               </div>
             )}
             <div className="flex flex-col gap-2">
-              <Label>Valor da parcela</Label>
+              <Label variante="campo">Valor da parcela</Label>
               <Input
                 type="text"
                 inputMode="decimal"
@@ -576,13 +603,13 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label>
+              <Label variante="campo">
                 Valor total{formaPagamento === "parcelado" ? " (parcela × número de parcelas)" : ""}
               </Label>
               <Input type="text" inputMode="decimal" value={valorTotal} disabled />
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Valor da licença adicional</Label>
+              <Label variante="campo">Valor da licença adicional</Label>
               <Input
                 type="text"
                 inputMode="decimal"
@@ -593,15 +620,15 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
             <div className="flex flex-col gap-2">
-              <Label>{formaPagamento === "parcelado" ? "Data do primeiro pagamento" : "Data do pagamento"}</Label>
+              <Label variante="campo">{formaPagamento === "parcelado" ? "Data do primeiro pagamento" : "Data do pagamento"}</Label>
               <Input type="date" value={primeiroPagamento} onChange={(e) => setPrimeiroPagamento(e.target.value)} />
             </div>
             {formaPagamento === "parcelado" && (
               <>
                 <div className="flex flex-col gap-2">
-                  <Label>Dia de vencimento recorrente</Label>
+                  <Label variante="campo">Dia de vencimento recorrente</Label>
                   <Input
                     type="text"
                     inputMode="numeric"
@@ -611,9 +638,9 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label>Convenção de parcelas</Label>
-                  <Select value={convencaoParcelas} onValueChange={(v) => setConvencaoParcelas(v as "calendario" | "ciclo")}>
-                    <SelectTrigger>
+                  <Label variante="campo">Convenção de parcelas</Label>
+                  <Select items={ROTULOS_CONVENCAO} value={convencaoParcelas} onValueChange={(v) => setConvencaoParcelas(v as "calendario" | "ciclo")}>
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -627,10 +654,10 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           </div>
         </BlocoFormulario>
 
-        <BlocoFormulario numero={4} titulo="Vigência" descricao="Início e fim do contrato." icon={CalendarRange}>
-          <div className="grid grid-cols-2 gap-4">
+        <BlocoFormulario titulo="Vigência" descricao="Início e fim do contrato.">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
             <div className="flex flex-col gap-2">
-              <Label>Vigência — início</Label>
+              <Label variante="campo">Vigência — início</Label>
               <Input
                 type="date"
                 value={vigenciaInicio}
@@ -643,16 +670,17 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Vigência — fim</Label>
+              <Label variante="campo">Vigência — fim</Label>
               <Input type="date" value={vigenciaFim} onChange={(e) => setVigenciaFim(e.target.value)} />
             </div>
           </div>
         </BlocoFormulario>
 
-        <BlocoFormulario numero={5} titulo="Cláusulas negociáveis" descricao="Multa, divulgação, foro e condições especiais." icon={ScrollText}>
+        <BlocoFormulario titulo="Cláusulas negociáveis" descricao="Multa, divulgação, foro e condições especiais.">
           <div className="flex flex-col gap-2">
-            <Label>Multa de rescisão</Label>
+            <Label variante="campo">Multa de rescisão</Label>
             <Select
+              items={ROTULO_MULTA}
               value={multaTipo}
               onValueChange={(v) => {
                 const tipo = v as MultaTipo;
@@ -660,7 +688,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                 setMultaTexto(textoMultaDefault(tipo));
               }}
             >
-              <SelectTrigger className="w-72">
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -686,9 +714,9 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label>Divulgação da parceria</Label>
-            <Select value={divulgacao} onValueChange={(v) => v && setDivulgacao(v as Divulgacao)}>
-              <SelectTrigger className="w-72">
+            <Label variante="campo">Divulgação da parceria</Label>
+            <Select items={ROTULOS_DIVULGACAO} value={divulgacao} onValueChange={(v) => v && setDivulgacao(v as Divulgacao)}>
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -698,9 +726,9 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
               </SelectContent>
             </Select>
             {divulgacao === "obrigacao" && (
-              <div className="grid grid-cols-2 gap-4 rounded-md border p-3">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 rounded-lg border border-gray5 p-4">
                 <div className="flex flex-col gap-2">
-                  <Label>Percentual de desconto combinado</Label>
+                  <Label variante="campo">Percentual de desconto combinado</Label>
                   <Input
                     type="text"
                     inputMode="decimal"
@@ -714,7 +742,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                   </p>
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label>Descrição do post (opcional)</Label>
+                  <Label variante="campo">Descrição do post (opcional)</Label>
                   <Textarea
                     value={postDivulgacao}
                     onChange={(e) => setPostDivulgacao(e.target.value)}
@@ -727,17 +755,17 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label>Foro</Label>
+            <Label variante="campo">Foro</Label>
             <Input value={foro} onChange={(e) => setForo(e.target.value)} />
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label>Condição especial</Label>
+            <Label variante="campo">Condição especial</Label>
             <Textarea value={condicaoEspecial} onChange={(e) => setCondicaoEspecial(e.target.value)} rows={2} />
           </div>
         </BlocoFormulario>
 
-        <BlocoFormulario numero={6} titulo="Signatários" descricao="Quem assina pelo cliente e pela Footure." icon={Users}>
+        <BlocoFormulario titulo="Signatários" descricao="Quem assina pelo cliente e pela Footure.">
           <SignatarioListEditor
             titulo="Representantes legais do cliente"
             itens={representantesLegais}
@@ -754,7 +782,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           <Separator />
 
           <div className="flex flex-col gap-2">
-            <Label>Representante(s) da Footure</Label>
+            <Label variante="campo">Representante(s) da Footure</Label>
             {representantesFooture.map((r) => (
               <div key={r.id} className="flex items-center gap-2">
                 <Checkbox
@@ -771,11 +799,11 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           <SignatarioListEditor titulo="Testemunhas da Footure" itens={testemunhasFooture} onChange={setTestemunhasFooture} />
         </BlocoFormulario>
 
-        <BlocoFormulario numero={7} titulo="SDR e Closer" descricao="Definem a comissão de cada um sobre esse pedido — podem ser a mesma pessoa." icon={Handshake}>
+        <BlocoFormulario titulo="SDR e Closer" descricao="Definem a comissão de cada um sobre esse pedido — podem ser a mesma pessoa.">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
-              <Label>SDR</Label>
-              <Select value={sdrId} onValueChange={(v) => v && setSdrId(v)}>
+              <Label variante="campo">SDR</Label>
+              <Select items={rotulosUsuarios} value={sdrId} onValueChange={(v) => v && setSdrId(v)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
@@ -789,8 +817,8 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
               </Select>
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Closer</Label>
-              <Select value={closerId} onValueChange={(v) => v && setCloserId(v)}>
+              <Label variante="campo">Closer</Label>
+              <Select items={rotulosUsuarios} value={closerId} onValueChange={(v) => v && setCloserId(v)}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
@@ -811,9 +839,18 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
         clienteNome={clienteNome}
         perfil={perfil}
         plano={plano}
+        incluiApi={incluiApi}
         valorTotal={valorTotal}
+        valorMensal={valorMensal}
+        formaPagamento={formaPagamento}
+        meioPagamento={meioPagamento}
+        numeroParcelas={numeroParcelas}
+        vigenciaInicio={vigenciaInicio}
+        vigenciaFim={vigenciaFim}
         qtdAlertas={alertas.length}
         pendente={pendente}
+        intencao={intencao}
+        aoEscolherIntencao={escolherIntencao}
       />
     </form>
   );

@@ -1,7 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
+// Seção de formulário do handoff (card branco, padding 24, título 18/700).
+// numero/icon são opcionais — o detalhe do pedido ainda os usa até ser
+// redesenhado (etapa 4b); o formulário novo não mostra nenhum dos dois.
 export function BlocoFormulario({
   numero,
   titulo,
@@ -9,27 +11,29 @@ export function BlocoFormulario({
   icon: Icon,
   children,
 }: {
-  numero: number;
+  numero?: number;
   titulo: string;
   descricao?: string;
-  icon: LucideIcon;
+  icon?: LucideIcon;
   children: ReactNode;
 }) {
   return (
-    <Card>
-      <CardHeader className="flex-row items-start gap-3 space-y-0">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
-          {numero}
-        </span>
-        <div className="flex flex-col gap-0.5 pt-0.5">
+    <section className="flex flex-col gap-[18px] rounded-xl border border-gray5 bg-surface p-6 shadow-card">
+      <div className="flex items-start gap-3">
+        {numero !== undefined && (
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-lightPurple4 text-sm font-bold text-purple-text">
+            {numero}
+          </span>
+        )}
+        <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            <Icon className="size-4 text-primary" strokeWidth={2} />
-            <h2 className="text-base font-bold text-foreground">{titulo}</h2>
+            {Icon && <Icon className="size-4 text-purple-text" strokeWidth={2} />}
+            <h2 className="text-lg font-bold text-darkPurple1">{titulo}</h2>
           </div>
-          {descricao && <p className="text-sm text-muted-foreground">{descricao}</p>}
+          {descricao && <p className="text-sm text-gray">{descricao}</p>}
         </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">{children}</CardContent>
-    </Card>
+      </div>
+      <div className="flex flex-col gap-4">{children}</div>
+    </section>
   );
 }

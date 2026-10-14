@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { exigirPapel } from "@/lib/auth/session";
+import { PageHeader } from "@/components/shell/page-header";
 import {
   listarClientes,
   listarRepresentantesFooture,
@@ -8,6 +10,7 @@ import {
 import { PedidoForm } from "@/components/pedido/pedido-form";
 
 export default async function NovoPedidoPage() {
+  const sessao = await exigirPapel("vendedor", "admin");
   const supabase = await createClient();
   const [clientes, representantesFooture, usuarios] = await Promise.all([
     listarClientes(supabase),
@@ -29,8 +32,12 @@ export default async function NovoPedidoPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">Novo pedido</h1>
+    <div className="flex max-w-[1300px] flex-col gap-6">
+      <PageHeader
+        modulo="Comercial · Pedidos de venda"
+        titulo="Novo pedido de venda"
+        voltarHref={sessao.papel === "admin" ? "/admin" : "/vendedor"}
+      />
       <PedidoForm
         clientes={clientes.map((c) => ({ id: c.id, tipo: c.tipo, razaoSocial: c.razao_social, cnpj: c.cnpj }))}
         signatariosPorCliente={signatariosPorCliente}

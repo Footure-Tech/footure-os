@@ -224,7 +224,21 @@ export async function salvarPedido(_prev: SalvarPedidoState, formData: FormData)
   const erroSignatarios = await salvarSignatariosDoPedido(supabase, pedidoId, clienteId, payload);
   if (erroSignatarios) return { erro: erroSignatarios };
 
+  // Botão "Enviar para aprovação" do formulário = salvar + a mesma transição
+  // do botão do detalhe (rascunho -> em_aprovacao, validada pelo RPC). Se a
+  // transição for recusada, o pedido já está salvo: segue em rascunho e o
+  // detalhe mostra o envio manual — não devolve erro ao form, senão um novo
+  // submit criaria um pedido duplicado.
+  if (formData.get("intencao") === "enviar") {
+    try {
+      await acoes.enviarParaAprovacao(supabase, pedidoId);
+    } catch (erro) {
+      console.error("[salvarPedido] pedido salvo, mas o envio para aprovação falhou:", erro);
+    }
+  }
+
   revalidatePath("/vendedor");
+  revalidatePath("/admin");
   redirect(`/pedidos/${pedidoId}`);
 }
 

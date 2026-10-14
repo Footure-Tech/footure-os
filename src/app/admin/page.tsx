@@ -1,81 +1,53 @@
 import Link from "next/link";
+import { MdAdd, MdError } from "react-icons/md";
 import { createClient } from "@/lib/supabase/server";
-import { listarFilaAprovacao, listarPedidosAprovadosComErro } from "@/lib/pedidos/consultas";
-import { urlLogoCliente } from "@/lib/clientes/consultas";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
-import { LogoCliente } from "@/components/clientes/logo-cliente";
+import { listarPedidosDeVenda } from "@/lib/pedidos/consultas";
+import { abaValida } from "@/lib/pedidos/abas";
 import { buscarPlanoPorKey } from "@/lib/plans/normalize";
+import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/shell/page-header";
+import { ListaPedidos } from "@/components/pedido/lista-pedidos";
 
-function formatarMoeda(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-}
-
-export default async function AdminAprovacaoPage() {
+// Diretoria: todos os pedidos de venda, abrindo na fila de aprovação.
+export default async function AdminPedidosPage({ searchParams }: PageProps<"/admin">) {
+  const { aba } = await searchParams;
   const supabase = await createClient();
-  const [fila, comErro] = await Promise.all([listarFilaAprovacao(supabase), listarPedidosAprovadosComErro(supabase)]);
+  const pedidos = await listarPedidosDeVenda(supabase);
+  const comFalhaNaGeracao = pedidos.filter((p) => p.status === "aprovado" && p.geracao_contrato_erro);
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">Fila de aprovação</h1>
+      <PageHeader
+        modulo="Comercial"
+        titulo="Pedidos de venda"
+        descricao="Aprove os pedidos enviados pelo comercial — o contrato é gerado automaticamente e segue para o jurídico."
+        acoes={
+          <Button nativeButton={false} render={<Link href="/vendedor/novo" />}>
+            <MdAdd className="size-[18px]" />
+            Novo pedido
+          </Button>
+        }
+      />
 
-      {comErro.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {comErro.map((p) => (
-            <Alert key={p.id} variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>
-                Falha ao gerar contrato — {(p.clientes as unknown as { razao_social: string } | null)?.razao_social} (
-                {buscarPlanoPorKey(p.plano)?.canonical ?? p.plano})
-              </AlertTitle>
-              <AlertDescription className="flex items-center justify-between gap-4">
-                <span>{p.geracao_contrato_erro}</span>
-                <Button size="sm" nativeButton={false} render={<Link href={`/pedidos/${p.id}`}>Ver e tentar novamente</Link>} />
-              </AlertDescription>
-            </Alert>
-          ))}
-        </div>
-      )}
+      {comFalhaNaGeracao.map((p) => {
+        const cliente = p.clientes as unknown as { razao_social: string } | null;
+        return (
+          <div key={p.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-red/30 bg-dangerBg px-5 py-4 text-red">
+            <MdError className="size-5 shrink-0" />
+            <div className="flex min-w-[240px] flex-1 flex-col">
+              <span className="font-bold">
+                Falha ao gerar contrato — {cliente?.razao_social ?? "Cliente"} ({buscarPlanoPorKey(p.plano)?.canonical ?? p.plano})
+              </span>
+              <span className="text-sm">{p.geracao_contrato_erro}</span>
+            </div>
+            <Button size="sm" variant="white" nativeButton={false} render={<Link href={`/pedidos/${p.id}`} />}>
+              Ver e tentar novamente
+            </Button>
+          </div>
+        );
+      })}
 
-      {fila.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhum pedido aguardando aprovação.</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead />
-              <TableHead>Cliente</TableHead>
-              <TableHead>Vendedor</TableHead>
-              <TableHead>Plano</TableHead>
-              <TableHead>Valor total</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {fila.map((p) => {
-              const cliente = p.clientes as unknown as { razao_social: string; logo_path: string | null } | null;
-              return (
-                <TableRow key={p.id}>
-                  <TableCell>
-                    <LogoCliente url={urlLogoCliente(supabase, cliente?.logo_path ?? null)} nome={cliente?.razao_social ?? "Cliente"} />
-                  </TableCell>
-                  <TableCell>{cliente?.razao_social ?? "—"}</TableCell>
-                  <TableCell>{(p.profiles as unknown as { nome: string } | null)?.nome ?? "—"}</TableCell>
-                  <TableCell>
-                    {p.perfil} · {buscarPlanoPorKey(p.plano)?.canonical ?? p.plano}
-                  </TableCell>
-                  <TableCell>{formatarMoeda(p.valor_total)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button size="sm" nativeButton={false} render={<Link href={`/pedidos/${p.id}`}>Revisar</Link>} />
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      )}
+      <ListaPedidos pedidos={pedidos} aba={abaValida(typeof aba === "string" ? aba : undefined, "aprovacao")} caminho="/admin" />
     </div>
   );
 }
