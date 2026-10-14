@@ -1,23 +1,51 @@
 import type { ReactNode } from "react";
 import type { SessaoUsuario } from "@/lib/auth/session";
-import { SidebarNav } from "@/components/sidebar-nav";
-import { UserMenu } from "@/components/user-menu";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { createClient } from "@/lib/supabase/server";
+import { obterDadosShell } from "@/lib/shell/dadosShell";
+import { AppBar } from "@/components/shell/app-bar";
+import { SidebarNav, type IntegracaoSidebar } from "@/components/sidebar-nav";
+import { TransicaoTela } from "@/components/shell/transicao-tela";
 
-// Layout com nav lateral fixa (porte de .ds-sidenav) + barra superior só com
-// identidade do usuário — pensado pra crescer com mais seções/grupos na
-// lateral conforme a plataforma ganha funcionalidades.
-export function AppShell({ sessao, children }: { sessao: SessaoUsuario; children: ReactNode }) {
+/** "há 4 min" — calculado no servidor, no momento da renderização do layout. */
+function tempoDecorrido(iso: string): string {
+  const minutos = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (minutos < 1) return "agora";
+  if (minutos < 60) return `há ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `há ${horas} h`;
+  return `há ${Math.floor(horas / 24)} d`;
+}
+
+// App shell do handoff: AppBar roxa no topo, sidebar por módulo e conteúdo
+// com padding de 30px. Contadores e integrações vêm de consultas reais
+// (obterDadosShell) — atualizam quando uma Server Action revalida a rota.
+export async function AppShell({ sessao, children }: { sessao: SessaoUsuario; children: ReactNode }) {
+  const supabase = await createClient();
+  const { contadores, integracoes } = await obterDadosShell(supabase, sessao.papel, sessao.id);
+
+  const statusIntegracoes: IntegracaoSidebar[] = [
+    {
+      nome: "Clicksign",
+      ok: integracoes.clicksignConfigurada,
+      status: integracoes.clicksignConfigurada ? "Conectado" : "Não configurado",
+    },
+    {
+      nome: "Bling",
+      ok: !!integracoes.blingSincronizadoEm,
+      status: integracoes.blingSincronizadoEm ? tempoDecorrido(integracoes.blingSincronizadoEm) : "Nunca sincronizado",
+    },
+  ];
+
   return (
-    <div className="min-h-full bg-background">
-      <SidebarNav papel={sessao.papel} />
-      <div className="flex min-h-full flex-col pl-[230px]">
-        <header className="flex h-16 shrink-0 items-center justify-end gap-3 border-b border-border bg-card px-8">
-          {/* Provisório até a AppBar da etapa 2 (lá o botão volta ao estilo branco-sobre-roxo). */}
-          <ThemeToggle className="bg-lightGrey2 text-gray hover:bg-surface-hover" />
-          <UserMenu sessao={sessao} />
-        </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-8 py-8">{children}</main>
+    <div className="flex min-h-full flex-col bg-background">
+      <AppBar sessao={sessao} />
+      <div className="flex flex-1 items-start">
+        <SidebarNav papel={sessao.papel} contadores={contadores} integracoes={statusIntegracoes} />
+        <main className="min-w-0 flex-1 p-[30px]">
+          <div className="max-w-[1500px]">
+            <TransicaoTela>{children}</TransicaoTela>
+          </div>
+        </main>
       </div>
     </div>
   );

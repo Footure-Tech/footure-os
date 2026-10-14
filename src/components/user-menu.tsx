@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, UserRound, LogOut } from "lucide-react";
+import { MdPerson, MdLogout } from "react-icons/md";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuLinkItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { sair } from "@/lib/auth/actions";
+import { ROTULO_PERFIL } from "@/lib/auth/perfis";
 import type { SessaoUsuario } from "@/lib/auth/session";
 
 function iniciais(nome: string) {
@@ -20,27 +23,34 @@ function iniciais(nome: string) {
   return (primeira + ultima).toUpperCase();
 }
 
+// Avatar da AppBar (círculo branco 30px, iniciais roxas) — abre o menu do usuário.
 export function UserMenu({ sessao }: { sessao: SessaoUsuario }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-lg py-1.5 pr-2 pl-1.5 outline-none hover:bg-accent">
-        <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-[13px] font-bold text-primary">
+      <DropdownMenuTrigger
+        title={sessao.nome}
+        aria-label={`Menu de ${sessao.nome}`}
+        className="flex shrink-0 items-center rounded-[20px] bg-white/10 p-1 transition-all duration-200 hover:bg-white/20 focus-visible:shadow-focus focus-visible:outline-none"
+      >
+        <span className="flex size-[30px] items-center justify-center rounded-full bg-white text-xs font-extrabold text-lightPurple1">
           {iniciais(sessao.nome)}
         </span>
-        <span className="flex flex-col items-start leading-tight">
-          <span className="text-sm font-semibold text-foreground">{sessao.nome}</span>
-          <span className="text-xs text-muted-foreground capitalize">{sessao.papel}</span>
-        </span>
-        <ChevronDown className="size-4 text-muted-foreground" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="flex flex-col gap-0.5 py-2">
+            <span className="text-sm font-bold text-foreground">{sessao.nome}</span>
+            <span className="text-xs font-normal text-muted-foreground">{ROTULO_PERFIL[sessao.papel]}</span>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
         <DropdownMenuLinkItem render={<Link href="/perfil" />}>
-          <UserRound className="size-4" />
+          <MdPerson className="size-4" />
           Ver perfil
         </DropdownMenuLinkItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={() => sair()}>
-          <LogOut className="size-4" />
+          <MdLogout className="size-4" />
           Sair
         </DropdownMenuItem>
       </DropdownMenuContent>

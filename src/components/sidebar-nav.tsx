@@ -2,24 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ClipboardList,
-  FileCheck2,
-  CheckSquare,
-  Users,
-  Settings,
-  Building2,
-  FilePlus2,
-  AlertTriangle,
-  type LucideIcon,
-} from "lucide-react";
+import type { IconType } from "react-icons";
+import { MdBusiness, MdFactCheck, MdGavel, MdManageAccounts, MdNoteAdd, MdReceipt, MdSettings, MdWarning } from "react-icons/md";
 import { cn } from "@/lib/utils";
 import type { PapelUsuario } from "@/lib/supabase/database.types";
+import type { ChaveContador } from "@/lib/shell/dadosShell";
 
 interface SidebarLink {
   href: string;
   label: string;
-  icon: LucideIcon;
+  icon: IconType;
+  /** Cor da caixa do ícone (token de módulo do Footlink DS). */
+  cor: string;
+  contador?: ChaveContador;
   /** Ativo também quando a rota atual é uma sub-rota deste link (ex.: /vendedor/novo). */
   exact?: boolean;
 }
@@ -29,86 +24,134 @@ interface SidebarGroup {
   links: SidebarLink[];
 }
 
-// Componentes de ícone (lucide-react) não são serializáveis pela fronteira
-// Server->Client — por isso essa config, com os ícones, mora dentro do
-// próprio client component em vez de vir como prop do AppShell (Server
-// Component). AppShell só passa o papel (string).
+export interface IntegracaoSidebar {
+  nome: string;
+  ok: boolean;
+  status: string;
+}
+
+const PEDIDOS_VENDEDOR: SidebarLink = {
+  href: "/vendedor",
+  label: "Pedidos de venda",
+  icon: MdReceipt,
+  cor: "bg-iconGreen",
+  contador: "pedidosRascunho",
+  exact: true,
+};
+const CLIENTES: SidebarLink = { href: "/clientes", label: "Clientes", icon: MdBusiness, cor: "bg-iconBlue" };
+const INADIMPLENCIA: SidebarLink = {
+  href: "/inadimplencia",
+  label: "Inadimplência",
+  icon: MdWarning,
+  cor: "bg-iconRed",
+  contador: "inadimplentes",
+  exact: true,
+};
+
+// Seções por módulo (handoff), limitadas às rotas que cada papel já acessa
+// hoje (layouts com exigirPapel). Componentes de ícone não são serializáveis
+// pela fronteira Server->Client — por isso a config mora no client component
+// e o AppShell só passa o papel.
 const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
   vendedor: [
-    {
-      label: "Vendas",
-      links: [
-        { href: "/vendedor", label: "Meus pedidos", icon: ClipboardList, exact: true },
-        { href: "/clientes", label: "Clientes", icon: Building2 },
-        { href: "/inadimplencia", label: "Inadimplência", icon: AlertTriangle, exact: true },
-      ],
-    },
+    { label: "Comercial", links: [PEDIDOS_VENDEDOR, CLIENTES] },
+    { label: "Financeiro", links: [INADIMPLENCIA] },
   ],
   juridico: [
     {
       label: "Jurídico",
-      links: [{ href: "/juridico", label: "Contratos para revisão", icon: FileCheck2, exact: true }],
+      links: [{ href: "/juridico", label: "Contratos", icon: MdGavel, cor: "bg-iconPurple", contador: "contratos", exact: true }],
     },
   ],
   admin: [
     {
+      label: "Comercial",
+      links: [
+        { href: "/admin", label: "Aprovação", icon: MdFactCheck, cor: "bg-iconGreen", contador: "aprovacao", exact: true },
+        { href: "/vendedor/novo", label: "Novo pedido", icon: MdNoteAdd, cor: "bg-iconGreen" },
+        CLIENTES,
+      ],
+    },
+    { label: "Financeiro", links: [INADIMPLENCIA] },
+    {
       label: "Administração",
       links: [
-        { href: "/admin", label: "Aprovação", icon: CheckSquare, exact: true },
-        { href: "/vendedor/novo", label: "Novo pedido", icon: FilePlus2 },
-        { href: "/clientes", label: "Clientes", icon: Building2 },
-        { href: "/inadimplencia", label: "Inadimplência", icon: AlertTriangle, exact: true },
-        { href: "/admin/usuarios", label: "Usuários", icon: Users, exact: true },
-        { href: "/admin/configuracoes", label: "Configurações", icon: Settings, exact: true },
+        { href: "/admin/usuarios", label: "Usuários", icon: MdManageAccounts, cor: "bg-iconGray", exact: true },
+        { href: "/admin/configuracoes", label: "Configurações", icon: MdSettings, cor: "bg-iconGray", exact: true },
       ],
     },
   ],
 };
 
-// Porte de .ds-sidenav (design_system.html) — fundo roxo quase-preto,
-// indicador de item ativo com borda + fundo translúcido roxo.
-export function SidebarNav({ papel }: { papel: PapelUsuario }) {
+// Sidebar do handoff (248px, superfície clara, ícone em caixa colorida).
+// Abaixo de 1024px vira um trilho de 72px só com ícones (rótulo no title) —
+// o handoff não define o comportamento estreito, e 248px fixos espremeriam
+// o conteúdo em ~900px.
+export function SidebarNav({
+  papel,
+  contadores,
+  integracoes,
+}: {
+  papel: PapelUsuario;
+  contadores: Partial<Record<ChaveContador, number>>;
+  integracoes: IntegracaoSidebar[];
+}) {
   const pathname = usePathname();
   const groups = GRUPOS_POR_PAPEL[papel];
 
   return (
-    <aside className="fixed inset-y-0 left-0 flex w-[230px] shrink-0 flex-col overflow-y-auto border-r border-white/6 bg-[#09001a]">
-      <div className="flex items-center border-b border-white/6 px-5 py-6">
-        <Link href="/" className="flex items-center">
-          {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático, sem otimização necessária */}
-          <img src="/logo.svg" alt="Footlink" height={28} className="h-7 w-auto" />
-        </Link>
-      </div>
-
-      <nav className="flex-1 py-3">
+    <aside className="sticky top-[60px] flex h-[calc(100vh-60px)] w-[72px] shrink-0 flex-col border-r border-gray5 bg-surface py-5 transition-colors duration-300 lg:w-[248px]">
+      <nav className="flex flex-1 flex-col gap-[18px] overflow-y-auto">
         {groups.map((group) => (
-          <div key={group.label}>
-            <p className="px-5 pt-4 pb-1.5 text-[10px] font-bold tracking-[0.12em] text-white/25 uppercase">
-              {group.label}
-            </p>
-            <ul className="flex flex-col gap-0.5 px-3">
-              {group.links.map((link) => {
-                const ativo = link.exact ? pathname === link.href : pathname.startsWith(link.href);
-                const Icon = link.icon;
-                return (
-                  <li key={link.href}>
-                    <Link
-                      href={link.href}
+          <div key={group.label} className="flex flex-col gap-0.5">
+            <span className="hidden px-6 pb-1.5 text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase lg:block">{group.label}</span>
+            {group.links.map((link) => {
+              const ativo = link.exact ? pathname === link.href : pathname.startsWith(link.href);
+              const Icon = link.icon;
+              const contagem = link.contador ? (contadores[link.contador] ?? 0) : 0;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  title={link.label}
+                  aria-current={ativo ? "page" : undefined}
+                  className={cn(
+                    "relative mx-2 flex items-center justify-center gap-3 rounded-lg border-l-[3px] border-transparent py-[9px] text-sm font-semibold text-darkPurple1 transition-all duration-200 hover:bg-surface-hover focus-visible:shadow-focus focus-visible:outline-none lg:mx-3 lg:justify-start lg:pr-3 lg:pl-[9px]",
+                    ativo && "border-lightPurple1 bg-nav-active text-nav-active-foreground hover:bg-nav-active",
+                  )}
+                >
+                  <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg text-white", link.cor)}>
+                    <Icon className="size-4" />
+                  </span>
+                  <span className="hidden flex-1 lg:inline">{link.label}</span>
+                  {contagem > 0 && (
+                    <span
                       className={cn(
-                        "flex items-center gap-2.5 rounded-lg border-l-2 border-transparent px-3 py-2 text-[13px] font-medium text-white/55 transition-all hover:bg-white/5 hover:text-white",
-                        ativo && "border-primary bg-primary/20 font-bold text-white",
+                        "flex h-[18px] min-w-[18px] items-center justify-center rounded-[9px] bg-lightPurple1 px-1.5 text-[10px] font-extrabold text-white",
+                        // No trilho estreito o contador vira um selo sobre o ícone.
+                        "absolute -top-0.5 right-1 lg:static",
                       )}
                     >
-                      <Icon className="size-[18px] shrink-0" strokeWidth={2} />
-                      {link.label}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+                      {contagem}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
           </div>
         ))}
       </nav>
+
+      <div className="mx-5 hidden flex-col gap-2.5 rounded-[10px] border border-gray5 p-3.5 lg:flex">
+        <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Integrações</span>
+        {integracoes.map((integracao) => (
+          <div key={integracao.nome} className="flex items-center gap-2 text-[13px]">
+            <span className={cn("size-2 shrink-0 rounded-full", integracao.ok ? "bg-green2" : "bg-gray3")} />
+            <span className="flex-1 font-semibold text-darkPurple1">{integracao.nome}</span>
+            <span className="text-xs text-gray3">{integracao.status}</span>
+          </div>
+        ))}
+      </div>
     </aside>
   );
 }
