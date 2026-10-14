@@ -15,13 +15,7 @@ import {
 import { sair } from "@/lib/auth/actions";
 import { ROTULO_PERFIL } from "@/lib/auth/perfis";
 import type { SessaoUsuario } from "@/lib/auth/session";
-
-function iniciais(nome: string) {
-  const partes = nome.trim().split(/\s+/);
-  const primeira = partes[0]?.[0] ?? "";
-  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : "";
-  return (primeira + ultima).toUpperCase();
-}
+import { iniciais } from "@/components/ds/avatar";
 
 // Avatar da AppBar (círculo branco 30px, iniciais roxas) — abre o menu do usuário.
 export function UserMenu({ sessao }: { sessao: SessaoUsuario }) {

@@ -50,6 +50,7 @@
   --color-lightPurple4: var(--lightPurple4);
   --color-lightPurple8: var(--lightPurple8);
   --color-darkPurple1: var(--darkPurple1);
+  --color-purple-text: var(--purple-text);
   --color-surface: var(--white);
   --color-page: var(--light);
   --color-strong: var(--black);
@@ -197,6 +198,11 @@
   --kanban-name: var(--lightPurple1);
   --empty-state-bg: rgba(90, 0, 255, 0.07);
   --empty-state-icon: #5a00ff;
+  /* Roxo usado como COR DE TEXTO (nomes de cliente, botões brancos, badges,
+     micro-rótulos). No escuro vira #a06bff — o mesmo tom que o DS já usa em
+     --kanban-name/--empty-state-icon — porque #5a00ff sobre #1e1e2d fica
+     ~2:1. Fundos roxos continuam em --lightPurple1. */
+  --purple-text: var(--lightPurple1);
 
   /* shadcn -> Footlink */
   --background: var(--light);
@@ -255,7 +261,8 @@
   --segment-active-bg: var(--lightPurple1);
   --segment-active-text: #ffffff;
   --nav-active-bg: rgba(90, 0, 255, 0.2);
-  --nav-active-text: var(--lightPurple1);
+  --nav-active-text: #a06bff;
+  --purple-text: #a06bff;
   --kanban-card-bg: #252538;
   --kanban-card-border: #2b2b40;
   --kanban-name: #a06bff;

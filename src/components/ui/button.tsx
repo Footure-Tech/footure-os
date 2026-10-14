@@ -3,26 +3,29 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
-// Portado de design_system.html (.button real do Footlink) — radius 8px,
-// hover levanta com shadow (não muda cor), variantes de cor mapeadas do
-// SCSS real (a variante "primary" se chama .green no CSS original, mas
-// renderiza roxo #5a00ff; mantido o nome semântico "default" aqui).
+// Footlink DS (components/core/Button.jsx): radius 8px, 14px/600; botões
+// coloridos não mudam de cor no hover — só ganham sombra; foco é o anel roxo
+// de 3px a 12%, nunca outline. "default" = primário roxo; "secondary" =
+// branco com borda roxa; "white" = branco com borda cinza (ex.: "Salvar
+// rascunho", "Renegociar" no handoff).
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border bg-clip-padding text-sm font-semibold whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/20 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border bg-clip-padding text-sm font-semibold whitespace-nowrap transition-all duration-200 ease-in-out outline-none select-none focus-visible:shadow-focus disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:shadow-focus-error [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)]",
+          "border-transparent bg-primary text-primary-foreground hover:shadow-btn-hover",
         outline:
-          "border-border bg-transparent text-primary hover:bg-primary hover:text-primary-foreground",
+          "border-lightPurple1 bg-transparent text-purple-text hover:bg-lightPurple4",
         secondary:
-          "border-border bg-card text-primary hover:bg-primary/10",
+          "border-lightPurple1 bg-surface text-purple-text hover:shadow-btn-hover",
+        white:
+          "border-gray5 bg-surface text-purple-text hover:shadow-btn-hover",
         ghost:
           "border-transparent bg-transparent text-foreground hover:bg-accent",
         destructive:
-          "border-transparent bg-destructive text-white hover:shadow-[0_4px_12px_rgba(0,0,0,0.15)] hover:opacity-90",
-        link: "border-transparent bg-transparent text-primary p-0! h-auto! underline-offset-4 hover:underline",
+          "border-transparent bg-destructive text-white hover:shadow-btn-hover",
+        link: "border-transparent bg-transparent text-purple-text p-0! h-auto! underline-offset-4 hover:underline",
       },
       size: {
         default: "h-10 gap-1.5 px-5",

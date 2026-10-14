@@ -23,7 +23,7 @@ export function PageHeader({
       <div className="flex min-w-[280px] flex-1 items-start gap-4">
         {voltarHref && <BotaoVoltar href={voltarHref} />}
         <div className="min-w-0">
-          {modulo && <span className="text-[11px] font-bold tracking-[0.06em] text-lightPurple1 uppercase">{modulo}</span>}
+          {modulo && <span className="text-[11px] font-bold tracking-[0.06em] text-purple-text uppercase">{modulo}</span>}
           <h1 className="mt-0.5 mb-1 text-[28px] leading-tight font-bold tracking-[-0.01em] text-darkPurple1">{titulo}</h1>
           {descricao && <p className="text-sm text-gray">{descricao}</p>}
         </div>
