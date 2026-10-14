@@ -2,9 +2,95 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/* Tema via atributo (Footlink DS: data-theme="dark", persistido em
+   localStorage "footlink_theme" — ver src/lib/tema.ts). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Sombras e animações do Footlink DS (tokens/elevation.css, motion.css) —
+   iguais nos dois temas, então ficam como valores estáticos de @theme
+   (geram utilitários shadow-card, shadow-table, animate-fade-in-page...). */
+@theme {
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.02);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-table: 0 4px 15px rgba(0, 0, 0, 0.03);
+  --shadow-kanban-card: 0 1px 4px rgba(0, 0, 0, 0.05);
+  --shadow-kanban-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-btn-hover: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-dropdown: 0 10px 30px rgba(0, 0, 0, 0.15);
+  --shadow-toast: 0 4px 16px rgba(0, 0, 0, 0.25);
+  --shadow-focus: 0 0 0 3px rgba(90, 0, 255, 0.12);
+  --shadow-focus-error: 0 0 0 3px rgba(235, 87, 87, 0.12);
+
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Transição entre telas (handoff: fadeInAnim 0.35s ease, 8px -> 0). */
+  --animate-fade-in-page: fade-in-page 350ms ease;
+  @keyframes fade-in-page {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
 
 @theme inline {
+  /* Paleta do Footlink DS exposta como utilitários com o nome original do
+     token (bg-lightPurple1, text-gray3, border-gray5, bg-iconBlue...), pra
+     o código bater 1:1 com o README do handoff. Neutros que o DS chama de
+     --white/--black/--light viram surface/strong/page aqui — não dá pra
+     sobrescrever bg-white/text-black do Tailwind sem quebrar quem usa branco
+     literal (ex.: texto da AppBar). */
+  --color-lightPurple1: var(--lightPurple1);
+  --color-lightPurple2: var(--lightPurple2);
+  --color-lightPurple3: var(--lightPurple3);
+  --color-lightPurple4: var(--lightPurple4);
+  --color-lightPurple8: var(--lightPurple8);
+  --color-darkPurple1: var(--darkPurple1);
+  --color-surface: var(--white);
+  --color-page: var(--light);
+  --color-strong: var(--black);
+  --color-dark: var(--dark);
+  --color-gray: var(--gray);
+  --color-gray2: var(--gray2);
+  --color-gray3: var(--gray3);
+  --color-gray5: var(--gray5);
+  --color-gray6: var(--gray6);
+  --color-lightBorder: var(--lightBorder);
+  --color-lightGrey2: var(--lightGrey2);
+  --color-surface-hover: var(--surface-hover);
+  --color-danger: var(--danger);
+  --color-dangerBg: var(--dangerBg);
+  --color-red: var(--red);
+  --color-green1: var(--green1);
+  --color-green2: var(--green2);
+  --color-green3: var(--green3);
+  --color-green5: var(--green5);
+  --color-warning: var(--warning);
+  --color-orange: var(--orange);
+  --color-orange2: var(--orange2);
+  --color-orange3: var(--orange3);
+  --color-info: var(--info);
+  --color-iconPurple: var(--iconPurple);
+  --color-iconBlue: var(--iconBlue);
+  --color-iconGreen: var(--iconGreen);
+  --color-iconYellow: var(--iconYellow);
+  --color-iconRed: var(--iconRed);
+  --color-iconGray: var(--iconGray);
+  --color-segment-active: var(--segment-active-bg);
+  --color-segment-active-foreground: var(--segment-active-text);
+  --color-nav-active: var(--nav-active-bg);
+  --color-nav-active-foreground: var(--nav-active-text);
+  --color-kanban-card: var(--kanban-card-bg);
+  --color-kanban-card-border: var(--kanban-card-border);
+  --color-kanban-name: var(--kanban-name);
+  --color-empty-state: var(--empty-state-bg);
+  --color-empty-state-icon: var(--empty-state-icon);
+  --color-appbar: var(--surface-appbar);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   /* Footlink roda em Barlow (design_system.html, mirror do _variables.scss
@@ -52,77 +138,129 @@
   --radius-4xl: 9999px;
 }
 
+/* ---------------------------------------------------------------------------
+   Footlink Design System — tokens/colors.css + semantic.css do handoff
+   (design_handoff_footure_gestao/prototype/_ds/.../tokens). O dark mode do DS
+   reatribui os MESMOS nomes (--white vira superfície escura, --black vira
+   branco, --darkPurple1 vira branco porque é usado como cor de texto) em vez
+   de uma paleta paralela — as variáveis do shadcn abaixo só apontam pra eles.
+   --------------------------------------------------------------------------- */
 :root {
-  /* Tokens do design_system.html real do Footlink (mirror de _variables.scss) */
-  --background: #f5f5f5; /* --light */
-  --foreground: #000000; /* --black */
-  --card: #ffffff; /* --white */
-  --card-foreground: #000000;
-  --popover: #ffffff;
-  --popover-foreground: #000000;
-  --primary: #5a00ff; /* --lightPurple1 — ação primária */
+  /* Roxo — marca */
+  --lightPurple1: #5a00ff;
+  --lightPurple2: #6b1aff;
+  --lightPurple3: #deccff;
+  --lightPurple4: #eee5ff;
+  --lightPurple8: #ceb3ff;
+  --darkPurple1: #09001a;
+  /* Neutros */
+  --black: #000000;
+  --dark: #4a4a4a;
+  --gray: #62747c;
+  --gray2: #4f4f4f;
+  --gray3: #828282;
+  --gray5: #e0e0e0;
+  --gray6: #cfd4d7;
+  --lightBorder: #bdbdbd;
+  --light: #f5f5f5;
+  --lightGrey2: #f2f2f2;
+  --white: #ffffff;
+  /* Feedback */
+  --danger: #ff5252;
+  --red: #eb5757;
+  --dangerBg: #ffdfdf;
+  --green1: #219653;
+  --green2: #27ae60;
+  --green3: #6fcf97;
+  --green5: #bde6ce;
+  --warning: #ffbb33;
+  --orange: #f5a623;
+  --orange2: #f2994a;
+  --orange3: #ffeacc;
+  --info: #29b6f6;
+  /* Ícones de módulo (sidebar) */
+  --iconPurple: #5a00ff;
+  --iconGreen: #219653;
+  --iconBlue: #2f80ed;
+  --iconYellow: #f2994a;
+  --iconRed: #eb5757;
+  --iconGray: #62747c;
+  /* Semânticos */
+  --surface-hover: #f9f9f9;
+  --surface-appbar: #5a00ff; /* não muda no escuro */
+  --segment-active-bg: var(--lightPurple4);
+  --segment-active-text: var(--lightPurple1);
+  --nav-active-bg: rgba(90, 0, 255, 0.08);
+  --nav-active-text: var(--lightPurple1);
+  --kanban-card-bg: var(--white);
+  --kanban-card-border: var(--gray5);
+  --kanban-name: var(--lightPurple1);
+  --empty-state-bg: rgba(90, 0, 255, 0.07);
+  --empty-state-icon: #5a00ff;
+
+  /* shadcn -> Footlink */
+  --background: var(--light);
+  --foreground: var(--black);
+  --card: var(--white);
+  --card-foreground: var(--black);
+  --popover: var(--white);
+  --popover-foreground: var(--black);
+  --primary: var(--lightPurple1);
   --primary-foreground: #ffffff;
-  --secondary: #f2f2f2; /* --lightGrey2 */
-  --secondary-foreground: #000000;
-  --muted: #f5f5f5; /* --light */
-  --muted-foreground: #62747c; /* --gray */
-  --accent: #f9f9f9; /* --surface-hover */
-  --accent-foreground: #000000;
-  --destructive: #eb5757; /* --red */
-  --border: #e0e0e0; /* --gray5 */
-  --input: #e0e0e0;
-  --ring: #5a00ff;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --secondary: var(--lightGrey2);
+  --secondary-foreground: var(--black);
+  --muted: var(--light);
+  --muted-foreground: var(--gray);
+  --accent: var(--surface-hover);
+  --accent-foreground: var(--black);
+  --destructive: var(--red);
+  --border: var(--gray5);
+  --input: var(--gray5);
+  --ring: var(--lightPurple1);
+  /* Séries de gráfico (handoff): Footlink, previsto, Academy, Consultoria */
+  --chart-1: var(--lightPurple1);
+  --chart-2: var(--lightPurple3);
+  --chart-3: var(--iconBlue);
+  --chart-4: var(--orange2);
+  --chart-5: var(--gray3);
   --radius: 0.5rem;
-  --sidebar: #f5f5f5;
-  --sidebar-foreground: #000000;
-  --sidebar-primary: #5a00ff;
+  --sidebar: var(--white);
+  --sidebar-foreground: var(--black);
+  --sidebar-primary: var(--lightPurple1);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f2f2f2;
-  --sidebar-accent-foreground: #000000;
-  --sidebar-border: #e0e0e0;
-  --sidebar-ring: #5a00ff;
+  --sidebar-accent: var(--surface-hover);
+  --sidebar-accent-foreground: var(--black);
+  --sidebar-border: var(--gray5);
+  --sidebar-ring: var(--lightPurple1);
 }
 
-.dark {
-  /* design_system.html implementa dark mode reatribuindo os MESMOS tokens
-     (--white vira a superfície escura, --light vira o fundo de página,
-     --black vira branco) em vez de uma paleta paralela — replicado aqui. */
-  --background: #151521; /* --light (dark) */
-  --foreground: #ffffff; /* --black (dark) */
-  --card: #1e1e2d; /* --white (dark) */
-  --card-foreground: #ffffff;
-  --popover: #1e1e2d;
-  --popover-foreground: #ffffff;
-  --primary: #5a00ff; /* inalterado — primária continua primária no escuro */
-  --primary-foreground: #ffffff;
-  --secondary: #252536; /* --lightGrey2 (dark) */
-  --secondary-foreground: #ffffff;
-  --muted: #151521;
-  --muted-foreground: #9899ad; /* --gray (dark) */
-  --accent: #212130; /* --surface-hover (dark) */
-  --accent-foreground: #ffffff;
-  --destructive: #eb5757;
-  --border: #2b2b40; /* --gray5 (dark) */
-  --input: #2b2b40;
-  --ring: #5a00ff;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: #151521;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #5a00ff;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #252536;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #2b2b40;
-  --sidebar-ring: #5a00ff;
+/* tokens/theme-dark.css. O DS usa body[data-theme]; aqui o atributo fica no
+   <html> pra ser aplicado antes do <body> existir (sem flash de tema). */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --black: #ffffff;
+  --dark: #e0e0e0;
+  --gray: #9899ad;
+  --gray2: #b5b5c3;
+  --gray3: #7e8299;
+  --gray5: #2b2b40;
+  --lightBorder: #323248;
+  --white: #1e1e2d;
+  --light: #151521;
+  --lightPurple4: #212e48;
+  --darkPurple1: #ffffff;
+  /* Não definido no DS — mantém o valor que o projeto já usava no escuro. */
+  --lightGrey2: #252536;
+  --surface-hover: #212130;
+  --segment-active-bg: var(--lightPurple1);
+  --segment-active-text: #ffffff;
+  --nav-active-bg: rgba(90, 0, 255, 0.2);
+  --nav-active-text: var(--lightPurple1);
+  --kanban-card-bg: #252538;
+  --kanban-card-border: #2b2b40;
+  --kanban-name: #a06bff;
+  --empty-state-bg: rgba(90, 0, 255, 0.15);
+  --empty-state-icon: #a06bff;
 }
 
 @layer base {
@@ -134,5 +272,9 @@
   }
   html {
     @apply font-sans;
+  }
+  ::selection {
+    background: var(--lightPurple4);
+    color: var(--lightPurple1);
   }
 }
