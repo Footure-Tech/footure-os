@@ -31,6 +31,7 @@ import {
   Footer,
   ImageRun,
   PageBreak,
+  TableLayoutType,
 } from "docx";
 import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
@@ -87,7 +88,8 @@ export interface DadosContrato {
   dataGeracao: Date;
 }
 
-const ASSET_LOGO = path.join(process.cwd(), "_docs/referencia-skill/assets/footlink-logo.png");
+const ASSET_LOGO_FOOTLINK = path.join(process.cwd(), "_docs/referencia-skill/assets/footlink-logo.png");
+const ASSET_LOGO_FOOTURE = path.join(process.cwd(), "_docs/referencia-skill/assets/footure-logo.png");
 
 // ---------- helpers de parágrafo ----------
 const R = (t: string) => new TextRun({ text: t, size: 22 });
@@ -112,27 +114,43 @@ const H = (t: string) =>
   });
 
 // ---------- cabeçalho / rodapé ----------
+// Footure (contratada) à esquerda, Footlink (produto) à direita, entre duas
+// linhas. Tabela de 2 células (e não tab stop) porque renderiza igual no Word,
+// na conversão da Clicksign e em visualizadores simples.
+const LARGURA_UTIL = 11906 - 2 * 1134;
+const LINHA_CABECALHO = { style: BorderStyle.SINGLE, size: 6, color: "5B4FC4" } as const;
+const SEM_LINHA = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } as const;
+function logoOuTexto(arquivo: string, transformation: { width: number; height: number }, texto: string) {
+  if (existsSync(arquivo)) return new ImageRun({ type: "png", data: readFileSync(arquivo), transformation });
+  return new TextRun({ text: texto, bold: true, size: 28, color: "5B4FC4" });
+}
+function celulaLogo(logo: ImageRun | TextRun, alignment: (typeof AlignmentType)[keyof typeof AlignmentType]) {
+  return new TableCell({
+    width: { size: LARGURA_UTIL / 2, type: WidthType.DXA },
+    margins: { top: 120, bottom: 120, left: 0, right: 0 },
+    // Borda da célula prevalece sobre a da tabela no Word — as linhas ficam aqui.
+    borders: { top: LINHA_CABECALHO, bottom: LINHA_CABECALHO, left: SEM_LINHA, right: SEM_LINHA },
+    children: [new Paragraph({ alignment, children: [logo] })],
+  });
+}
 function buildHeader() {
-  const children: (ImageRun | TextRun)[] = [];
-  if (existsSync(ASSET_LOGO)) {
-    children.push(
-      new ImageRun({
-        type: "png",
-        data: readFileSync(ASSET_LOGO),
-        transformation: { width: 132, height: 50 },
-      }),
-    );
-  } else {
-    children.push(new TextRun({ text: "footlink", bold: true, size: 28, color: "5B4FC4" }));
-  }
   return new Header({
     children: [
-      new Paragraph({
-        alignment: AlignmentType.LEFT,
-        spacing: { after: 120 },
-        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "5B4FC4" } },
-        children,
+      new Table({
+        width: { size: LARGURA_UTIL, type: WidthType.DXA },
+        layout: TableLayoutType.FIXED,
+        columnWidths: [LARGURA_UTIL / 2, LARGURA_UTIL / 2],
+        borders: { top: LINHA_CABECALHO, bottom: LINHA_CABECALHO, left: SEM_LINHA, right: SEM_LINHA, insideHorizontal: SEM_LINHA, insideVertical: SEM_LINHA },
+        rows: [
+          new TableRow({
+            children: [
+              celulaLogo(logoOuTexto(ASSET_LOGO_FOOTURE, { width: 104, height: 40 }, "footure"), AlignmentType.LEFT),
+              celulaLogo(logoOuTexto(ASSET_LOGO_FOOTLINK, { width: 106, height: 40 }, "footlink"), AlignmentType.RIGHT),
+            ],
+          }),
+        ],
       }),
+      new Paragraph({ spacing: { after: 120 }, children: [] }),
     ],
   });
 }

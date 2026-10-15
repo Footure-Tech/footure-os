@@ -18,7 +18,7 @@
   --shadow-btn-hover: 0 4px 12px rgba(0, 0, 0, 0.05);
   --shadow-dropdown: 0 10px 30px rgba(0, 0, 0, 0.15);
   --shadow-toast: 0 4px 16px rgba(0, 0, 0, 0.25);
-  --shadow-focus: 0 0 0 3px rgba(90, 0, 255, 0.12);
+  --shadow-focus: 0 0 0 3px rgba(0, 0, 0, 0.12);
   --shadow-focus-error: 0 0 0 3px rgba(235, 87, 87, 0.12);
 
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
@@ -91,6 +91,7 @@
   --color-empty-state: var(--empty-state-bg);
   --color-empty-state-icon: var(--empty-state-icon);
   --color-appbar: var(--surface-appbar);
+  --color-footlink: var(--footlink);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -148,12 +149,14 @@
    --------------------------------------------------------------------------- */
 :root {
   /* Roxo — marca */
-  --lightPurple1: #5a00ff;
-  --lightPurple2: #6b1aff;
-  --lightPurple3: #deccff;
-  --lightPurple4: #eee5ff;
-  --lightPurple8: #ceb3ff;
-  --darkPurple1: #09001a;
+  --lightPurple1: #111111;
+  --lightPurple2: #2b2b2b;
+  --lightPurple3: #cfcfcf;
+  --lightPurple4: #ededed;
+  --lightPurple8: #bdbdbd;
+  --darkPurple1: #0a0a0a;
+  /* Roxo restrito à linha de receita Footlink. */
+  --footlink: #5a00ff;
   /* Neutros */
   --black: #000000;
   --dark: #4a4a4a;
@@ -180,7 +183,7 @@
   --orange3: #ffeacc;
   --info: #29b6f6;
   /* Ícones de módulo (sidebar) */
-  --iconPurple: #5a00ff;
+  --iconPurple: #111111;
   --iconGreen: #219653;
   --iconBlue: #2f80ed;
   --iconYellow: #f2994a;
@@ -188,16 +191,16 @@
   --iconGray: #62747c;
   /* Semânticos */
   --surface-hover: #f9f9f9;
-  --surface-appbar: #5a00ff; /* não muda no escuro */
+  --surface-appbar: #0a0a0a; /* não muda no escuro */
   --segment-active-bg: var(--lightPurple4);
   --segment-active-text: var(--lightPurple1);
-  --nav-active-bg: rgba(90, 0, 255, 0.08);
+  --nav-active-bg: rgba(0, 0, 0, 0.06);
   --nav-active-text: var(--lightPurple1);
   --kanban-card-bg: var(--white);
   --kanban-card-border: var(--gray5);
-  --kanban-name: var(--lightPurple1);
-  --empty-state-bg: rgba(90, 0, 255, 0.07);
-  --empty-state-icon: #5a00ff;
+  --kanban-name: #0a0a0a;
+  --empty-state-bg: rgba(0, 0, 0, 0.05);
+  --empty-state-icon: #111111;
   /* Roxo usado como COR DE TEXTO (nomes de cliente, botões brancos, badges,
      micro-rótulos). No escuro vira branco — #5a00ff sobre #1e1e2d fica ~2:1
      (decisão do produto; o DS já faz o mesmo com --link-color). Fundos
@@ -223,11 +226,10 @@
   --border: var(--gray5);
   --input: var(--gray5);
   --ring: var(--lightPurple1);
-  /* Séries de gráfico: realizado, previsto, Academy, Consultoria. O previsto
-     do handoff (#deccff) reprova no validador de paleta (contraste 1,48:1,
-     quase cinza) — #9d75ff mantém o roxo e passa nas 6 checagens. */
-  --chart-1: var(--lightPurple1);
-  --chart-2: #9d75ff;
+  /* Séries de gráfico: realizado, previsto, Academy, Consultoria (identidade
+     Footure monocromática; a linha Footlink usa --footlink). */
+  --chart-1: #111111;
+  --chart-2: #bdbdbd;
   --chart-3: var(--iconBlue);
   --chart-4: var(--orange2);
   --chart-5: var(--gray3);
@@ -248,32 +250,39 @@
   color-scheme: dark;
   --black: #ffffff;
   --dark: #e0e0e0;
-  --gray: #9899ad;
-  --gray2: #b5b5c3;
-  --gray3: #7e8299;
-  --gray5: #2b2b40;
-  --lightBorder: #323248;
-  --white: #1e1e2d;
-  --light: #151521;
-  --lightPurple4: #212e48;
+  --gray: #a3a3a3;
+  --gray2: #c7c7c7;
+  --gray3: #8c8c8c;
+  --gray5: #2a2a2a;
+  --lightBorder: #363636;
+  --white: #161616;
+  --light: #0c0c0c;
+  --lightPurple1: #ffffff;
+  --lightPurple2: #f2f2f2;
+  --lightPurple3: #4a4a4a;
+  --lightPurple4: #262626;
+  --lightPurple8: #555555;
   --darkPurple1: #ffffff;
+  --iconPurple: #3a3a3a;
+  --footlink: #9d75ff;
   /* Não definido no DS — mantém o valor que o projeto já usava no escuro. */
-  --lightGrey2: #252536;
-  --surface-hover: #212130;
-  --segment-active-bg: var(--lightPurple1);
-  --segment-active-text: #ffffff;
-  --nav-active-bg: rgba(90, 0, 255, 0.2);
+  --lightGrey2: #1f1f1f;
+  --surface-hover: #1f1f1f;
+  --segment-active-bg: #ffffff;
+  --segment-active-text: #0a0a0a;
+  --nav-active-bg: rgba(255, 255, 255, 0.07);
   --nav-active-text: #ffffff;
   --purple-text: #ffffff;
-  /* Séries no escuro: #5a00ff fica 2,25:1 sobre #1e1e2d — o realizado clareia
-     e o previsto escurece (par validado; previsto com legenda + tabela). */
-  --chart-1: #9d75ff;
-  --chart-2: #6f2bff;
-  --kanban-card-bg: #252538;
-  --kanban-card-border: #2b2b40;
-  --kanban-name: #a06bff;
-  --empty-state-bg: rgba(90, 0, 255, 0.15);
-  --empty-state-icon: #a06bff;
+  /* Séries no escuro: realizado branco, previsto cinza (legenda + tabela). */
+  --chart-1: #ffffff;
+  --chart-2: #4a4a4a;
+  --kanban-card-bg: #1c1c1c;
+  --kanban-card-border: #2a2a2a;
+  --kanban-name: #ffffff;
+  --empty-state-bg: rgba(255, 255, 255, 0.06);
+  --empty-state-icon: #ffffff;
+  --primary-foreground: #0a0a0a;
+  --sidebar-primary-foreground: #0a0a0a;
 }
 
 @layer base {
@@ -288,6 +297,21 @@
   }
   ::selection {
     background: var(--lightPurple4);
-    color: var(--lightPurple1);
+    color: var(--darkPurple1);
   }
+}
+
+/* Identidade Footure: no escuro o fundo "primário" vira branco, então o
+   texto/ícone sobre ele precisa ficar escuro (sem mexer nos componentes,
+   que usam text-white literal). O avatar da AppBar (branco com iniciais em
+   --lightPurple1) entra junto: a AppBar é preta nos dois temas. */
+[data-theme="dark"] :is(.bg-primary, .bg-lightPurple1, .bg-sidebar-primary, .bg-appbar .bg-white) {
+  color: #0a0a0a;
+}
+[data-theme="dark"] :is(.bg-primary, .bg-lightPurple1, .bg-sidebar-primary) :is(.text-white, svg) {
+  color: #0a0a0a;
+}
+/* AppBar preta sobre página quase preta: linha sutil para separar. */
+[data-theme="dark"] header.bg-appbar {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
 }

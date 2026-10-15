@@ -12,8 +12,8 @@ const barlow = Barlow({
 });
 
 export const metadata: Metadata = {
-  title: "Footlink — Fechamento de Venda",
-  description: "Sistema interno de pedidos, aprovação e contratos Footlink",
+  title: "Footure OS",
+  description: "Sistema de gestão da Footure Football Company",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

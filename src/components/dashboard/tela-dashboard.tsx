@@ -57,10 +57,10 @@ function ReceitaPorLinha({ valor }: { valor: number }) {
   return (
     <div className="flex flex-col gap-4">
       <span className="flex h-3 overflow-hidden rounded-md">
-        <span className="h-full w-full bg-chart-1" />
+        <span className="h-full w-full bg-footlink" />
       </span>
       <div className="flex items-center gap-3">
-        <span className="size-2.5 shrink-0 rounded-sm bg-chart-1" />
+        <span className="size-2.5 shrink-0 rounded-sm bg-footlink" />
         <div className="flex flex-1 flex-col">
           <span className="text-sm font-bold text-darkPurple1">Footlink</span>
           <span className="text-xs text-gray3">SaaS · clubes e agentes</span>

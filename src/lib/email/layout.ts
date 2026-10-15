@@ -1,10 +1,12 @@
-// Template de e-mail transacional com a marca Footlink (por enquanto — trocar
-// logo/nome aqui quando a marca da plataforma mudar). HTML de e-mail: tabelas
+// Template de e-mail transacional do Footure OS (identidade Footure: preto e
+// branco). Logo/nome da marca ficam só aqui. HTML de e-mail: tabelas
 // e estilos inline (Gmail/Outlook ignoram <style> e flexbox), largura máx.
 // 560px, logo em PNG (SVG não é exibido no Gmail/Outlook), sempre com versão
 // em texto puro.
 
-const ROXO = "#5a00ff";
+export const NOME_DO_SISTEMA = "Footure OS";
+
+const MARCA = "#0a0a0a";
 const TEXTO = "#09001a";
 const CINZA = "#62747c";
 const BORDA = "#e0e0e0";
@@ -66,11 +68,11 @@ export function montarEmail(conteudo: ConteudoEmail): { html: string; texto: str
   const url = urlDoSistema();
   const botao = conteudo.botao
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 16px;">
-        <tr><td style="border-radius:8px;background:${ROXO};">
+        <tr><td style="border-radius:8px;background:${MARCA};">
           <a href="${escaparHtml(conteudo.botao.url)}" style="display:inline-block;padding:13px 26px;font-family:${FONTE};font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;">${escaparHtml(conteudo.botao.rotulo)}</a>
         </td></tr>
       </table>
-      <p style="margin:0 0 16px;font-family:${FONTE};font-size:12px;line-height:1.5;color:${CINZA};">Se o botão não funcionar, copie e cole no navegador:<br><a href="${escaparHtml(conteudo.botao.url)}" style="color:${ROXO};word-break:break-all;">${escaparHtml(conteudo.botao.url)}</a></p>`
+      <p style="margin:0 0 16px;font-family:${FONTE};font-size:12px;line-height:1.5;color:${CINZA};">Se o botão não funcionar, copie e cole no navegador:<br><a href="${escaparHtml(conteudo.botao.url)}" style="color:${MARCA};word-break:break-all;">${escaparHtml(conteudo.botao.url)}</a></p>`
     : "";
   const observacao = conteudo.observacao
     ? `<p style="margin:0;font-family:${FONTE};font-size:13px;line-height:1.5;color:${CINZA};">${escaparHtml(conteudo.observacao)}</p>`
@@ -84,8 +86,8 @@ export function montarEmail(conteudo: ConteudoEmail): { html: string; texto: str
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${FUNDO};">
     <tr><td align="center" style="padding:32px 16px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
-        <tr><td style="background:${ROXO};border-radius:12px 12px 0 0;padding:22px 32px;">
-          <img src="${url}/email/footlink-logo.png" width="133" height="32" alt="Footlink" style="display:block;border:0;outline:none;width:133px;height:32px;">
+        <tr><td style="background:${MARCA};border-radius:12px 12px 0 0;padding:22px 32px;">
+          <img src="${url}/email/footure-logo.png" width="94" height="36" alt="Footure Football Company" style="display:block;border:0;outline:none;width:94px;height:36px;">
         </td></tr>
         <tr><td style="background:#ffffff;border:1px solid ${BORDA};border-top:0;border-radius:0 0 12px 12px;padding:32px;">
           <h1 style="margin:0 0 20px;font-family:${FONTE};font-size:22px;line-height:1.3;font-weight:700;color:${TEXTO};">${escaparHtml(conteudo.titulo)}</h1>
@@ -94,7 +96,7 @@ export function montarEmail(conteudo: ConteudoEmail): { html: string; texto: str
           ${observacao}
         </td></tr>
         <tr><td style="padding:20px 32px 0;font-family:${FONTE};font-size:12px;line-height:1.5;color:${CINZA};text-align:center;">
-          Footlink · Footure — e-mail automático, não responda.<br>
+          ${NOME_DO_SISTEMA} · Footure Football Company — e-mail automático, não responda.<br>
           <a href="${url}" style="color:${CINZA};">${escaparHtml(url.replace(/^https?:\/\//, ""))}</a>
         </td></tr>
       </table>
@@ -110,7 +112,7 @@ export function montarEmail(conteudo: ConteudoEmail): { html: string; texto: str
     ...(conteudo.botao ? [`${conteudo.botao.rotulo}: ${conteudo.botao.url}`, ""] : []),
     ...(conteudo.observacao ? [conteudo.observacao, ""] : []),
     "—",
-    `Footlink · Footure · ${url}`,
+    `${NOME_DO_SISTEMA} · Footure Football Company · ${url}`,
   ].join("\n");
 
   return { html, texto };
