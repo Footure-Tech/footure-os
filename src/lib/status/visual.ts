@@ -64,3 +64,11 @@ export const STATUS_CLIENTE_VISUAL: Record<SituacaoCliente, StatusVisual> = {
 };
 
 export const STATUS_CLIENTE_NAO_CADASTRADO: StatusVisual = { rotulo: "Não cadastrado", tom: "pending" };
+
+/** Situação do contrato (pedido de venda do Bling) — tela Financeiro · Contratos. */
+export const STATUS_CONTRATO_VISUAL: Record<"em_dia" | "atrasado" | "concluido" | "cancelado", StatusVisual> = {
+  em_dia: { rotulo: "Em dia", tom: "active" },
+  atrasado: { rotulo: "Atrasado", tom: "inactive" },
+  concluido: { rotulo: "Concluído", tom: "completed" },
+  cancelado: { rotulo: "Cancelado", tom: "not_started" },
+};

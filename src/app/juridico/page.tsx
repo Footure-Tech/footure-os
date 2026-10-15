@@ -111,7 +111,7 @@ export default async function ContratosJuridicoPage({ searchParams }: PageProps<
     <div className="flex flex-col gap-6">
       <PageHeader
         modulo="Jurídico"
-        titulo="Contratos"
+        titulo="Assinatura de contratos"
         descricao="Geração a partir do pedido de venda, validação jurídica e assinatura eletrônica via Clicksign."
       />
 

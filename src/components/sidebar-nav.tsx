@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { IconType } from "react-icons";
-import { MdAttachMoney, MdBusiness, MdDashboard, MdGavel, MdManageAccounts, MdReceipt, MdSettings, MdWarning } from "react-icons/md";
+import { MdBusiness, MdDashboard, MdDescription, MdGavel, MdPayments, MdManageAccounts, MdReceipt, MdSettings, MdWarning } from "react-icons/md";
 import { cn } from "@/lib/utils";
 import { SincronizarBlingButton } from "@/components/clientes/sincronizar-bling-button";
 import type { PapelUsuario } from "@/lib/supabase/database.types";
@@ -51,17 +51,24 @@ const PEDIDOS_ADMIN: SidebarLink = {
 const CLIENTES: SidebarLink = { href: "/clientes", label: "Clientes", icon: MdBusiness, cor: "bg-iconBlue" };
 const CONTRATOS: SidebarLink = {
   href: "/juridico",
-  label: "Contratos",
+  label: "Assinatura de contratos",
   icon: MdGavel,
   cor: "bg-iconPurple",
   contador: "contratos",
   exact: true,
 };
-const CONTRATOS_PARCELAS: SidebarLink = {
+const CONTRATOS_FINANCEIRO: SidebarLink = {
   href: "/financeiro",
-  label: "Contratos e parcelas",
-  icon: MdAttachMoney,
+  label: "Contratos",
+  icon: MdDescription,
   cor: "bg-iconYellow",
+  exact: true,
+};
+const PAGAMENTOS: SidebarLink = {
+  href: "/financeiro/pagamentos",
+  label: "Pagamentos",
+  icon: MdPayments,
+  cor: "bg-iconGreen",
   exact: true,
 };
 const INADIMPLENCIA: SidebarLink = {
@@ -90,7 +97,7 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
       links: [PEDIDOS_ADMIN, CLIENTES],
     },
     { label: "Jurídico", links: [CONTRATOS] },
-    { label: "Financeiro", links: [CONTRATOS_PARCELAS, INADIMPLENCIA] },
+    { label: "Financeiro", links: [CONTRATOS_FINANCEIRO, PAGAMENTOS, INADIMPLENCIA] },
     {
       label: "Administração",
       links: [

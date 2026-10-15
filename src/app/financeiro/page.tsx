@@ -1,12 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
-import { carregarCarteira } from "@/lib/financeiro/carteira";
+import { carregarContratos, type FiltroContratos } from "@/lib/financeiro/carteira";
 import { urlLogoCliente } from "@/lib/clientes/consultas";
-import { TelaFinanceiro } from "@/components/financeiro/tela-financeiro";
+import { TelaContratos } from "@/components/financeiro/tela-contratos";
 
-// Lê só o cache do Bling (gravado em "Sincronizar") — sem chamadas ao Bling
-// na renderização. A carteira é por cliente: ainda não há vínculo pedido -> Bling.
-export default async function FinanceiroPage() {
+const FILTROS: FiltroContratos[] = ["ativos", "vencem_3_meses", "inativos", "cancelados"];
+
+// Financeiro · Contratos (pedidos de venda do Bling). Lê só o cache do Bling.
+export default async function ContratosFinanceiroPage({ searchParams }: PageProps<"/financeiro">) {
+  const { filtro: f } = await searchParams;
+  const filtro = FILTROS.includes(f as FiltroContratos) ? (f as FiltroContratos) : "ativos";
   const supabase = await createClient();
-  const dados = await carregarCarteira(supabase);
-  return <TelaFinanceiro dados={dados} urlLogo={(path) => urlLogoCliente(supabase, path)} />;
+  const dados = await carregarContratos(supabase);
+  return <TelaContratos dados={dados} filtro={filtro} urlLogo={(path) => urlLogoCliente(supabase, path)} />;
 }

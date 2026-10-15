@@ -99,6 +99,7 @@ export async function sincronizarContatosBlingAction(): Promise<{ totalContatos:
   const resultado = await sincronizarContatosBling(supabase);
   revalidatePath("/clientes");
   revalidatePath("/financeiro");
+  revalidatePath("/financeiro/pagamentos");
   revalidatePath("/inadimplencia");
   return resultado;
 }

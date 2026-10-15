@@ -136,7 +136,7 @@ export async function carregarDashboard(supabase: Supa, periodo: Periodo) {
     quantidade: new Set(aReceber.map((p) => p.contatoId)).size,
     valor: aReceber.reduce((s, p) => s + p.valor, 0),
     sub: "clientes com parcelas a receber",
-    href: "/financeiro",
+    href: "/financeiro/pagamentos",
   });
 
   // Realizado por vendedor (não há metas cadastradas).

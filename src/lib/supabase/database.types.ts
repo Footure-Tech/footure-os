@@ -352,6 +352,30 @@ export interface Database {
           assinatura_incompleta?: boolean;
         }
       >;
+      // supabase/migrations/0031_bling_pedidos.sql
+      bling_pedidos: TableDef<
+        {
+          id: number;
+          contato_id: number;
+          numero: string;
+          data: string | null;
+          total: number;
+          situacao_id: number | null;
+          situacao_valor: number | null;
+          sincronizado_em: string;
+        },
+        {
+          id: number;
+          contato_id: number;
+          numero: string;
+          data?: string | null;
+          total?: number;
+          situacao_id?: number | null;
+          situacao_valor?: number | null;
+          sincronizado_em?: string;
+        },
+        Partial<{ numero: string; data: string | null; total: number; situacao_id: number | null; situacao_valor: number | null; sincronizado_em: string }>
+      >;
       // supabase/migrations/0030_bling_parcelas.sql
       bling_parcelas: TableDef<
         {

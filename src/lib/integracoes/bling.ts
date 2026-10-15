@@ -200,9 +200,28 @@ async function buscarIdContatoBling(token: string, cnpj: string): Promise<number
 /** limite=100: cobre o volume real visto até agora (nenhum cliente com mais
  * de 1 dígito de pedidos de venda); se algum dia passar disso o total fica
  * só truncado em 100, não quebra nada. */
-async function buscarTotalPedidosVenda(token: string, idContato: number): Promise<number> {
-  const resp = await chamarApiBling<{ data: Array<{ id: number }> }>(token, `/pedidos/vendas?idContato=${idContato}&limite=100`);
-  return (resp.data ?? []).length;
+interface PedidoVendaListado {
+  id: number;
+  numero: number | string;
+  data?: string;
+  total?: number;
+  situacao?: { id?: number; valor?: number };
+}
+
+async function buscarPedidosVenda(token: string, idContato: number): Promise<PedidoVendaListado[]> {
+  const resp = await chamarApiBling<{ data: PedidoVendaListado[] }>(token, `/pedidos/vendas?idContato=${idContato}&limite=100`);
+  return resp.data ?? [];
+}
+
+/**
+ * Pedido de venda cancelado no Bling. A situação do pedido é configurável na
+ * conta; o padrão do Bling usa id 12 / valor 2 para "Cancelado". AINDA NÃO
+ * CONFIRMADO contra dados reais desta conta (ao contrário dos códigos de
+ * contas a receber, ver classificarSituacaoParcela) — conferir após a
+ * primeira sincronização com bling_pedidos e ajustar só aqui.
+ */
+export function pedidoBlingCancelado(situacaoId: number | null, situacaoValor: number | null): boolean {
+  return situacaoValor === 2 || situacaoId === 12;
 }
 
 export async function sincronizarContatosBling(
@@ -247,12 +266,25 @@ export async function sincronizarContatosBling(
       parcelasAtrasadas: number;
     }
   > = [];
-  // Parcelas de cada contato qualificado — vão pro cache bling_parcelas (0030).
+  // Pedidos de venda (0031) e parcelas (0030) de cada contato qualificado, pro cache.
+  const pedidosParaCache: Array<{ id: number; contato_id: number; numero: string; data: string | null; total: number; situacao_id: number | null; situacao_valor: number | null }> = [];
   const parcelasParaCache: Array<{ id: number; contato_id: number; numero_pedido_origem: string | null; vencimento: string; valor: number; situacao: number }> = [];
   const hoje = new Date().toISOString().slice(0, 10);
   for (const candidato of candidatosPessoaJuridica) {
-    const totalPedidosVenda = await buscarTotalPedidosVenda(token, candidato.id);
+    const pedidosVenda = await buscarPedidosVenda(token, candidato.id);
+    const totalPedidosVenda = pedidosVenda.length;
     if (totalPedidosVenda === 0) continue;
+    for (const p of pedidosVenda) {
+      pedidosParaCache.push({
+        id: p.id,
+        contato_id: candidato.id,
+        numero: String(p.numero),
+        data: p.data && /^\d{4}-\d{2}-\d{2}/.test(p.data) ? p.data.slice(0, 10) : null,
+        total: Number(p.total ?? 0),
+        situacao_id: p.situacao?.id ?? null,
+        situacao_valor: p.situacao?.valor ?? null,
+      });
+    }
     const parcelas = await buscarContasReceberBling(token, candidato.id);
     for (const p of parcelas) {
       parcelasParaCache.push({
@@ -305,6 +337,7 @@ export async function sincronizarContatosBling(
     if (error) throw new Error(`Falha ao salvar cache de contatos do Bling: ${error.message}`);
   }
 
+  await salvarCachePedidos(supabase, pedidosParaCache, inicioSincronizacao);
   const baixasImportadas = await salvarCacheParcelas(supabase, parcelasParaCache, inicioSincronizacao);
 
   // Remove do cache quem não qualifica mais (ex.: era fornecedor que tinha
@@ -364,6 +397,20 @@ export async function sincronizarContatosBling(
   }
 
   return { totalContatos: contatosPessoaJuridica.length, novosClientesRegistrados, baixasImportadas };
+}
+
+/** Grava os pedidos de venda no cache (0031); pedidos que sumiram do Bling saem. */
+async function salvarCachePedidos(
+  supabase: Supa,
+  pedidos: Array<{ id: number; contato_id: number; numero: string; data: string | null; total: number; situacao_id: number | null; situacao_valor: number | null }>,
+  inicioSincronizacao: string,
+) {
+  const agora = new Date().toISOString();
+  for (let i = 0; i < pedidos.length; i += 500) {
+    const { error } = await supabase.from("bling_pedidos").upsert(pedidos.slice(i, i + 500).map((p) => ({ ...p, sincronizado_em: agora })));
+    if (error) throw new Error(`Falha ao salvar cache de pedidos do Bling: ${error.message}`);
+  }
+  await supabase.from("bling_pedidos").delete().lt("sincronizado_em", inicioSincronizacao);
 }
 
 /**
