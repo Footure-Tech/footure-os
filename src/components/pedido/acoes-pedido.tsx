@@ -3,6 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { MdAutorenew, MdCancel, MdRefresh, MdSend, MdTaskAlt, MdUploadFile } from "react-icons/md";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -144,6 +145,7 @@ export function AcoesPedido({
       <AcoesContrato
         primaria={
           <Button disabled={pendente} onClick={() => rodar(() => tentarGerarNovamenteAction(pedidoId), "Gerando o contrato novamente")}>
+            <MdRefresh className="size-[18px]" />
             Tentar gerar contrato novamente
           </Button>
         }
@@ -159,6 +161,7 @@ export function AcoesPedido({
             disabled={pendente}
             onClick={() => rodar(() => liberarParaAssinaturaAction(pedidoId), "Contrato liberado para assinatura")}
           >
+            <MdTaskAlt className="size-[18px]" />
             Liberar para assinatura
           </Button>
         }
@@ -180,6 +183,7 @@ export function AcoesPedido({
             disabled={pendente}
             onClick={() => rodar(() => enviarParaAssinaturaAction(pedidoId), "Contrato enviado para assinatura via Clicksign")}
           >
+            <MdSend className="size-[18px]" />
             Enviar para assinatura
           </Button>
         }
@@ -222,7 +226,10 @@ function CancelarAssinaturaDialog({ pedidoId }: { pedidoId: string }) {
 
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
-      <DialogTrigger render={<Button type="button" variant="white" />}>Cancelar assinatura</DialogTrigger>
+      <DialogTrigger render={<Button type="button" variant="white" />}>
+        <MdCancel className="size-[18px]" />
+        Cancelar assinatura
+      </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Cancelar processo de assinatura</DialogTitle>
@@ -262,7 +269,10 @@ function RegenerarContratoDialog({ pedidoId }: { pedidoId: string }) {
 
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
-      <DialogTrigger render={<Button type="button" variant="white" />}>Regenerar</DialogTrigger>
+      <DialogTrigger render={<Button type="button" variant="white" />}>
+        <MdAutorenew className="size-[18px]" />
+        Regenerar
+      </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Regenerar contrato</DialogTitle>
@@ -293,7 +303,10 @@ function SubirNovaVersaoDialog({ pedidoId }: { pedidoId: string }) {
 
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
-      <DialogTrigger render={<Button type="button" variant="white" />}>Subir nova versão</DialogTrigger>
+      <DialogTrigger render={<Button type="button" variant="white" />}>
+        <MdUploadFile className="size-[18px]" />
+        Subir nova versão
+      </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Subir nova versão do contrato</DialogTitle>
