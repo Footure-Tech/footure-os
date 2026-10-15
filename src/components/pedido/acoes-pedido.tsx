@@ -195,13 +195,14 @@ export function AcoesPedido({
   return null;
 }
 
-// Layout das ações dentro do card do contrato: todas numa linha, primária
-// primeiro, dividindo a largura em partes iguais; quebram em telas estreitas.
+// Layout das ações dentro do card do contrato: todas numa linha, dividindo a
+// largura em partes iguais, com a primária por último (à direita) — mesmo
+// padrão dos rodapés de modal do sistema. Quebram em telas estreitas.
 function AcoesContrato({ primaria, secundarias }: { primaria?: ReactNode; secundarias?: ReactNode }) {
   return (
     <div className="flex flex-wrap gap-2.5 *:min-w-[160px] *:flex-1">
-      {primaria}
       {secundarias}
+      {primaria}
     </div>
   );
 }
