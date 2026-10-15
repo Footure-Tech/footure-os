@@ -42,7 +42,7 @@ export interface ResumoFinanceiro {
   clientesComVencido: number;
 }
 
-function hojeLocal() {
+export function hojeLocal() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -61,7 +61,9 @@ async function lerTudo<T>(consulta: (de: number, ate: number) => PromiseLike<{ d
   return linhas;
 }
 
-export async function carregarCarteira(supabase: Supa) {
+/** Base comum (Financeiro e Inadimplência): parcelas do cache já classificadas
+ * e numeradas n/N, e o nome/logo/cadastro local de cada contato do Bling. */
+export async function carregarBaseParcelas(supabase: Supa) {
   const [parcelasBrutas, contatos, clientesLocais] = await Promise.all([
     lerTudo((de, ate) => supabase.from("bling_parcelas").select("*").order("vencimento").range(de, ate)),
     lerTudo((de, ate) => supabase.from("bling_contatos").select("id, nome, sincronizado_em").range(de, ate)),
@@ -95,6 +97,18 @@ export async function carregarCarteira(supabase: Supa) {
     );
   }
 
+  const nomeDoContato = (id: number) => {
+    const local = clientePorContato.get(id);
+    return local?.nome_fantasia || local?.razao_social || contatoPorId.get(id)?.nome || "Cliente";
+  };
+  const sincronizadoEm = contatos.reduce<string | null>((max, c) => (!max || c.sincronizado_em > max ? c.sincronizado_em : max), null);
+
+  return { parcelas, clientePorContato, nomeDoContato, sincronizadoEm, temCache: parcelasBrutas.length > 0 };
+}
+
+export async function carregarCarteira(supabase: Supa) {
+  const { parcelas, clientePorContato, nomeDoContato, sincronizadoEm, temCache } = await carregarBaseParcelas(supabase);
+
   // Carteira por cliente — só quem ainda tem algo a receber (a vencer ou vencido).
   const porContato = new Map<number, ParcelaCarteira[]>();
   for (const p of parcelas) porContato.set(p.contatoId, [...(porContato.get(p.contatoId) ?? []), p]);
@@ -106,7 +120,7 @@ export async function carregarCarteira(supabase: Supa) {
     carteira.push({
       contatoId,
       clienteId: local?.id ?? null,
-      nome: local?.nome_fantasia || local?.razao_social || contatoPorId.get(contatoId)?.nome || "Cliente",
+      nome: nomeDoContato(contatoId),
       logoPath: local?.logo_path ?? null,
       valorTotal: lista.reduce((s, p) => s + p.valor, 0),
       pagas: lista.filter((p) => p.situacao === "recebida").length,
@@ -135,15 +149,9 @@ export async function carregarCarteira(supabase: Supa) {
     clientesComVencido: new Set(vencidas.map((p) => p.contatoId)).size,
   };
 
-  const nomeDoContato = (id: number) => {
-    const local = clientePorContato.get(id);
-    return local?.nome_fantasia || local?.razao_social || contatoPorId.get(id)?.nome || "Cliente";
-  };
   const parcelasDoMes = doMes
     .map((p) => ({ ...p, cliente: nomeDoContato(p.contatoId), clienteId: clientePorContato.get(p.contatoId)?.id ?? null }))
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
 
-  const sincronizadoEm = contatos.reduce<string | null>((max, c) => (!max || c.sincronizado_em > max ? c.sincronizado_em : max), null);
-
-  return { resumo, carteira, parcelasDoMes, sincronizadoEm, temCache: parcelasBrutas.length > 0 };
+  return { resumo, carteira, parcelasDoMes, sincronizadoEm, temCache };
 }

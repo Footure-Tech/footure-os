@@ -412,64 +412,6 @@ async function buscarContasReceberBling(token: string, idContato: number): Promi
   }));
 }
 
-export interface ParcelaAtrasadaDetalhe {
-  numeroPedido: string;
-  numeroParcela: number;
-  vencimento: string;
-  valor: number;
-  diasAtraso: number;
-}
-
-function diasDesdeVencimento(vencimentoIso: string): number {
-  const [ano, mes, dia] = vencimentoIso.split("-").map(Number);
-  const vencimento = new Date(ano, mes - 1, dia);
-  const hoje = new Date();
-  const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-  return Math.round((hojeSemHora.getTime() - vencimento.getTime()) / 86_400_000);
-}
-
-/**
- * Detalhe das parcelas atrasadas de um contato — usado na tela de
- * Inadimplência. "Número da parcela" é a posição dela dentro do próprio
- * pedido (ordenada por vencimento), já que o Bling não devolve isso pronto;
- * calculado a partir do mesmo /contas/receber que já traz todas as parcelas
- * do contato (nenhuma chamada extra).
- */
-export async function buscarParcelasAtrasadasDoContato(supabase: Supa, idContato: number): Promise<ParcelaAtrasadaDetalhe[]> {
-  let token: string;
-  try {
-    token = await obterAccessTokenValido(supabase);
-  } catch {
-    return [];
-  }
-  const parcelas = await buscarContasReceberBling(token, idContato);
-
-  const porPedido = new Map<string, typeof parcelas>();
-  for (const p of parcelas) {
-    if (!p.numeroPedidoOrigem) continue;
-    const lista = porPedido.get(p.numeroPedidoOrigem) ?? [];
-    lista.push(p);
-    porPedido.set(p.numeroPedidoOrigem, lista);
-  }
-
-  const resultado: ParcelaAtrasadaDetalhe[] = [];
-  for (const [numeroPedido, lista] of porPedido) {
-    const ordenada = [...lista].sort((a, b) => a.vencimento.localeCompare(b.vencimento));
-    ordenada.forEach((p, indice) => {
-      if (classificarSituacaoParcela(p.situacao, p.vencimento) === "atrasada") {
-        resultado.push({
-          numeroPedido,
-          numeroParcela: indice + 1,
-          vencimento: p.vencimento,
-          valor: p.valor,
-          diasAtraso: diasDesdeVencimento(p.vencimento),
-        });
-      }
-    });
-  }
-  return resultado.sort((a, b) => b.diasAtraso - a.diasAtraso);
-}
-
 /** Versão leve só pra saber se há parcela atrasada — usada na listagem de
  * clientes, onde buscar itens/descrição de cada pedido (N+1) seria caro. */
 export async function buscarSituacaoPagamentoBling(supabase: Supa, cnpj: string): Promise<{ temParcelaAtrasada: boolean }> {
