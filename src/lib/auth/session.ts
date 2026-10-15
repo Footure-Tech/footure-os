@@ -7,6 +7,8 @@ export interface SessaoUsuario {
   email: string | null;
   nome: string;
   papel: PapelUsuario;
+  /** Entrou com a senha temporária do cadastro/reenvio e ainda não definiu uma pessoal. */
+  senhaTemporaria: boolean;
 }
 
 // Lê usuário + papel a partir da sessão atual. Retorna null se não logado —
@@ -29,7 +31,13 @@ export async function obterSessao(): Promise<SessaoUsuario | null> {
   // antes da inativação (o login em si também barra antes de chegar aqui).
   if (!profile || !profile.ativo) return null;
 
-  return { id: user.id, email: user.email ?? null, nome: profile.nome, papel: profile.papel };
+  return {
+    id: user.id,
+    email: user.email ?? null,
+    nome: profile.nome,
+    papel: profile.papel,
+    senhaTemporaria: user.user_metadata?.senha_temporaria === true,
+  };
 }
 
 // Uso em Server Actions/Route Handlers: garante papel autorizado ou lança.

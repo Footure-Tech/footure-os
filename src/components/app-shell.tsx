@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { MdLock } from "react-icons/md";
 import type { SessaoUsuario } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { obterDadosShell } from "@/lib/shell/dadosShell";
@@ -34,6 +36,16 @@ export async function AppShell({ sessao, children }: { sessao: SessaoUsuario; ch
         <SidebarNav papel={sessao.papel} contadores={contadores} integracoes={statusIntegracoes} />
         <main className="min-w-0 flex-1 p-[30px]">
           <div className="max-w-[1500px]">
+            {sessao.senhaTemporaria && (
+              // Até o usuário trocar a senha temporária do e-mail de acesso.
+              <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-orange/40 bg-orange3 px-5 py-3 text-sm text-[#ce9232]">
+                <MdLock className="size-5 shrink-0" />
+                <span className="flex-1 font-semibold">Você está usando uma senha temporária. Defina uma senha pessoal para proteger sua conta.</span>
+                <Link href="/perfil#senha" className="font-bold underline">
+                  Alterar senha
+                </Link>
+              </div>
+            )}
             <TransicaoTela>{children}</TransicaoTela>
           </div>
         </main>

@@ -8,7 +8,12 @@ const AREA_POR_PAPEL: Record<string, string> = {
   admin: "/dashboard",
 };
 
-const ROTAS_PUBLICAS = ["/login"];
+// Sem sessão: login e "esqueci minha senha". Quem já está logado e abre uma
+// delas é mandado pra própria área.
+const ROTAS_PUBLICAS = ["/login", "/esqueci-senha"];
+// Abertas com ou sem sessão: /auth/confirmar troca o token do e-mail por
+// sessão (o usuário pode até já ter outra sessão aberta no navegador).
+const ROTAS_ABERTAS = ["/auth/"];
 
 // Chamado pelo src/proxy.ts em toda request. Faz duas coisas:
 // 1. Refresh de sessão (padrão @supabase/ssr) — checagem "otimista", sem
@@ -22,6 +27,7 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const rotaPublica = ROTAS_PUBLICAS.some((rota) => pathname.startsWith(rota));
+  if (ROTAS_ABERTAS.some((rota) => pathname.startsWith(rota))) return response;
 
   // Sem projeto Supabase conectado (.env.local ausente/incompleto): não dá
   // pra checar sessão de verdade. Em vez de deixar createServerClient

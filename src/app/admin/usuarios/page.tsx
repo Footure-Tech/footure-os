@@ -10,6 +10,7 @@ import { StatusPill } from "@/components/ds/status-pill";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { UsuarioFormDialog } from "@/components/usuarios/usuario-form-dialog";
 import { UsuarioAtivoButton } from "@/components/usuarios/usuario-ativo-button";
+import { ReenviarAcessoDialog } from "@/components/usuarios/reenviar-acesso-dialog";
 
 export default async function UsuariosPage() {
   const supabase = await createClient();
@@ -34,7 +35,7 @@ export default async function UsuariosPage() {
           <span className="-mt-2 text-sm text-gray3">
             {ativos} de {usuarios.length} usuários ativos
           </span>
-          <Table minWidth={720}>
+          <Table minWidth={860}>
             <TableHeader>
               <TableRow>
                 <TableHead>Usuário</TableHead>
@@ -61,6 +62,7 @@ export default async function UsuariosPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
+                      {u.ativo && <ReenviarAcessoDialog userId={u.user_id} nome={u.nome} />}
                       <UsuarioFormDialog modo="editar" usuario={{ id: u.user_id, nome: u.nome, papel: u.papel }} />
                       <UsuarioAtivoButton userId={u.user_id} ativo={u.ativo} />
                     </div>

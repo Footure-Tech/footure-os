@@ -40,7 +40,8 @@ export async function criarUsuario(dados: CriarUsuarioInput) {
     email,
     password: senhaTemporaria,
     email_confirm: true,
-    user_metadata: { nome },
+    // Marca a senha como temporária: o sistema avisa até o usuário definir uma pessoal.
+    user_metadata: { nome, senha_temporaria: true },
   });
   if (erroCriacao || !criado.user) {
     throw new Error(erroCriacao?.message ?? "Falha ao criar usuário.");
@@ -59,6 +60,33 @@ export async function criarUsuario(dados: CriarUsuarioInput) {
   }
 
   revalidatePath("/admin/usuarios");
+}
+
+/** Gera uma nova senha temporária e reenvia o e-mail de acesso (senha
+ * anterior deixa de valer). Para quem perdeu o e-mail do cadastro ou nunca
+ * conseguiu entrar. */
+export async function reenviarAcessoAction(userId: string) {
+  await exigirPapel("admin");
+  const service = createServiceClient();
+
+  const { data: encontrado, error: erroBusca } = await service.auth.admin.getUserById(userId);
+  if (erroBusca || !encontrado.user?.email) throw new Error(erroBusca?.message ?? "Usuário sem e-mail cadastrado.");
+  const { data: profile } = await service.from("profiles").select("nome, ativo").eq("user_id", userId).single();
+  if (!profile?.ativo) throw new Error("Usuário inativo — ative a conta antes de reenviar o acesso.");
+
+  const senhaTemporaria = gerarSenhaTemporaria();
+  const { error: erroSenha } = await service.auth.admin.updateUserById(userId, {
+    password: senhaTemporaria,
+    user_metadata: { ...encontrado.user.user_metadata, senha_temporaria: true },
+  });
+  if (erroSenha) throw new Error(`Falha ao gerar a nova senha: ${erroSenha.message}`);
+
+  try {
+    await enviarEmailSenhaTemporaria(encontrado.user.email, profile.nome, senhaTemporaria, false);
+  } catch (erro) {
+    const msg = erro instanceof Error ? erro.message : String(erro);
+    throw new Error(`Nova senha gerada, mas o e-mail não foi enviado: ${msg}`);
+  }
 }
 
 export async function editarUsuario(userId: string, dados: { nome: string; papel: PapelUsuario }) {
