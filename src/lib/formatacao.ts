@@ -46,3 +46,10 @@ export function tempoDecorrido(iso: string): string {
   if (horas < 24) return `há ${horas} h`;
   return `há ${Math.floor(horas / 24)} d`;
 }
+
+const MOEDA_COMPACTA = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+/** "R$ 4,93 mi" / "R$ 286 mil" — KPIs e eixos de gráfico (valor exato no tooltip). */
+export function formatarMoedaCompacta(valor: number): string {
+  return MOEDA_COMPACTA.format(valor);
+}

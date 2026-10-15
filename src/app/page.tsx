@@ -4,7 +4,7 @@ import { obterSessao } from "@/lib/auth/session";
 const AREA_POR_PAPEL = {
   vendedor: "/vendedor",
   juridico: "/juridico",
-  admin: "/admin",
+  admin: "/dashboard",
 } as const;
 
 export default async function Home() {

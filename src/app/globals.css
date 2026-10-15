@@ -223,9 +223,11 @@
   --border: var(--gray5);
   --input: var(--gray5);
   --ring: var(--lightPurple1);
-  /* Séries de gráfico (handoff): Footlink, previsto, Academy, Consultoria */
+  /* Séries de gráfico: realizado, previsto, Academy, Consultoria. O previsto
+     do handoff (#deccff) reprova no validador de paleta (contraste 1,48:1,
+     quase cinza) — #9d75ff mantém o roxo e passa nas 6 checagens. */
   --chart-1: var(--lightPurple1);
-  --chart-2: var(--lightPurple3);
+  --chart-2: #9d75ff;
   --chart-3: var(--iconBlue);
   --chart-4: var(--orange2);
   --chart-5: var(--gray3);
@@ -263,6 +265,10 @@
   --nav-active-bg: rgba(90, 0, 255, 0.2);
   --nav-active-text: #ffffff;
   --purple-text: #ffffff;
+  /* Séries no escuro: #5a00ff fica 2,25:1 sobre #1e1e2d — o realizado clareia
+     e o previsto escurece (par validado; previsto com legenda + tabela). */
+  --chart-1: #9d75ff;
+  --chart-2: #6f2bff;
   --kanban-card-bg: #252538;
   --kanban-card-border: #2b2b40;
   --kanban-name: #a06bff;

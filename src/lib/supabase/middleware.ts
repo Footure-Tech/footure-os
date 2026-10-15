@@ -5,7 +5,7 @@ import type { Database } from "./database.types";
 const AREA_POR_PAPEL: Record<string, string> = {
   vendedor: "/vendedor",
   juridico: "/juridico",
-  admin: "/admin",
+  admin: "/dashboard",
 };
 
 const ROTAS_PUBLICAS = ["/login"];

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { IconType } from "react-icons";
-import { MdAttachMoney, MdBusiness, MdGavel, MdManageAccounts, MdReceipt, MdSettings, MdWarning } from "react-icons/md";
+import { MdAttachMoney, MdBusiness, MdDashboard, MdGavel, MdManageAccounts, MdReceipt, MdSettings, MdWarning } from "react-icons/md";
 import { cn } from "@/lib/utils";
 import type { PapelUsuario } from "@/lib/supabase/database.types";
 import type { ChaveContador } from "@/lib/shell/dadosShell";
@@ -83,6 +83,7 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
   ],
   juridico: [{ label: "Jurídico", links: [{ ...CONTRATOS, ativoEm: ["/pedidos/"] }] }],
   admin: [
+    { label: "Gestão", links: [{ href: "/dashboard", label: "Dashboard", icon: MdDashboard, cor: "bg-iconPurple", exact: true }] },
     {
       label: "Comercial",
       links: [PEDIDOS_ADMIN, CLIENTES],

@@ -52,8 +52,9 @@ export interface ClienteInadimplente {
   diasAtraso: number;
 }
 
-export async function carregarInadimplencia(supabase: Supa) {
-  const { parcelas, clientePorContato, nomeDoContato, sincronizadoEm, temCache } = await carregarBaseParcelas(supabase);
+/** `base` opcional: quem já carregou o cache (ex.: Dashboard) evita ler de novo. */
+export async function carregarInadimplencia(supabase: Supa, base?: Awaited<ReturnType<typeof carregarBaseParcelas>>) {
+  const { parcelas, clientePorContato, nomeDoContato, sincronizadoEm, temCache } = base ?? (await carregarBaseParcelas(supabase));
   const hoje = hojeLocal();
   const vencidas = parcelas.filter((p) => p.situacao === "atrasada");
   const aVencer = parcelas.filter((p) => p.situacao === "em_aberto");
