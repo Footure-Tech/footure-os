@@ -8,7 +8,17 @@ import { cn } from "@/lib/utils";
 // Linha de tabela inteira clicável (handoff: listas abrem a tela de detalhe).
 // Cliques em elementos interativos dentro da linha (botões, links, inputs)
 // não navegam — eles seguem com a própria ação.
-export function LinhaClicavel({ href, className, children, ...props }: ComponentProps<typeof TableRow> & { href: string }) {
+export function LinhaClicavel({
+  href,
+  manterRolagem = false,
+  className,
+  children,
+  ...props
+}: ComponentProps<typeof TableRow> & {
+  href: string;
+  /** Navegação dentro da mesma tela (ex.: selecionar item num mestre-detalhe) — não volta ao topo. */
+  manterRolagem?: boolean;
+}) {
   const router = useRouter();
 
   function deveIgnorar(alvo: EventTarget | null) {
@@ -21,11 +31,11 @@ export function LinhaClicavel({ href, className, children, ...props }: Component
       window.open(href, "_blank");
       return;
     }
-    router.push(href);
+    router.push(href, { scroll: !manterRolagem });
   }
 
   function aoTeclar(e: KeyboardEvent<HTMLTableRowElement>) {
-    if (e.key === "Enter" && !deveIgnorar(e.target)) router.push(href);
+    if (e.key === "Enter" && !deveIgnorar(e.target)) router.push(href, { scroll: !manterRolagem });
   }
 
   return (

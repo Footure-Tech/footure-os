@@ -29,13 +29,17 @@ export async function listarPedidosDeVenda(supabase: Supa, filtro?: { vendedorId
   return data ?? [];
 }
 
-export async function listarFilaJuridico(supabase: Supa) {
+/** Tela Contratos (jurídico): pedidos da geração do contrato em diante, com
+ * todas as versões do contrato (a mais recente é escolhida por quem chama). */
+export async function listarContratosJuridico(supabase: Supa) {
   const { data, error } = await supabase
     .from("pedidos")
-    .select("id, status, perfil, plano, valor_total, criado_em, clientes(razao_social, logo_path)")
-    .in("status", ["em_revisao_juridica", "pronto_para_assinatura", "enviado_para_assinatura"])
-    .order("criado_em", { ascending: true });
-  logSeErro("listarFilaJuridico", error);
+    .select(
+      "id, status, perfil, plano, valor_total, geracao_contrato_erro, criado_em, clientes(razao_social, nome_fantasia, logo_path), contratos(id, versao, gerado_em, assinatura_incompleta)",
+    )
+    .in("status", ["aprovado", "em_revisao_juridica", "pronto_para_assinatura", "enviado_para_assinatura", "assinado", "concluido"])
+    .order("atualizado_em", { ascending: false });
+  logSeErro("listarContratosJuridico", error);
   return data ?? [];
 }
 

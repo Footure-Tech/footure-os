@@ -17,7 +17,7 @@ export interface DadosShell {
   integracoes: StatusIntegracoes;
 }
 
-// Mesmos status da fila do jurídico (listarFilaJuridico): contratos ainda não assinados.
+// Mesmos status da fila do jurídico (tela Contratos): contratos ainda não assinados.
 const STATUS_CONTRATO_EM_ANDAMENTO: StatusPedido[] = ["em_revisao_juridica", "pronto_para_assinatura", "enviado_para_assinatura"];
 
 async function contar(consulta: PromiseLike<{ count: number | null; error: { message: string } | null }>, rotulo: string) {

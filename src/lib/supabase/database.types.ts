@@ -36,6 +36,7 @@ export type Produto = "footlink" | "api";
 export type PapelAssinaturaClicksign = "legal_representative" | "witness";
 export type LadoSignatario = "cliente" | "footure";
 export type StatusAssinaturaSignatario = "pendente" | "assinado" | "recusado";
+export type ItemValidacaoContrato = "dados_cadastrais" | "valores_parcelas" | "clausulas_padrao" | "anexo_plano";
 
 // supabase-js exige Row/Insert/Update/Relationships em cada tabela, e
 // Tables/Views/Functions como irmãos no schema — sem isso a inferência de
@@ -350,6 +351,12 @@ export interface Database {
           assinatura_encerrada_em?: string | null;
           assinatura_incompleta?: boolean;
         }
+      >;
+      // supabase/migrations/0029_contrato_validacao.sql
+      contrato_validacao: TableDef<
+        { id: string; contrato_id: string; item: ItemValidacaoContrato; marcado_por: string | null; marcado_em: string },
+        { id?: string; contrato_id: string; item: ItemValidacaoContrato; marcado_por?: string | null },
+        never
       >;
       // supabase/migrations/0027_contrato_signatarios_clicksign.sql
       contrato_signatarios: TableDef<

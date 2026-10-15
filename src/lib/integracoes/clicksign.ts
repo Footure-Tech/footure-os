@@ -276,3 +276,36 @@ export async function buscarArquivoAssinado(envelopeId: string, documentId: stri
   if (!resposta.ok) return null;
   return Buffer.from(await resposta.arrayBuffer());
 }
+
+/**
+ * "Reenviar lembrete": notifica SÓ os signatários ainda pendentes do contrato
+ * (POST /envelopes/:envelope/signers/:signer/notifications — referência
+ * "Notificar um Signatário" da v3). Depende dos signatários registrados no
+ * envio (0027); contratos enviados antes disso não têm o id do signer.
+ */
+export async function notificarSignatariosPendentes(supabase: Supa, contratoId: string): Promise<{ notificados: number }> {
+  const { data: contrato, error: erroContrato } = await supabase
+    .from("contratos")
+    .select("clicksign_envelope_id")
+    .eq("id", contratoId)
+    .single();
+  if (erroContrato || !contrato?.clicksign_envelope_id) throw new Error("Contrato sem envelope na Clicksign — envie para assinatura primeiro.");
+
+  const { data: pendentes } = await supabase
+    .from("contrato_signatarios")
+    .select("clicksign_signer_id")
+    .eq("contrato_id", contratoId)
+    .eq("status", "pendente");
+  const ids = (pendentes ?? []).map((p) => p.clicksign_signer_id).filter((id): id is string => !!id);
+  if (ids.length === 0) {
+    throw new Error("Nenhum signatário pendente com registro na Clicksign — use o painel da Clicksign para envios anteriores ao acompanhamento individual.");
+  }
+
+  for (const signerId of ids) {
+    await clicksign(`/envelopes/${contrato.clicksign_envelope_id}/signers/${signerId}/notifications`, {
+      method: "POST",
+      body: { data: { type: "notifications", attributes: {} } },
+    });
+  }
+  return { notificados: ids.length };
+}

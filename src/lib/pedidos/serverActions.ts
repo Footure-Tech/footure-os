@@ -9,6 +9,8 @@ import { normalizePlan, buscarPlanoPorKey } from "@/lib/plans/normalize";
 import { podeRegistrarPedido } from "@/lib/validacoes/pedido";
 import * as acoes from "@/lib/pedidos/acoes";
 import { STATUS_EDITAVEIS } from "@/lib/pedidos/statusEditavel";
+import { notificarSignatariosPendentes } from "@/lib/integracoes/clicksign";
+import type { ItemValidacaoContrato } from "@/lib/supabase/database.types";
 
 const SignatarioSchema = z.object({
   id: z.string().uuid().optional(), // já existente em signatarios_cliente
@@ -394,4 +396,31 @@ export async function subirNovaVersaoAction(_prev: SubirVersaoState, formData: F
   revalidatePath("/juridico");
   revalidatePath(`/pedidos/${pedidoId}`);
   return { sucesso: true };
+}
+
+/** Checklist de validação jurídica (0029): marca/desmarca um item da versão atual do contrato. */
+export async function marcarItemValidacaoAction(pedidoId: string, contratoId: string, item: ItemValidacaoContrato, marcado: boolean) {
+  const sessao = await exigirPapel("juridico", "admin");
+  const supabase = await createClient();
+  const { error } = marcado
+    ? await supabase.from("contrato_validacao").upsert({ contrato_id: contratoId, item, marcado_por: sessao.id }, { onConflict: "contrato_id,item" })
+    : await supabase.from("contrato_validacao").delete().eq("contrato_id", contratoId).eq("item", item);
+  if (error) throw new Error(`Falha ao salvar a validação: ${error.message}`);
+  revalidatePath("/juridico");
+  revalidatePath(`/pedidos/${pedidoId}`);
+}
+
+/** "Reenviar lembrete aos signatários": só para quem ainda não assinou. */
+export async function reenviarLembreteAction(pedidoId: string): Promise<{ notificados: number }> {
+  await exigirPapel("juridico", "admin");
+  const supabase = await createClient();
+  const { data: contrato } = await supabase
+    .from("contratos")
+    .select("id")
+    .eq("pedido_id", pedidoId)
+    .order("versao", { ascending: false })
+    .limit(1)
+    .single();
+  if (!contrato) throw new Error("Pedido sem contrato gerado.");
+  return notificarSignatariosPendentes(supabase, contrato.id);
 }

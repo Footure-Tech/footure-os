@@ -3,7 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MdAutorenew, MdCancel, MdRefresh, MdSend, MdTaskAlt, MdUploadFile } from "react-icons/md";
+import { MdAutorenew, MdCancel, MdNotificationsActive, MdRefresh, MdSend, MdTaskAlt, MdUploadFile } from "react-icons/md";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -26,6 +26,7 @@ import {
   enviarParaAssinaturaAction,
   enviarParaAprovacaoAction,
   cancelarAssinaturaAction,
+  reenviarLembreteAction,
 } from "@/lib/pedidos/serverActions";
 import type { PapelUsuario, StatusPedido } from "@/lib/supabase/database.types";
 
@@ -193,10 +194,34 @@ export function AcoesPedido({
   }
 
   if (status === "enviado_para_assinatura" && (papel === "juridico" || papel === "admin")) {
-    return <AcoesContrato secundarias={<CancelarAssinaturaDialog pedidoId={pedidoId} />} />;
+    return <AcoesContrato secundarias={<CancelarAssinaturaDialog pedidoId={pedidoId} />} primaria={<ReenviarLembreteBotao pedidoId={pedidoId} />} />;
   }
 
   return null;
+}
+
+function ReenviarLembreteBotao({ pedidoId }: { pedidoId: string }) {
+  const router = useRouter();
+  const [pendente, iniciar] = useTransition();
+  return (
+    <Button
+      disabled={pendente}
+      onClick={() =>
+        iniciar(async () => {
+          try {
+            const { notificados } = await reenviarLembreteAction(pedidoId);
+            toast.success(`Lembrete enviado a ${notificados} ${notificados === 1 ? "signatário" : "signatários"}`);
+            router.refresh();
+          } catch (erro) {
+            toast.error(erro instanceof Error ? erro.message : "Falha ao reenviar o lembrete.");
+          }
+        })
+      }
+    >
+      <MdNotificationsActive className="size-[18px]" />
+      {pendente ? "Enviando…" : "Reenviar lembrete aos pendentes"}
+    </Button>
+  );
 }
 
 // Layout das ações dentro do card do contrato: todas numa linha, dividindo a

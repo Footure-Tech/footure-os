@@ -2,17 +2,7 @@ import { MdCancel, MdCheck, MdPriorityHigh, MdRadioButtonUnchecked, MdSchedule }
 import { cn } from "@/lib/utils";
 import { formatarDataCurta } from "@/lib/formatacao";
 
-/** nao_assinou = estava pendente quando o processo de assinatura foi encerrado (prazo/finalização). */
-export type SituacaoSignatario = "assinado" | "pendente" | "recusado" | "nao_assinou" | "nao_enviado";
-
-export interface SignatarioExibido {
-  nome: string;
-  /** Ex.: "Contratante", "Testemunha · cliente", "Footure · representante". */
-  papel: string;
-  email?: string | null;
-  situacao: SituacaoSignatario;
-  assinadoEm?: string | null;
-}
+import type { SignatarioExibido, SituacaoSignatario } from "@/lib/contratos/signatariosExibidos";
 
 const VISUAL: Record<SituacaoSignatario, { icone: typeof MdCheck; caixa: string; texto: string; rotulo: string }> = {
   assinado: { icone: MdCheck, caixa: "bg-green2 text-white", texto: "text-green1", rotulo: "Assinou" },

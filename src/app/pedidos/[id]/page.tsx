@@ -22,7 +22,8 @@ import { StatusPill } from "@/components/ds/status-pill";
 import { Stepper } from "@/components/ds/stepper";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { CardModulo, LinhaChaveValor } from "@/components/negocio/card-modulo";
-import { ListaSignatarios, type SignatarioExibido, type SituacaoSignatario } from "@/components/negocio/lista-signatarios";
+import { ListaSignatarios } from "@/components/negocio/lista-signatarios";
+import { carregarSignatariosExibidos } from "@/lib/contratos/signatariosExibidos";
 import { PainelAlertas } from "@/components/pedido/painel-alertas";
 import { AcoesPedido } from "@/components/pedido/acoes-pedido";
 import { CancelarPedidoDialog } from "@/components/pedido/cancelar-pedido-dialog";
@@ -32,11 +33,6 @@ import { ROTULO_STATUS } from "@/components/rotulo-status";
 const VOLTAR_POR_PAPEL = { vendedor: "/vendedor", admin: "/admin", juridico: "/juridico" } as const;
 const ROTULO_PERFIL_CLIENTE = { clube: "Clube", agente: "Agente" } as const;
 const MODELO_CONTRATO = { clube: "Footlink Clube", agente: "Footlink Agente" } as const;
-
-function papelSignatario(lado: "cliente" | "footure", representante: boolean) {
-  if (lado === "cliente") return representante ? "Contratante · representante legal" : "Testemunha · contratante";
-  return representante ? "Footure · representante" : "Testemunha · Footure";
-}
 
 // Tela "Negócio" do handoff: visão ponta a ponta de um pedido — cabeçalho
 // com a ação da próxima etapa, stepper do fluxo e os cards de cliente,
@@ -48,7 +44,7 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
 
   const detalhe = await buscarPedidoDetalhe(supabase, id);
   if (!detalhe) notFound();
-  const { pedido, transicoes, contratos, signatarios, representantesFooture, testemunhasFooture } = detalhe;
+  const { pedido, transicoes, contratos, signatarios } = detalhe;
 
   const cliente = pedido.clientes as unknown as {
     id: string;
@@ -75,7 +71,6 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
   const status = statusPedidoVisual(pedido.status, pedido.geracao_contrato_erro);
 
   const representantesLegais = signatarios.filter((s) => s.tipo === "representante_legal");
-  const testemunhasCliente = signatarios.filter((s) => s.tipo === "testemunha");
   const donoDoRascunho = pedido.vendedor_id === sessao.id;
   const podeEditar =
     pedidoEhEditavel(pedido.status) && (sessao.papel === "admin" || (sessao.papel === "vendedor" && donoDoRascunho));
@@ -116,45 +111,12 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
   // Prazo expirou / documento finalizado com signatários pendentes (0028).
   const assinaturaIncompleta = !!contratoAtual?.assinatura_incompleta;
 
-  // Status por signatário (0027). Sem linhas = contrato ainda não enviado, ou
-  // enviado antes da migration: monta a lista a partir do pedido e usa o
-  // status geral (todos aguardando / todos assinados).
-  const { data: linhasClicksign } = contratoAtual
-    ? await supabase.from("contrato_signatarios").select("*").eq("contrato_id", contratoAtual.id).order("ordem")
-    : { data: null };
-  const situacaoGeral: SituacaoSignatario =
-    pedido.status === "assinado" || pedido.status === "concluido"
-      ? "assinado"
-      : pedido.status === "enviado_para_assinatura"
-        ? "pendente"
-        : "nao_enviado";
-  const signatariosExibidos: SignatarioExibido[] =
-    linhasClicksign && linhasClicksign.length > 0
-      ? linhasClicksign.map((s) => ({
-          nome: s.nome,
-          email: s.email,
-          papel: papelSignatario(s.lado, s.papel === "legal_representative"),
-          situacao: assinaturaIncompleta && s.status === "pendente" ? ("nao_assinou" as const) : s.status,
-          assinadoEm: s.assinado_em,
-        }))
-      : [
-          ...representantesLegais.map((s) => {
-            const sc = s.signatarios_cliente as unknown as { nome_completo: string; email: string } | null;
-            return { nome: sc?.nome_completo ?? "—", email: sc?.email, papel: papelSignatario("cliente", true), situacao: situacaoGeral };
-          }),
-          ...testemunhasCliente.map((s) => {
-            const sc = s.signatarios_cliente as unknown as { nome_completo: string; email: string } | null;
-            return { nome: sc?.nome_completo ?? "—", email: sc?.email, papel: papelSignatario("cliente", false), situacao: situacaoGeral };
-          }),
-          ...representantesFooture.map((r) => {
-            const rf = r.representantes_footure as unknown as { nome: string; email: string | null } | null;
-            return { nome: rf?.nome ?? "—", email: rf?.email, papel: papelSignatario("footure", true), situacao: situacaoGeral };
-          }),
-          ...testemunhasFooture.map((t) => ({ nome: t.nome_completo, email: t.email, papel: papelSignatario("footure", false), situacao: situacaoGeral })),
-        ];
-  const temStatusPorSignatario = !!linhasClicksign && linhasClicksign.length > 0;
-  const assinados = signatariosExibidos.filter((s) => s.situacao === "assinado").length;
-  const naoAssinaram = signatariosExibidos.filter((s) => s.situacao === "nao_assinou");
+  const {
+    signatarios: signatariosExibidos,
+    temStatusPorSignatario,
+    assinados,
+    naoAssinaram,
+  } = await carregarSignatariosExibidos(supabase, detalhe, contratoAtual);
 
   const { etapas, atual, canceladoEm } = montarEtapasNegocio({
     status: pedido.status,
