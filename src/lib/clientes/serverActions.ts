@@ -93,7 +93,7 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
   redirect("/clientes");
 }
 
-export async function sincronizarContatosBlingAction(): Promise<{ totalContatos: number; novosClientesRegistrados: number; baixasImportadas: number }> {
+export async function sincronizarContatosBlingAction(): Promise<Awaited<ReturnType<typeof sincronizarContatosBling>>> {
   await exigirPapel("vendedor", "admin");
   const supabase = await createClient();
   const resultado = await sincronizarContatosBling(supabase);

@@ -19,6 +19,9 @@ export interface ParcelaCarteira {
   /** Posição da parcela dentro do pedido de origem no Bling (ordem de vencimento). */
   numero: number;
   totalDoPedido: number;
+  /** Data da baixa (pagamento) — vem do borderô do Bling (0032); nulo até a sincronização buscar o detalhe. */
+  dataPagamento: string | null;
+  valorPago: number | null;
 }
 
 export function hojeLocal() {
@@ -73,6 +76,8 @@ export async function carregarBaseParcelas(supabase: Supa) {
         situacao: classificarSituacaoParcela(p.situacao, p.vencimento),
         numero: i + 1,
         totalDoPedido: grupo.length,
+        dataPagamento: p.data_pagamento,
+        valorPago: p.valor_pago === null ? null : Number(p.valor_pago),
       }),
     );
   }
@@ -172,7 +177,7 @@ export async function carregarContratos(supabase: Supa) {
   });
   contratos.sort((a, b) => Number(b.situacao === "atrasado") - Number(a.situacao === "atrasado") || (a.fim ?? "").localeCompare(b.fim ?? ""));
 
-  // KPIs do ano corrente — execução por data de VENCIMENTO (o cache não tem a data da baixa).
+  // KPIs do ano corrente — regra de produto: parcelas que VENCEM no ano (pagas ou não), como em Pagamentos.
   const parcelasDoAno = base.parcelas.filter((p) => p.numeroPedidoOrigem && p.vencimento.startsWith(ano) && !base.deCancelado(p));
   const resumo = {
     ano,

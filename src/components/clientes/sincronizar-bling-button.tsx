@@ -24,11 +24,24 @@ export function SincronizarBlingButton({
   function aoClicar() {
     iniciar(async () => {
       try {
-        const { novosClientesRegistrados, baixasImportadas } = await sincronizarContatosBlingAction();
+        const { novosClientesRegistrados, baixasImportadas, baixas } = await sincronizarContatosBlingAction();
         toast.success(
           `Bling sincronizado · ${baixasImportadas} ${baixasImportadas === 1 ? "baixa de pagamento importada" : "baixas de pagamento importadas"}` +
             (novosClientesRegistrados > 0 ? ` · ${novosClientesRegistrados} novos clientes` : ""),
+          baixas.detalhadas > 0 || baixas.pendentes > 0
+            ? {
+                description:
+                  `Data de baixa de ${baixas.detalhadas} ${baixas.detalhadas === 1 ? "parcela" : "parcelas"}` +
+                  (baixas.pendentes > 0 ? ` · ${baixas.pendentes} na próxima sincronização` : ""),
+              }
+            : undefined,
         );
+        if (baixas.escopoBorderosAusente) {
+          toast.error("O app do Bling não tem o escopo “Borderôs”", {
+            description: "Sem ele, a data de baixa das parcelas não é importada. Reconecte o Bling em Administração · Configurações.",
+            duration: 8000,
+          });
+        }
         // Atualiza a tela e o "há N min" da sidebar (o layout re-renderiza).
         router.refresh();
       } catch (erro) {

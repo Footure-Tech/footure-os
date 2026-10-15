@@ -91,6 +91,12 @@ export async function carregarInadimplencia(supabase: Supa, base?: Awaited<Retur
   });
 
   const totalVencido = vencidas.reduce((s, p) => s + p.valor, 0);
+  // Recuperado no mês = parcelas pagas NESTE mês depois do vencimento (baixa do borderô, 0032).
+  const mesAtual = hoje.slice(0, 7);
+  const recuperadas = parcelas.filter(
+    (p) => (p.situacao === "recebida" || p.situacao === "recebida_parcial") && p.dataPagamento?.startsWith(mesAtual) && p.dataPagamento > p.vencimento,
+  );
+  const temDataDeBaixa = parcelas.some((p) => p.dataPagamento);
   const totalAVencer = aVencer.reduce((s, p) => s + p.valor, 0);
   return {
     temCache,
@@ -104,6 +110,8 @@ export async function carregarInadimplencia(supabase: Supa, base?: Awaited<Retur
       taxa: totalVencido + totalAVencer > 0 ? totalVencido / (totalVencido + totalAVencer) : 0,
       clientes: clientes.length,
       clientesAtivos: new Set([...vencidas, ...aVencer].map((p) => p.contatoId)).size,
+      recuperadoMes: temDataDeBaixa ? recuperadas.reduce((s, p) => s + (p.valorPago ?? p.valor), 0) : null,
+      parcelasRecuperadas: recuperadas.length,
     },
   };
 }

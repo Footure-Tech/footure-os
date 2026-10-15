@@ -226,7 +226,12 @@ export function pedidoBlingCancelado(situacaoId: number | null, situacaoValor: n
 
 export async function sincronizarContatosBling(
   supabase: Supa,
-): Promise<{ totalContatos: number; novosClientesRegistrados: number; baixasImportadas: number }> {
+): Promise<{
+  totalContatos: number;
+  novosClientesRegistrados: number;
+  baixasImportadas: number;
+  baixas: ResultadoBaixas;
+}> {
   const token = await obterAccessTokenValido(supabase);
   const inicioSincronizacao = new Date().toISOString();
 
@@ -339,6 +344,7 @@ export async function sincronizarContatosBling(
 
   await salvarCachePedidos(supabase, pedidosParaCache, inicioSincronizacao);
   const baixasImportadas = await salvarCacheParcelas(supabase, parcelasParaCache, inicioSincronizacao);
+  const baixas = await complementarBaixas(supabase, token);
 
   // Remove do cache quem não qualifica mais (ex.: era fornecedor que tinha
   // ficado antes dessa checagem existir) — nunca quem ainda está vinculado a
@@ -396,7 +402,88 @@ export async function sincronizarContatosBling(
     }
   }
 
-  return { totalContatos: contatosPessoaJuridica.length, novosClientesRegistrados, baixasImportadas };
+  return { totalContatos: contatosPessoaJuridica.length, novosClientesRegistrados, baixasImportadas, baixas };
+}
+
+/** Parcelas por sincronização que recebem o detalhe da baixa (2 chamadas cada,
+ * ~0,7 s com a fila de 3 req/s) — o resto continua na próxima rodada. */
+const LIMITE_BAIXAS_POR_SINCRONIZACAO = 120;
+
+export interface ResultadoBaixas {
+  /** Parcelas que ganharam data/valor da baixa nesta rodada. */
+  detalhadas: number;
+  /** Pagas ainda sem o detalhe (ficam para a próxima sincronização). */
+  pendentes: number;
+  /** O Bling recusou /borderos (403): o app ainda não tem o escopo "Borderôs" — reconectar. */
+  escopoBorderosAusente: boolean;
+}
+
+/** Data (aaaa-mm-dd) e valor pago de uma conta a receber, via detalhe da conta + borderôs. */
+async function buscarBaixaDaConta(token: string, contaId: number): Promise<{ dataPagamento: string | null; valorPago: number | null }> {
+  const detalhe = await chamarApiBling<{ data: { valor?: number; saldo?: number; borderos?: Array<number | { id: number }> } }>(
+    token,
+    `/contas/receber/${contaId}`,
+  );
+  const conta = detalhe.data ?? {};
+  // A forma do array de borderôs não está documentada publicamente — aceita id puro ou { id }.
+  const idsBorderos = [...new Set((conta.borderos ?? []).map((b) => (typeof b === "number" ? b : b?.id)).filter((id): id is number => !!id))];
+  let dataPagamento: string | null = null;
+  for (const idBordero of idsBorderos) {
+    const bordero = await chamarApiBling<{ data: { data?: string } }>(token, `/borderos/${idBordero}`);
+    const data = bordero.data?.data?.slice(0, 10);
+    // Parcela paga em mais de uma vez (parcial): a baixa é a mais recente.
+    if (data && /^\d{4}-\d{2}-\d{2}$/.test(data) && (!dataPagamento || data > dataPagamento)) dataPagamento = data;
+  }
+  const valorPago = typeof conta.valor === "number" && typeof conta.saldo === "number" ? Math.max(0, conta.valor - conta.saldo) : null;
+  return { dataPagamento, valorPago };
+}
+
+/**
+ * Complementa o cache com a baixa (0032) das parcelas pagas — total (2) ou
+ * parcial (3) — cuja situação mudou desde a última leitura do detalhe. Só
+ * isso entra (a listagem /contas/receber não traz a data de recebimento), o
+ * que mantém o custo em poucas chamadas por dia depois da primeira carga.
+ */
+async function complementarBaixas(supabase: Supa, token: string): Promise<ResultadoBaixas> {
+  // Parcela que voltou a ficar em aberto (estorno) perde a baixa antiga.
+  await supabase
+    .from("bling_parcelas")
+    .update({ data_pagamento: null, valor_pago: null, situacao_detalhada: null })
+    .not("situacao", "in", "(2,3)")
+    .not("situacao_detalhada", "is", null);
+
+  const { data: candidatas, error } = await supabase
+    .from("bling_parcelas")
+    .select("id, situacao, situacao_detalhada")
+    .in("situacao", [2, 3])
+    .order("vencimento", { ascending: false })
+    .limit(5000);
+  if (error) {
+    console.error("[bling] falha ao listar parcelas para baixa:", error.message);
+    return { detalhadas: 0, pendentes: 0, escopoBorderosAusente: false };
+  }
+  const pendentes = (candidatas ?? []).filter((p) => p.situacao_detalhada !== p.situacao);
+
+  let detalhadas = 0;
+  let escopoBorderosAusente = false;
+  for (const parcela of pendentes.slice(0, LIMITE_BAIXAS_POR_SINCRONIZACAO)) {
+    try {
+      const { dataPagamento, valorPago } = await buscarBaixaDaConta(token, parcela.id);
+      await supabase
+        .from("bling_parcelas")
+        .update({ data_pagamento: dataPagamento, valor_pago: valorPago, situacao_detalhada: parcela.situacao })
+        .eq("id", parcela.id);
+      detalhadas++;
+    } catch (erro) {
+      const mensagem = erro instanceof Error ? erro.message : String(erro);
+      if (/\/borderos\/\d+ retornou 403/.test(mensagem)) {
+        escopoBorderosAusente = true;
+        break; // sem o escopo, toda chamada de borderô falha — não adianta continuar
+      }
+      console.error(`[bling] falha ao buscar a baixa da parcela ${parcela.id}:`, mensagem);
+    }
+  }
+  return { detalhadas, pendentes: pendentes.length - detalhadas, escopoBorderosAusente };
 }
 
 /** Grava os pedidos de venda no cache (0031); pedidos que sumiram do Bling saem. */

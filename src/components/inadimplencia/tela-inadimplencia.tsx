@@ -85,7 +85,16 @@ export function TelaInadimplencia({
                 apoio="do valor em aberto · sem meta definida"
               />
               <KpiCard rotulo="Clientes inadimplentes" valor={resumo.clientes} apoio={`de ${resumo.clientesAtivos} com parcelas em aberto`} />
-              <KpiCard rotulo="Recuperado no mês" valor="—" apoio="Requer a data de baixa do Bling (ainda não sincronizada)" />
+              <KpiCard
+                rotulo="Recuperado no mês"
+                valor={resumo.recuperadoMes === null ? "—" : formatarMoeda(resumo.recuperadoMes)}
+                corValor={resumo.recuperadoMes ? "text-green1" : undefined}
+                apoio={
+                  resumo.recuperadoMes === null
+                    ? "aguardando a data de baixa do Bling (sincronize)"
+                    : `${resumo.parcelasRecuperadas} ${resumo.parcelasRecuperadas === 1 ? "parcela paga" : "parcelas pagas"} em atraso neste mês`
+                }
+              />
             </div>
 
             <section className="flex flex-col gap-4 rounded-xl border border-gray5 bg-surface p-6 shadow-card">

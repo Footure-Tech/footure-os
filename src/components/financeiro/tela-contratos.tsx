@@ -165,8 +165,8 @@ export function TelaContratos({
             </Table>
           )}
           <p className="text-xs text-gray3">
-            Vigência = data do pedido até o vencimento da última parcela. Execução calculada pela data de vencimento das parcelas (o Bling não informa a
-            data da baixa); parcelas pagas só em parte contam como “a executar”.
+            Vigência = data do pedido até o vencimento da última parcela. A execução do ano considera as parcelas que vencem no ano; parcelas pagas só em
+            parte contam como “a executar”.
           </p>
         </>
       )}

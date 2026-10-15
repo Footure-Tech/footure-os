@@ -177,7 +177,7 @@ function VisaoGeral({ dados, urlLogo, rotuloPeriodo }: { dados: Dados; urlLogo: 
           {dados.temCacheBling ? (
             <>
               <GraficoReceitaMensal meses={dados.receitaMensal} />
-              <p className="text-xs text-gray3">Parcelas do Bling por mês de vencimento (o Bling não informa a data da baixa).</p>
+              <p className="text-xs text-gray3">Parcelas do Bling por mês de vencimento; realizado = parcelas do mês já pagas.</p>
             </>
           ) : (
             <EstadoVazio compacto icone={MdSync} titulo="Parcelas do Bling não sincronizadas" descricao="Use “Sincronizar Bling” no card de Integrações da barra lateral." />

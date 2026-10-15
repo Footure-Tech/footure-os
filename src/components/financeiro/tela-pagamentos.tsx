@@ -121,12 +121,13 @@ export function TelaPagamentos({
               />
             </div>
           ) : (
-            <Table minWidth={900}>
+            <Table minWidth={1000}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Parcela</TableHead>
                   <TableHead>Vencimento</TableHead>
+                  <TableHead>Data da baixa</TableHead>
                   <TableHead>Valor</TableHead>
                   <TableHead>Pedido Bling</TableHead>
                   <TableHead>ID Bling</TableHead>
@@ -143,7 +144,27 @@ export function TelaPagamentos({
                         {p.numero}/{p.totalDoPedido}
                       </TableCell>
                       <TableCell className="text-gray2">{formatarDataCurta(p.vencimento)}</TableCell>
-                      <TableCell className="font-bold text-darkPurple1">{formatarMoeda(p.valor)}</TableCell>
+                      <TableCell>
+                        {p.situacao === "recebida" || p.situacao === "recebida_parcial" ? (
+                          p.dataPagamento ? (
+                            <span className={p.dataPagamento > p.vencimento ? "font-semibold text-[#ce9232]" : "text-gray2"} title={p.dataPagamento > p.vencimento ? "Paga depois do vencimento" : undefined}>
+                              {formatarDataCurta(p.dataPagamento)}
+                            </span>
+                          ) : (
+                            <span className="text-gray3" title="A data de baixa chega na próxima sincronização com o Bling">
+                              aguardando
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-gray3">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-bold text-darkPurple1">
+                        {formatarMoeda(p.valor)}
+                        {p.situacao === "recebida_parcial" && p.valorPago !== null && (
+                          <span className="block text-xs font-normal text-gray3">pago {formatarMoeda(p.valorPago)}</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-gray2">{p.numeroPedidoOrigem ?? "—"}</TableCell>
                       <TableCell className="font-mono text-xs text-gray3">{p.id}</TableCell>
                       <TableCell>

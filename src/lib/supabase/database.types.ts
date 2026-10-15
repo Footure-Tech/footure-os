@@ -386,6 +386,10 @@ export interface Database {
           valor: number;
           situacao: number;
           sincronizado_em: string;
+          // 0032_bling_parcelas_baixa.sql
+          data_pagamento: string | null;
+          valor_pago: number | null;
+          situacao_detalhada: number | null;
         },
         {
           id: number;
@@ -396,7 +400,16 @@ export interface Database {
           situacao: number;
           sincronizado_em?: string;
         },
-        Partial<{ numero_pedido_origem: string | null; vencimento: string; valor: number; situacao: number; sincronizado_em: string }>
+        Partial<{
+          numero_pedido_origem: string | null;
+          vencimento: string;
+          valor: number;
+          situacao: number;
+          sincronizado_em: string;
+          data_pagamento: string | null;
+          valor_pago: number | null;
+          situacao_detalhada: number | null;
+        }>
       >;
       // supabase/migrations/0029_contrato_validacao.sql
       contrato_validacao: TableDef<
