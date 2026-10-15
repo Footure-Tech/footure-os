@@ -121,7 +121,7 @@ export function SidebarNav({
 
   return (
     <aside className="sticky top-[60px] flex h-[calc(100vh-60px)] w-[72px] shrink-0 flex-col border-r border-gray5 bg-surface py-5 transition-colors duration-300 lg:w-[248px]">
-      <nav className="flex flex-1 flex-col gap-[18px] overflow-y-auto">
+      <nav className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto pb-4">
         {groups.map((group) => (
           <div key={group.label} className="flex flex-col gap-0.5">
             <span className="hidden px-6 pb-1.5 text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase lg:block">{group.label}</span>
@@ -164,7 +164,7 @@ export function SidebarNav({
         ))}
       </nav>
 
-      <div className="mx-5 hidden flex-col gap-2.5 rounded-[10px] border border-gray5 p-3.5 lg:flex">
+      <div className="mx-5 hidden shrink-0 flex-col gap-2.5 rounded-[10px] border border-gray5 p-3.5 lg:flex">
         <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Integrações</span>
         {integracoes.map((integracao) => (
           <div key={integracao.nome} className="flex items-center gap-2 text-[13px]">

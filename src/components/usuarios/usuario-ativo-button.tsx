@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { UserCheck, UserX } from "lucide-react";
+import { MdPersonOff, MdHowToReg } from "react-icons/md";
 import { Button } from "@/components/ui/button";
 import { definirAtivoUsuario } from "@/lib/usuarios/serverActions";
 
@@ -24,8 +24,8 @@ export function UsuarioAtivoButton({ userId, ativo }: { userId: string; ativo: b
   }
 
   return (
-    <Button type="button" variant={ativo ? "destructive" : "secondary"} size="sm" disabled={pendente} onClick={alternar}>
-      {ativo ? <UserX className="size-4" /> : <UserCheck className="size-4" />}
+    <Button type="button" variant={ativo ? "white" : "secondary"} size="sm" className={ativo ? "text-red" : undefined} disabled={pendente} onClick={alternar}>
+      {ativo ? <MdPersonOff className="size-4" /> : <MdHowToReg className="size-4" />}
       {ativo ? "Inativar" : "Ativar"}
     </Button>
   );

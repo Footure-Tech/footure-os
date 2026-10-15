@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import { MdDelete } from "react-icons/md";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -32,8 +32,8 @@ export function ExcluirClienteDialog({
 
   if (totalPedidos > 0) {
     return (
-      <Button variant="ghost" size="icon-sm" disabled title="Cliente possui pedidos vinculados — não pode ser excluído.">
-        <Trash2 className="size-4" />
+      <Button variant="white" size="icon-sm" className="size-[34px]" disabled title="Cliente possui pedidos vinculados — não pode ser excluído." aria-label="Excluir cliente">
+        <MdDelete className="size-4" />
       </Button>
     );
   }
@@ -53,8 +53,8 @@ export function ExcluirClienteDialog({
 
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
-      <DialogTrigger render={<Button variant="ghost" size="icon-sm" />}>
-        <Trash2 className="size-4" />
+      <DialogTrigger render={<Button variant="white" size="icon-sm" className="size-[34px] text-red" aria-label="Excluir cliente" title="Excluir cliente" />}>
+        <MdDelete className="size-4" />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -64,7 +64,7 @@ export function ExcluirClienteDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
+          <DialogClose render={<Button type="button" variant="white" />}>Cancelar</DialogClose>
           <Button type="button" variant="destructive" disabled={pendente} onClick={confirmar}>
             {pendente ? "Excluindo…" : "Excluir"}
           </Button>

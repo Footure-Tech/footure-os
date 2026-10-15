@@ -10,25 +10,12 @@ import { BadgeLinha } from "@/components/ds/badge-tom";
 import { LinhaClicavel } from "@/components/ds/linha-clicavel";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { LogoCliente } from "@/components/clientes/logo-cliente";
+import { BarraProgresso } from "@/components/ds/barra-progresso";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
 function hrefCliente(clienteId: string | null, contatoId: number) {
   return clienteId ? `/clientes/${clienteId}` : `/clientes/bling/${contatoId}`;
-}
-
-function BarraProgresso({ feito, total }: { feito: number; total: number }) {
-  const pct = total > 0 ? Math.round((feito / total) * 100) : 0;
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="h-1.5 w-24 overflow-hidden rounded-full bg-gray5">
-        <span className="block h-full rounded-full bg-green2" style={{ width: `${pct}%` }} />
-      </span>
-      <span className="text-[13px] font-semibold text-gray2">
-        {feito}/{total}
-      </span>
-    </div>
-  );
 }
 
 // Tela "Contratos e parcelas" do handoff (Financeiro) — só apresentação; os

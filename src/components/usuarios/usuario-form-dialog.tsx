@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Pencil } from "lucide-react";
+import { MdEdit, MdPersonAdd } from "react-icons/md";
+import { ROTULO_PERFIL } from "@/lib/auth/perfis";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +22,8 @@ import {
 import { criarUsuario, editarUsuario } from "@/lib/usuarios/serverActions";
 import type { PapelUsuario } from "@/lib/supabase/database.types";
 
-const ROTULO_PAPEL: Record<PapelUsuario, string> = { vendedor: "Vendedor", juridico: "Jurídico", admin: "Admin" };
+// Nomes de exibição do handoff (Diretoria = admin, Comercial = vendedor).
+const ROTULO_PAPEL = ROTULO_PERFIL;
 
 type Props =
   | { modo: "criar" }
@@ -68,12 +70,12 @@ export function UsuarioFormDialog(props: Props) {
     <Dialog open={aberto} onOpenChange={aoFechar}>
       {props.modo === "criar" ? (
         <DialogTrigger render={<Button type="button" />}>
-          <Plus className="size-4" />
+          <MdPersonAdd className="size-[18px]" />
           Adicionar usuário
         </DialogTrigger>
       ) : (
-        <DialogTrigger render={<Button type="button" variant="secondary" size="sm" />}>
-          <Pencil className="size-4" />
+        <DialogTrigger render={<Button type="button" variant="white" size="sm" />}>
+          <MdEdit className="size-4" />
           Editar
         </DialogTrigger>
       )}
@@ -88,18 +90,18 @@ export function UsuarioFormDialog(props: Props) {
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
-            <Label>Nome</Label>
+            <Label variante="campo">Nome</Label>
             <Input value={nome} onChange={(e) => setNome(e.target.value)} />
           </div>
           {props.modo === "criar" && (
             <div className="flex flex-col gap-2">
-              <Label>E-mail</Label>
+              <Label variante="campo">E-mail</Label>
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
           )}
           <div className="flex flex-col gap-2">
-            <Label>Papel</Label>
-            <Select value={papel} onValueChange={(v) => v && setPapel(v as PapelUsuario)}>
+            <Label variante="campo">Perfil</Label>
+            <Select items={ROTULO_PAPEL} value={papel} onValueChange={(v) => v && setPapel(v as PapelUsuario)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -114,7 +116,7 @@ export function UsuarioFormDialog(props: Props) {
           </div>
         </div>
         <DialogFooter>
-          <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
+          <DialogClose render={<Button type="button" variant="white" />}>Cancelar</DialogClose>
           <Button type="button" disabled={pendente || !podeConfirmar} onClick={confirmar}>
             {pendente ? "Salvando…" : "Salvar"}
           </Button>

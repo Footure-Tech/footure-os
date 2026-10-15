@@ -2,8 +2,8 @@
 
 import { useState, useTransition, type FocusEvent } from "react";
 import { toast } from "sonner";
-import { Percent } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { MdPercent } from "react-icons/md";
+import { CardModulo } from "@/components/negocio/card-modulo";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -57,20 +57,12 @@ export function BlocoComissionamento({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Percent className="size-4 text-primary" strokeWidth={2} />
-          <CardTitle>Comissionamento</CardTitle>
-        </div>
-        <CardDescription>
-          Parâmetros globais usados pra calcular a comissão de SDR e Closer sobre os pedidos.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <CardModulo icone={MdPercent} cor="bg-iconGreen" titulo="Comissionamento">
+      <p className="-mt-1 text-sm text-gray">Parâmetros globais usados para calcular a comissão de SDR e Closer sobre os pedidos.</p>
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
           <div className="flex flex-col gap-2">
-            <Label>% de imposto</Label>
+            <Label variante="campo">% de imposto</Label>
             <Input
               type="text"
               inputMode="decimal"
@@ -80,7 +72,7 @@ export function BlocoComissionamento({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label>% de comissão total</Label>
+            <Label variante="campo">% de comissão total</Label>
             <Input
               type="text"
               inputMode="decimal"
@@ -90,7 +82,7 @@ export function BlocoComissionamento({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label>% comissão SDR</Label>
+            <Label variante="campo">% comissão SDR</Label>
             <Input
               type="text"
               inputMode="decimal"
@@ -100,7 +92,7 @@ export function BlocoComissionamento({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label>% comissão Closer</Label>
+            <Label variante="campo">% comissão Closer</Label>
             <Input
               type="text"
               inputMode="decimal"
@@ -110,10 +102,10 @@ export function BlocoComissionamento({
             />
           </div>
         </div>
-        <Button className="mt-4" size="sm" disabled={pendente} onClick={salvar}>
-          {pendente ? "Salvando…" : "Salvar"}
+        <Button className="self-end" disabled={pendente} onClick={salvar}>
+          {pendente ? "Salvando…" : "Salvar comissionamento"}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </CardModulo>
   );
 }
