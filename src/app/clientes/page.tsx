@@ -15,7 +15,7 @@ export default async function ClientesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Clientes</h1>
         <div className="flex items-center gap-2">
-          <SincronizarBlingButton />
+          <SincronizarBlingButton rotulo="Sincronizar com o Bling" />
           <Button nativeButton={false} render={<Link href="/clientes/novo">Novo cliente</Link>} />
         </div>
       </div>

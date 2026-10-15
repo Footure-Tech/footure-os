@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { IconType } from "react-icons";
-import { MdBusiness, MdGavel, MdManageAccounts, MdReceipt, MdSettings, MdWarning } from "react-icons/md";
+import { MdAttachMoney, MdBusiness, MdGavel, MdManageAccounts, MdReceipt, MdSettings, MdWarning } from "react-icons/md";
 import { cn } from "@/lib/utils";
 import type { PapelUsuario } from "@/lib/supabase/database.types";
 import type { ChaveContador } from "@/lib/shell/dadosShell";
@@ -56,6 +56,13 @@ const CONTRATOS: SidebarLink = {
   contador: "contratos",
   exact: true,
 };
+const CONTRATOS_PARCELAS: SidebarLink = {
+  href: "/financeiro",
+  label: "Contratos e parcelas",
+  icon: MdAttachMoney,
+  cor: "bg-iconYellow",
+  exact: true,
+};
 const INADIMPLENCIA: SidebarLink = {
   href: "/inadimplencia",
   label: "Inadimplência",
@@ -81,7 +88,7 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
       links: [PEDIDOS_ADMIN, CLIENTES],
     },
     { label: "Jurídico", links: [CONTRATOS] },
-    { label: "Financeiro", links: [INADIMPLENCIA] },
+    { label: "Financeiro", links: [CONTRATOS_PARCELAS, INADIMPLENCIA] },
     {
       label: "Administração",
       links: [

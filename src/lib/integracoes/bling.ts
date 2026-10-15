@@ -207,8 +207,9 @@ async function buscarTotalPedidosVenda(token: string, idContato: number): Promis
 
 export async function sincronizarContatosBling(
   supabase: Supa,
-): Promise<{ totalContatos: number; novosClientesRegistrados: number }> {
+): Promise<{ totalContatos: number; novosClientesRegistrados: number; baixasImportadas: number }> {
   const token = await obterAccessTokenValido(supabase);
+  const inicioSincronizacao = new Date().toISOString();
 
   const candidatosPessoaJuridica: Array<{ id: number; nome: string; cnpj: string; telefone: string | null }> = [];
   for (let pagina = 1; pagina <= 50; pagina++) {
@@ -246,11 +247,23 @@ export async function sincronizarContatosBling(
       parcelasAtrasadas: number;
     }
   > = [];
+  // Parcelas de cada contato qualificado — vão pro cache bling_parcelas (0030).
+  const parcelasParaCache: Array<{ id: number; contato_id: number; numero_pedido_origem: string | null; vencimento: string; valor: number; situacao: number }> = [];
   const hoje = new Date().toISOString().slice(0, 10);
   for (const candidato of candidatosPessoaJuridica) {
     const totalPedidosVenda = await buscarTotalPedidosVenda(token, candidato.id);
     if (totalPedidosVenda === 0) continue;
     const parcelas = await buscarContasReceberBling(token, candidato.id);
+    for (const p of parcelas) {
+      parcelasParaCache.push({
+        id: p.id,
+        contato_id: candidato.id,
+        numero_pedido_origem: p.numeroPedidoOrigem,
+        vencimento: p.vencimento,
+        valor: p.valor,
+        situacao: p.situacao,
+      });
+    }
     const classificacoes = parcelas.map((p) => classificarSituacaoParcela(p.situacao, p.vencimento));
     const parcelasAtrasadas = classificacoes.filter((c) => c === "atrasada").length;
     const temParcelaAtrasada = parcelasAtrasadas > 0;
@@ -291,6 +304,8 @@ export async function sincronizarContatosBling(
     );
     if (error) throw new Error(`Falha ao salvar cache de contatos do Bling: ${error.message}`);
   }
+
+  const baixasImportadas = await salvarCacheParcelas(supabase, parcelasParaCache, inicioSincronizacao);
 
   // Remove do cache quem não qualifica mais (ex.: era fornecedor que tinha
   // ficado antes dessa checagem existir) — nunca quem ainda está vinculado a
@@ -348,7 +363,40 @@ export async function sincronizarContatosBling(
     }
   }
 
-  return { totalContatos: contatosPessoaJuridica.length, novosClientesRegistrados };
+  return { totalContatos: contatosPessoaJuridica.length, novosClientesRegistrados, baixasImportadas };
+}
+
+/**
+ * Grava as parcelas no cache (0030) e devolve quantas "baixas" (parcelas que
+ * passaram a recebida desde a sincronização anterior) vieram nesta rodada —
+ * é o número do toast "Bling sincronizado · N baixas de pagamento importadas".
+ * Parcelas que sumiram do Bling (excluídas lá) saem do cache.
+ */
+async function salvarCacheParcelas(
+  supabase: Supa,
+  parcelas: Array<{ id: number; contato_id: number; numero_pedido_origem: string | null; vencimento: string; valor: number; situacao: number }>,
+  inicioSincronizacao: string,
+): Promise<number> {
+  const situacaoAnterior = new Map<number, number>();
+  for (let pagina = 0; ; pagina++) {
+    const { data } = await supabase.from("bling_parcelas").select("id, situacao").range(pagina * 1000, pagina * 1000 + 999);
+    for (const p of data ?? []) situacaoAnterior.set(p.id, p.situacao);
+    if (!data || data.length < 1000) break;
+  }
+  const primeiraSincronizacao = situacaoAnterior.size === 0;
+  const baixas = primeiraSincronizacao
+    ? 0
+    : parcelas.filter((p) => p.situacao === 2 && situacaoAnterior.get(p.id) !== 2).length;
+
+  const agora = new Date().toISOString();
+  for (let i = 0; i < parcelas.length; i += 500) {
+    const { error } = await supabase
+      .from("bling_parcelas")
+      .upsert(parcelas.slice(i, i + 500).map((p) => ({ ...p, sincronizado_em: agora })));
+    if (error) throw new Error(`Falha ao salvar cache de parcelas do Bling: ${error.message}`);
+  }
+  await supabase.from("bling_parcelas").delete().lt("sincronizado_em", inicioSincronizacao);
+  return baixas;
 }
 
 async function buscarContasReceberBling(token: string, idContato: number): Promise<Array<ParcelaBling & { numeroPedidoOrigem: string | null }>> {

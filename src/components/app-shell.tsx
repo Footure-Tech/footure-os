@@ -2,19 +2,10 @@ import type { ReactNode } from "react";
 import type { SessaoUsuario } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { obterDadosShell } from "@/lib/shell/dadosShell";
+import { tempoDecorrido } from "@/lib/formatacao";
 import { AppBar } from "@/components/shell/app-bar";
 import { SidebarNav, type IntegracaoSidebar } from "@/components/sidebar-nav";
 import { TransicaoTela } from "@/components/shell/transicao-tela";
-
-/** "há 4 min" — calculado no servidor, no momento da renderização do layout. */
-function tempoDecorrido(iso: string): string {
-  const minutos = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
-  if (minutos < 1) return "agora";
-  if (minutos < 60) return `há ${minutos} min`;
-  const horas = Math.floor(minutos / 60);
-  if (horas < 24) return `há ${horas} h`;
-  return `há ${Math.floor(horas / 24)} d`;
-}
 
 // App shell do handoff: AppBar roxa no topo, sidebar por módulo e conteúdo
 // com padding de 30px. Contadores e integrações vêm de consultas reais

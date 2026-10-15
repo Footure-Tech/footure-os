@@ -36,3 +36,13 @@ export function mesesEntre(inicio: string, fim: string): number | null {
   if (d2 + 1 < d1) meses -= 1;
   return meses > 0 ? meses : null;
 }
+
+/** "há 4 min" — calculado no momento da renderização (Server Components). */
+export function tempoDecorrido(iso: string): string {
+  const minutos = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (minutos < 1) return "agora";
+  if (minutos < 60) return `há ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `há ${horas} h`;
+  return `há ${Math.floor(horas / 24)} d`;
+}
