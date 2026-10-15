@@ -180,7 +180,7 @@ function VisaoGeral({ dados, urlLogo, rotuloPeriodo }: { dados: Dados; urlLogo: 
               <p className="text-xs text-gray3">Parcelas do Bling por mês de vencimento (o Bling não informa a data da baixa).</p>
             </>
           ) : (
-            <EstadoVazio compacto icone={MdSync} titulo="Parcelas do Bling não sincronizadas" descricao="Sincronize em Financeiro · Contratos e parcelas." />
+            <EstadoVazio compacto icone={MdSync} titulo="Parcelas do Bling não sincronizadas" descricao="Use “Sincronizar Bling” no card de Integrações da barra lateral." />
           )}
         </Card>
         <Card titulo="Receita por linha">

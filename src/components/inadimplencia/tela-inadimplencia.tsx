@@ -66,7 +66,7 @@ export function TelaInadimplencia({
           <EstadoVazio
             icone={MdSync}
             titulo="Parcelas do Bling ainda não sincronizadas"
-            descricao="Sincronize em Financeiro · Contratos e parcelas (ou em Clientes) para trazer as contas a receber do Bling."
+            descricao="Use “Sincronizar Bling” no card de Integrações da barra lateral para trazer as contas a receber do Bling — a primeira sincronização pode levar alguns minutos."
           />
         </div>
       ) : (

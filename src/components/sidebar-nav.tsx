@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { IconType } from "react-icons";
 import { MdAttachMoney, MdBusiness, MdDashboard, MdGavel, MdManageAccounts, MdReceipt, MdSettings, MdWarning } from "react-icons/md";
 import { cn } from "@/lib/utils";
+import { SincronizarBlingButton } from "@/components/clientes/sincronizar-bling-button";
 import type { PapelUsuario } from "@/lib/supabase/database.types";
 import type { ChaveContador } from "@/lib/shell/dadosShell";
 
@@ -115,6 +116,8 @@ export function SidebarNav({
 }) {
   const pathname = usePathname();
   const groups = GRUPOS_POR_PAPEL[papel];
+  // Mesmos papéis da action de sincronização (sincronizarContatosBlingAction).
+  const podeSincronizar = papel === "vendedor" || papel === "admin";
 
   return (
     <aside className="sticky top-[60px] flex h-[calc(100vh-60px)] w-[72px] shrink-0 flex-col border-r border-gray5 bg-surface py-5 transition-colors duration-300 lg:w-[248px]">
@@ -170,7 +173,14 @@ export function SidebarNav({
             <span className="text-xs text-gray3">{integracao.status}</span>
           </div>
         ))}
+        {podeSincronizar && <SincronizarBlingButton variante="sidebar" rotulo="Sincronizar Bling" />}
       </div>
+      {/* Trilho estreito: o card de integrações some, fica só o atalho. */}
+      {podeSincronizar && (
+        <div className="lg:hidden">
+          <SincronizarBlingButton variante="icone" />
+        </div>
+      )}
     </aside>
   );
 }

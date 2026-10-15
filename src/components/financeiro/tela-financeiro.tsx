@@ -10,7 +10,6 @@ import { BadgeLinha } from "@/components/ds/badge-tom";
 import { LinhaClicavel } from "@/components/ds/linha-clicavel";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { LogoCliente } from "@/components/clientes/logo-cliente";
-import { SincronizarBlingButton } from "@/components/clientes/sincronizar-bling-button";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
@@ -56,7 +55,6 @@ export function TelaFinanceiro({
               <span className={sincronizadoEm ? "size-2 rounded-full bg-green2" : "size-2 rounded-full bg-gray3"} />
               Bling · {sincronizadoEm ? tempoDecorrido(sincronizadoEm) : "nunca sincronizado"}
             </span>
-            <SincronizarBlingButton />
           </>
         }
       />
@@ -66,7 +64,7 @@ export function TelaFinanceiro({
           <EstadoVazio
             icone={MdSync}
             titulo="Parcelas do Bling ainda não sincronizadas"
-            descricao="Clique em “Sincronizar” para trazer as contas a receber do Bling — a primeira sincronização pode levar alguns minutos."
+            descricao="Use “Sincronizar Bling” no card de Integrações da barra lateral para trazer as contas a receber do Bling — a primeira sincronização pode levar alguns minutos."
           />
         </div>
       ) : (
