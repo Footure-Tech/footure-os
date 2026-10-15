@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { MdSearch } from "react-icons/md";
 import {
   Combobox,
   ComboboxInputGroup,
@@ -44,7 +45,9 @@ export function BuscaClientes({ clientes }: { clientes: ClienteBusca[] }) {
         if (destino) router.push(destino);
       }}
     >
-      <ComboboxInputGroup className="max-w-sm">
+      {/* Solto sobre o fundo da página: superfície branca (bg-muted some contra o --light). */}
+      <ComboboxInputGroup className="h-[42px] max-w-md border-gray5 bg-surface shadow-card">
+        <MdSearch className="size-[18px] shrink-0 text-gray3" />
         <ComboboxInput placeholder="Buscar cliente por nome..." />
         <ComboboxClear />
         <ComboboxIcon />

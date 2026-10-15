@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shell/page-header";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { BuscaClientes } from "@/components/clientes/busca-clientes";
-import { SincronizarBlingButton } from "@/components/clientes/sincronizar-bling-button";
 import { ClientesTabela } from "@/components/clientes/clientes-tabela";
 
 export default async function ClientesPage() {
@@ -20,13 +19,10 @@ export default async function ClientesPage() {
         titulo="Clientes"
         descricao="Clubes e agentes com pedido de venda no Bling — a base oficial de razão social, CNPJ e endereço."
         acoes={
-          <>
-            <SincronizarBlingButton rotulo="Sincronizar com o Bling" />
-            <Button nativeButton={false} render={<Link href="/clientes/novo" />}>
-              <MdAdd className="size-[18px]" />
-              Novo cliente
-            </Button>
-          </>
+          <Button nativeButton={false} render={<Link href="/clientes/novo" />}>
+            <MdAdd className="size-[18px]" />
+            Novo cliente
+          </Button>
         }
       />
 
@@ -35,7 +31,7 @@ export default async function ClientesPage() {
           <EstadoVazio
             icone={MdBusiness}
             titulo="Nenhum cliente importado ainda"
-            descricao="Use “Sincronizar com o Bling” para importar os clientes (pessoa jurídica com pedido de venda)."
+            descricao="Use “Sincronizar Bling” no card de Integrações da barra lateral para importar os clientes (pessoa jurídica com pedido de venda)."
           />
         </div>
       ) : (

@@ -173,7 +173,7 @@ export function SidebarNav({
             <span className="text-xs text-gray3">{integracao.status}</span>
           </div>
         ))}
-        {podeSincronizar && <SincronizarBlingButton variante="sidebar" rotulo="Sincronizar Bling" />}
+        {podeSincronizar && <SincronizarBlingButton />}
       </div>
       {/* Trilho estreito: o card de integrações some, fica só o atalho. */}
       {podeSincronizar && (

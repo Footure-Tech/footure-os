@@ -9,14 +9,14 @@ import { sincronizarContatosBlingAction } from "@/lib/clientes/serverActions";
 import { cn } from "@/lib/utils";
 
 // Sincronização sob demanda com o Bling (contatos + parcelas em cache).
-// "padrao" = botão de página (Clientes); "sidebar" = dentro do card de
-// Integrações da sidebar; "icone" = trilho estreito da sidebar.
+// Fica só na sidebar (decisão de produto): "sidebar" = dentro do card de
+// Integrações; "icone" = trilho estreito da sidebar.
 export function SincronizarBlingButton({
-  rotulo = "Sincronizar",
-  variante = "padrao",
+  rotulo = "Sincronizar Bling",
+  variante = "sidebar",
 }: {
   rotulo?: string;
-  variante?: "padrao" | "sidebar" | "icone";
+  variante?: "sidebar" | "icone";
 }) {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
@@ -55,7 +55,7 @@ export function SincronizarBlingButton({
   }
 
   return (
-    <Button variant="secondary" size={variante === "sidebar" ? "sm" : "default"} onClick={aoClicar} disabled={pendente} className={cn(variante === "sidebar" && "w-full")}>
+    <Button variant="secondary" size="sm" onClick={aoClicar} disabled={pendente} className="w-full">
       {icone}
       {pendente ? "Sincronizando…" : rotulo}
     </Button>
