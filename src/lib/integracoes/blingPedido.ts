@@ -8,9 +8,9 @@
 //     Pagar.me Nx no cartão (uma parcela só, com o total);
 //   • observações internas "Obs Pagamento / E-mail financeiro";
 //   • contas a receber lançadas e pedido em "Atendido".
-// Produto: um produto FIXO por plano, criado à mão no Bling uma vez (o app não
-// tem o escopo de gravar produtos) — encontrado pelo nome padrão
-// (nomeProdutoBling). Idempotente: com bling_pedido_id já gravado, não cria de
+// Produto: um produto FIXO por plano, encontrado pelo nome padrão
+// (nomeProdutoBling) e criado automaticamente na primeira venda do plano
+// (exige o escopo "Produtos" no app do Bling). Idempotente: com bling_pedido_id já gravado, não cria de
 // novo, só refaz as etapas seguintes (contas e situação).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
@@ -55,6 +55,25 @@ export function nomeProdutoBling(perfil: "clube" | "agente", planoKey: string): 
 }
 export const NOME_PRODUTO_API = "Footlink - API";
 
+/** Código do produto no padrão dos já existentes (ex.: FKCLFM00): FK + CL/AG + iniciais do plano. */
+function codigoProduto(nome: string): string {
+  const [, linha = "", plano = ""] = nome.match(/^Footlink (Clubes|Agentes) - (.+)$/) ?? [];
+  const prefixo = linha === "Agentes" ? "FKAG" : linha === "Clubes" ? "FKCL" : "FK";
+  const iniciais = plano
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[\s-]+/)
+    .filter(Boolean)
+    .map((p) => p.slice(0, 3).toUpperCase())
+    .join("");
+  return `${prefixo}${iniciais || nome.replace(/\W/g, "").slice(0, 8).toUpperCase()}`.slice(0, 20);
+}
+
+/**
+ * Produto do plano no Bling, pelo nome exato. Se não existir, cria (serviço,
+ * ativo, preço 0 — mesmo formato de "Footlink Clubes - Feminino") — exige o
+ * escopo "Produtos" (gravação) no app do Bling; sem ele, erro com a orientação.
+ */
 async function buscarProduto(token: string, nome: string): Promise<{ id: number; codigo: string | null }> {
   const { data } = await consultarBling<{ data: Array<{ id: number; nome: string; codigo?: string; situacao?: string }> }>(
     token,
@@ -63,8 +82,29 @@ async function buscarProduto(token: string, nome: string): Promise<{ id: number;
   const alvo = nome.trim().toLowerCase();
   const exatos = (data ?? []).filter((p) => p.nome.trim().toLowerCase() === alvo);
   const produto = exatos.find((p) => p.situacao === "A") ?? exatos[0];
-  if (!produto) throw new Error(`Produto "${nome}" não encontrado no Bling — cadastre-o (com esse nome exato) e reenvie.`);
-  return { id: produto.id, codigo: produto.codigo || null };
+  if (produto) return { id: produto.id, codigo: produto.codigo || null };
+
+  const codigo = codigoProduto(nome);
+  try {
+    const criado = await requisicaoBling<{ data: { id: number } }>(token, "POST", "/produtos", {
+      nome,
+      codigo,
+      tipo: "S",
+      formato: "S",
+      situacao: "A",
+      preco: 0,
+    });
+    if (!criado?.data?.id) throw new Error("o Bling não devolveu o id do produto");
+    return { id: criado.data.id, codigo };
+  } catch (erro) {
+    const msg = erro instanceof Error ? erro.message : String(erro);
+    if (/insufficient_scope|403/.test(msg)) {
+      throw new Error(
+        `Produto "${nome}" não existe no Bling e o app não tem permissão para criá-lo — inclua o escopo "Produtos" no app do Bling e reconecte, ou cadastre o produto com esse nome exato; depois reenvie.`,
+      );
+    }
+    throw new Error(`Produto "${nome}" não existe no Bling e não foi possível criá-lo: ${msg}`);
+  }
 }
 
 const paraISO = (ddmmaaaa: string) => {
