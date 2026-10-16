@@ -21,7 +21,7 @@ export default async function EditarDadosContratoPage({ params }: PageProps<"/fi
   if (vinculo) redirect(`/pedidos/${vinculo.id}`);
 
   const [{ data: equipe }, { data: licencas }, usuarios] = await Promise.all([
-    supabase.from("contrato_equipe_bling").select("sdr_id, closer_id").eq("bling_pedido_id", blingPedidoId).maybeSingle(),
+    supabase.from("contrato_equipe_bling").select("sdr_id, closer_id, tipo_venda, origem").eq("bling_pedido_id", blingPedidoId).maybeSingle(),
     supabase.from("contrato_licencas_bling").select("licencas_pagas, licencas_gratuitas, valor_licenca_adicional").eq("bling_pedido_id", blingPedidoId).maybeSingle(),
     listarUsuariosParaAtribuicaoVenda(supabase),
   ]);
@@ -32,7 +32,7 @@ export default async function EditarDadosContratoPage({ params }: PageProps<"/fi
       <PageHeader
         modulo="Financeiro · Contratos"
         titulo="Editar dados do contrato"
-        descricao="Vigência, equipe comercial e licenças — informações que o Bling não guarda."
+        descricao="Vigência, dados comerciais e licenças — informações que o Bling não guarda."
         voltarHref={`/financeiro/contratos/${blingPedidoId}`}
       />
       <FormDadosContrato
@@ -49,6 +49,8 @@ export default async function EditarDadosContratoPage({ params }: PageProps<"/fi
           vigenciaDefinida: contrato.vigenciaDefinida,
           sdrId: equipe?.sdr_id ?? null,
           closerId: equipe?.closer_id ?? null,
+          tipoVenda: equipe?.tipo_venda ?? null,
+          origem: equipe?.origem ?? null,
           licencasPagas: licencas?.licencas_pagas ?? null,
           licencasGratuitas: licencas?.licencas_gratuitas ?? null,
           valorLicencaAdicional: licencas?.valor_licenca_adicional === null || licencas?.valor_licenca_adicional === undefined ? null : Number(licencas.valor_licenca_adicional),

@@ -24,6 +24,7 @@ import { TimelineTransicoes, type EventoTimeline } from "@/components/pedido/tim
 import { IndicadorBling } from "@/components/financeiro/tela-contratos";
 import { AnexarContratoBling } from "@/components/financeiro/anexar-contrato-bling";
 import { ROTULO_STATUS } from "@/components/rotulo-status";
+import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 
 const ROTULO_PERFIL_CLIENTE = { clube: "Clube", agente: "Agente" } as const;
 
@@ -90,7 +91,7 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
     vinculo ? buscarPedidoDetalhe(supabase, vinculo.id) : Promise.resolve(null),
     buscarPedidoVendaBling(supabase, blingPedidoId),
     clienteLocal ? Promise.resolve(null) : buscarDetalheContatoBling(supabase, pedido.contato_id),
-    supabase.from("contrato_equipe_bling").select("sdr_id, closer_id, atualizado_por, atualizado_em").eq("bling_pedido_id", blingPedidoId).maybeSingle(),
+    supabase.from("contrato_equipe_bling").select("sdr_id, closer_id, tipo_venda, origem, atualizado_por, atualizado_em").eq("bling_pedido_id", blingPedidoId).maybeSingle(),
     listarUsuariosParaAtribuicaoVenda(supabase),
     supabase
       .from("contrato_licencas_bling")
@@ -109,6 +110,7 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
   const pedidoLocal = detalheLocal?.pedido ?? null;
   const faltando = [
     !contrato.vigenciaDefinida && "a vigência",
+    !equipe?.tipo_venda && !equipe?.origem && "o tipo de venda e a origem",
     !sdrNome && !closerNome && "SDR e Closer",
     !licencas && "as licenças",
   ].filter((x): x is string => !!x);
@@ -164,14 +166,21 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
           },
         ]
       : []),
-    ...(equipe && (sdrNome || closerNome)
+    ...(equipe && (sdrNome || closerNome || equipe.tipo_venda || equipe.origem)
       ? [
           {
             id: "equipe",
             data: equipe.atualizado_em,
             nome: nomeUsuario(equipe.atualizado_por),
-            titulo: "SDR e Closer definidos",
-            comentario: `SDR: ${sdrNome ?? "não informado"} · Closer: ${closerNome ?? "não informado"}.`,
+            titulo: "Dados comerciais definidos",
+            comentario: [
+              equipe.tipo_venda && ROTULO_TIPO_VENDA[equipe.tipo_venda],
+              equipe.origem && `origem ${ROTULO_ORIGEM_VENDA[equipe.origem].toLowerCase()}`,
+              `SDR: ${sdrNome ?? "não informado"}`,
+              `Closer: ${closerNome ?? "não informado"}`,
+            ]
+              .filter(Boolean)
+              .join(" · "),
           },
         ]
       : []),
@@ -303,6 +312,11 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
                     ) : null
                   }
                 />
+                <LinhaChaveValor
+                  rotulo="Tipo de venda"
+                  valor={equipe?.tipo_venda ? ROTULO_TIPO_VENDA[equipe.tipo_venda] : <span className="text-gray3">não informado</span>}
+                />
+                <LinhaChaveValor rotulo="Origem" valor={equipe?.origem ? ROTULO_ORIGEM_VENDA[equipe.origem] : <span className="text-gray3">não informada</span>} />
                 <LinhaChaveValor rotulo="SDR" valor={sdrNome ?? <span className="text-gray3">não informado</span>} />
                 <LinhaChaveValor rotulo="Closer" valor={closerNome ?? <span className="text-gray3">não informado</span>} />
                 <LinhaChaveValor rotulo="Licenças" valor={resumoLicencas ?? <span className="text-gray3">não informadas</span>} />

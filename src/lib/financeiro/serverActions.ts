@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { exigirPapel } from "@/lib/auth/session";
+import type { OrigemVenda, TipoVenda } from "@/lib/supabase/database.types";
 
 // Contrato de pedido de venda que só existe no Bling (0033): o arquivo vai do
 // navegador direto para o Storage por URL assinada — Server Actions e funções
@@ -82,7 +83,7 @@ function paraValor(texto: string): number | null {
 
 /**
  * Tela "Editar dados do contrato" (venda que veio do Bling): vigência (0034),
- * SDR/Closer (0035) e licenças (0036) — dados que o Bling não tem — salvos
+ * SDR/Closer (0035), tipo de venda e origem (0038) e licenças (0036) — dados que o Bling não tem — salvos
  * juntos. Vigência e licenças são opcionais (em branco = não mexe); SDR e
  * Closer aceitam "não informado".
  */
@@ -94,6 +95,10 @@ export async function salvarDadosContratoBlingAction(_prev: EstadoDadosContrato,
   const fim = campo("fim");
   const sdrId = campo("sdr") || null;
   const closerId = campo("closer") || null;
+  const tipoVenda = campo("tipoVenda") || null;
+  const origem = campo("origem") || null;
+  if (tipoVenda && !["novo", "renovacao", "reativacao"].includes(tipoVenda)) return { erro: "Tipo de venda inválido." };
+  if (origem && !["carteira", "inbound", "outbound"].includes(origem)) return { erro: "Origem inválida." };
   const textoPagas = campo("licencasPagas");
   const textoGratuitas = campo("licencasGratuitas");
   const valorAdicional = paraValor(campo("valorLicencaAdicional"));
@@ -123,7 +128,14 @@ export async function salvarDadosContratoBlingAction(_prev: EstadoDadosContrato,
   const auditoria = { atualizado_por: sessao.id, atualizado_em: new Date().toISOString() };
   const [rVigencia, rEquipe, rLicencas] = await Promise.all([
     inicio ? supabase.from("contrato_vigencia_bling").upsert({ bling_pedido_id: blingPedidoId, vigencia_inicio: inicio, vigencia_fim: fim, ...auditoria }) : null,
-    supabase.from("contrato_equipe_bling").upsert({ bling_pedido_id: blingPedidoId, sdr_id: sdrId, closer_id: closerId, ...auditoria }),
+    supabase.from("contrato_equipe_bling").upsert({
+      bling_pedido_id: blingPedidoId,
+      sdr_id: sdrId,
+      closer_id: closerId,
+      tipo_venda: tipoVenda as TipoVenda | null,
+      origem: origem as OrigemVenda | null,
+      ...auditoria,
+    }),
     temLicencas
       ? supabase.from("contrato_licencas_bling").upsert({
           bling_pedido_id: blingPedidoId,

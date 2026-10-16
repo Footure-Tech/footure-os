@@ -10,6 +10,8 @@ import { BlocoFormulario } from "@/components/pedido/bloco-formulario";
 import { LogoCliente } from "@/components/clientes/logo-cliente";
 import { salvarDadosContratoBlingAction, type EstadoDadosContrato } from "@/lib/financeiro/serverActions";
 import { formatarDataCurta, formatarMoeda } from "@/lib/formatacao";
+import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
+import type { OrigemVenda, TipoVenda } from "@/lib/supabase/database.types";
 
 const NENHUM = "nenhum";
 const ESTADO_INICIAL: EstadoDadosContrato = {};
@@ -28,6 +30,8 @@ export interface DadosContratoForm {
   vigenciaDefinida: boolean;
   sdrId: string | null;
   closerId: string | null;
+  tipoVenda: TipoVenda | null;
+  origem: OrigemVenda | null;
   licencasPagas: number | null;
   licencasGratuitas: number | null;
   valorLicencaAdicional: number | null;
@@ -38,39 +42,43 @@ export function FormDadosContrato({ dados, usuarios }: { dados: DadosContratoFor
   const [estado, formAction, pendente] = useActionState(salvarDadosContratoBlingAction, ESTADO_INICIAL);
   const [sdr, setSdr] = useState(dados.sdrId ?? NENHUM);
   const [closer, setCloser] = useState(dados.closerId ?? NENHUM);
+  const [tipoVenda, setTipoVenda] = useState<string>(dados.tipoVenda ?? NENHUM);
+  const [origem, setOrigem] = useState<string>(dados.origem ?? NENHUM);
   // Sem vigência definida, os campos começam vazios (salvar só SDR/licenças não
   // pode gravar a estimativa como vigência oficial sem querer).
   const [inicio, setInicio] = useState(dados.vigenciaDefinida ? (dados.inicio ?? "") : "");
   const [fim, setFim] = useState(dados.vigenciaDefinida ? (dados.fim ?? "") : "");
-  const rotulos: Record<string, string> = { [NENHUM]: "Não informado", ...Object.fromEntries(usuarios.map((u) => [u.id, u.nome])) };
   const voltar = `/financeiro/contratos/${dados.blingPedidoId}`;
 
-  const seletor = (id: string, rotulo: string, valor: string, aoMudar: (v: string) => void) => (
+  const seletor = (id: string, rotulo: string, valor: string, aoMudar: (v: string) => void, opcoes: Record<string, string>) => (
     <div className="flex flex-col gap-2">
       <Label variante="campo" htmlFor={id}>
         {rotulo}
       </Label>
-      <Select items={rotulos} value={valor} onValueChange={(v) => v && aoMudar(v as string)}>
+      <Select items={{ [NENHUM]: "Não informado", ...opcoes }} value={valor} onValueChange={(v) => v && aoMudar(v as string)}>
         <SelectTrigger id={id} className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={NENHUM}>Não informado</SelectItem>
-          {usuarios.map((u) => (
-            <SelectItem key={u.id} value={u.id}>
-              {u.nome}
+          {Object.entries(opcoes).map(([valorOpcao, rotuloOpcao]) => (
+            <SelectItem key={valorOpcao} value={valorOpcao}>
+              {rotuloOpcao}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
     </div>
   );
+  const pessoas = Object.fromEntries(usuarios.map((u) => [u.id, u.nome]));
 
   return (
     <form action={formAction} className="grid grid-cols-1 items-start gap-5 pb-16 lg:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
       <input type="hidden" name="blingPedidoId" value={dados.blingPedidoId} />
       <input type="hidden" name="sdr" value={sdr === NENHUM ? "" : sdr} />
       <input type="hidden" name="closer" value={closer === NENHUM ? "" : closer} />
+      <input type="hidden" name="tipoVenda" value={tipoVenda === NENHUM ? "" : tipoVenda} />
+      <input type="hidden" name="origem" value={origem === NENHUM ? "" : origem} />
 
       <div className="flex flex-col gap-5">
         {estado.erro && <p className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">{estado.erro}</p>}
@@ -119,10 +127,12 @@ export function FormDadosContrato({ dados, usuarios }: { dados: DadosContratoFor
           )}
         </BlocoFormulario>
 
-        <BlocoFormulario titulo="Equipe comercial" descricao="Quem participou da venda — podem ser a mesma pessoa. Aparece na tela Vendas.">
+        <BlocoFormulario titulo="Dados comerciais" descricao="Tipo e origem da venda e quem participou dela (SDR e Closer podem ser a mesma pessoa).">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {seletor("equipe-sdr", "SDR", sdr, setSdr)}
-            {seletor("equipe-closer", "Closer", closer, setCloser)}
+            {seletor("venda-tipo", "Tipo de venda", tipoVenda, setTipoVenda, ROTULO_TIPO_VENDA)}
+            {seletor("venda-origem", "Origem", origem, setOrigem, ROTULO_ORIGEM_VENDA)}
+            {seletor("equipe-sdr", "SDR", sdr, setSdr, pessoas)}
+            {seletor("equipe-closer", "Closer", closer, setCloser, pessoas)}
           </div>
         </BlocoFormulario>
 

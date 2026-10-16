@@ -6,6 +6,9 @@
 
 export type PapelUsuario = "vendedor" | "juridico" | "admin";
 export type TipoCliente = "clube" | "agente";
+/** 0038: tipo de venda e origem de uma venda do Bling. */
+export type TipoVenda = "novo" | "renovacao" | "reativacao";
+export type OrigemVenda = "carteira" | "inbound" | "outbound";
 export type StatusPedido =
   | "rascunho"
   | "em_aprovacao"
@@ -437,9 +440,26 @@ export interface Database {
       >;
       // supabase/migrations/0035_contrato_equipe_bling.sql
       contrato_equipe_bling: TableDef<
-        { bling_pedido_id: number; sdr_id: string | null; closer_id: string | null; atualizado_por: string | null; atualizado_em: string },
-        { bling_pedido_id: number; sdr_id?: string | null; closer_id?: string | null; atualizado_por?: string | null; atualizado_em?: string },
-        Partial<{ sdr_id: string | null; closer_id: string | null; atualizado_por: string | null; atualizado_em: string }>
+        {
+          bling_pedido_id: number;
+          sdr_id: string | null;
+          closer_id: string | null;
+          // 0038_contrato_tipo_origem_bling.sql
+          tipo_venda: TipoVenda | null;
+          origem: OrigemVenda | null;
+          atualizado_por: string | null;
+          atualizado_em: string;
+        },
+        {
+          bling_pedido_id: number;
+          sdr_id?: string | null;
+          closer_id?: string | null;
+          tipo_venda?: TipoVenda | null;
+          origem?: OrigemVenda | null;
+          atualizado_por?: string | null;
+          atualizado_em?: string;
+        },
+        Partial<{ sdr_id: string | null; closer_id: string | null; tipo_venda: TipoVenda | null; origem: OrigemVenda | null; atualizado_por: string | null; atualizado_em: string }>
       >;
       // supabase/migrations/0034_contrato_vigencia_bling.sql
       contrato_vigencia_bling: TableDef<
