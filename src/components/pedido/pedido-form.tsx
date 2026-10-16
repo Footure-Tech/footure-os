@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState, useMemo, useRef, useState, type FocusEvent } from "react";
+import { startTransition, useActionState, useMemo, useRef, useState, type FocusEvent } from "react";
 import { MdBusiness } from "react-icons/md";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Combobox, ComboboxInputGroup, ComboboxInput, ComboboxClear, ComboboxIcon, ComboboxPopup, ComboboxList, ComboboxEmpty, ComboboxItem } from "@/components/ui/combobox";
 import { Separator } from "@/components/ui/separator";
@@ -134,6 +135,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
   // Qual botão do resumo submeteu: o ref é lido no submit (síncrono, antes de
   // qualquer re-render); o state só alimenta o rótulo "Enviando…/Salvando…".
   const intencaoRef = useRef<IntencaoEnvio>("rascunho");
+  const [envioAguardando, setEnvioAguardando] = useState<FormData | null>(null);
   const [intencao, setIntencao] = useState<IntencaoEnvio>("rascunho");
   function escolherIntencao(valor: IntencaoEnvio) {
     intencaoRef.current = valor;
@@ -321,15 +323,35 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
     };
     formData.set("payload", JSON.stringify(payload));
     formData.set("intencao", intencaoRef.current);
+    // Sem representante legal: em vez de alertar desde a abertura da tela,
+    // pergunta no envio para aprovação (o rascunho salva sem perguntar).
+    if (intencaoRef.current === "enviar" && geraContrato && representantesLegais.length === 0) {
+      setEnvioAguardando(formData);
+      return;
+    }
     return formAction(formData);
   }
+
+  function enviarMesmoAssim() {
+    const formData = envioAguardando;
+    setEnvioAguardando(null);
+    if (formData) startTransition(() => formAction(formData));
+  }
+
+  function irParaSignatarios() {
+    setEnvioAguardando(null);
+    document.getElementById("signatarios")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // Alerta de representante ausente vira o modal acima — fora do painel e da contagem do resumo.
+  const alertasVisiveis = alertas.filter((a) => a.codigo !== "representante_ausente");
 
   const clienteNome = cadastrandoNovo ? novoCliente.razaoSocial : (clienteSelecionado?.razaoSocial ?? "");
 
   return (
     <form action={aoEnviar} className="grid grid-cols-1 items-start gap-5 pb-16 lg:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
       <div className="flex flex-col gap-5">
-        <PainelAlertas alertas={alertas} />
+        <PainelAlertas alertas={alertasVisiveis} />
         {estado.erro && (
           <p className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">{estado.erro}</p>
         )}
@@ -820,6 +842,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
 
         {geraContrato && (
           <>
+        <div id="signatarios" className="scroll-mt-[90px]">
         <BlocoFormulario titulo="Signatários" descricao="Quem assina pelo cliente e pela Footure.">
           <SignatarioListEditor
             titulo="Representantes legais do cliente"
@@ -853,6 +876,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
 
           <SignatarioListEditor titulo="Testemunhas da Footure" itens={testemunhasFooture} onChange={setTestemunhasFooture} />
         </BlocoFormulario>
+        </div>
           </>
         )}
 
@@ -939,12 +963,32 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
         numeroParcelas={numeroParcelas}
         vigenciaInicio={vigenciaInicio}
         vigenciaFim={vigenciaFim}
-        qtdAlertas={alertas.length}
+        qtdAlertas={alertasVisiveis.length}
         geraContrato={geraContrato}
         pendente={pendente}
         intencao={intencao}
         aoEscolherIntencao={escolherIntencao}
       />
+
+      <Dialog open={!!envioAguardando} onOpenChange={(aberto) => !aberto && setEnvioAguardando(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Pedido sem representante legal</DialogTitle>
+            <DialogDescription>
+              Nenhum representante legal do cliente foi cadastrado. O pedido pode seguir para aprovação, mas o contrato não poderá ser liberado para
+              assinatura sem isso.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="white" onClick={irParaSignatarios}>
+              Preencher dados
+            </Button>
+            <Button type="button" onClick={enviarMesmoAssim}>
+              Enviar mesmo assim
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }
