@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { MdAttachMoney, MdBusiness, MdDescription, MdDownload, MdGavel, MdHistory, MdInfo, MdOpenInNew, MdReceipt } from "react-icons/md";
+import { MdAttachMoney, MdBusiness, MdEdit, MdDescription, MdDownload, MdGavel, MdHistory, MdInfo, MdOpenInNew, MdReceipt } from "react-icons/md";
 import { createClient } from "@/lib/supabase/server";
 import { carregarContrato, type ParcelaCarteira } from "@/lib/financeiro/carteira";
 import { buscarDetalheContatoBling, buscarPedidoVendaBling } from "@/lib/integracoes/bling";
@@ -23,9 +23,6 @@ import { CardModulo, LinhaChaveValor } from "@/components/negocio/card-modulo";
 import { TimelineTransicoes, type EventoTimeline } from "@/components/pedido/timeline-transicoes";
 import { IndicadorBling } from "@/components/financeiro/tela-contratos";
 import { AnexarContratoBling } from "@/components/financeiro/anexar-contrato-bling";
-import { EditarVigenciaDialog } from "@/components/financeiro/editar-vigencia-dialog";
-import { EditarEquipeDialog } from "@/components/financeiro/editar-equipe-dialog";
-import { EditarLicencasDialog } from "@/components/financeiro/editar-licencas-dialog";
 import { ROTULO_STATUS } from "@/components/rotulo-status";
 
 const ROTULO_PERFIL_CLIENTE = { clube: "Clube", agente: "Agente" } as const;
@@ -110,6 +107,11 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
   const sdrNome = nomeUsuario(equipe?.sdr_id);
   const closerNome = nomeUsuario(equipe?.closer_id);
   const pedidoLocal = detalheLocal?.pedido ?? null;
+  const faltando = [
+    !contrato.vigenciaDefinida && "a vigência",
+    !sdrNome && !closerNome && "SDR e Closer",
+    !licencas && "as licenças",
+  ].filter((x): x is string => !!x);
 
   const situacao = STATUS_CONTRATO_VISUAL[contrato.situacao];
   const nomeCliente = contrato.cliente;
@@ -209,7 +211,15 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
             {contrato.fim ? formatarDataCurta(contrato.fim) : "—"}
           </span>
         </div>
-        <IndicadorBling sincronizadoEm={dados.sincronizadoEm} />
+        <div className="flex flex-wrap items-center gap-3">
+          <IndicadorBling sincronizadoEm={dados.sincronizadoEm} />
+          {!pedidoLocal && (
+            <Button variant="white" nativeButton={false} render={<Link href={`/financeiro/contratos/${blingPedidoId}/editar`} />}>
+              <MdEdit className="size-4" />
+              Editar dados do contrato
+            </Button>
+          )}
+        </div>
       </div>
 
       <GradeKpis>
@@ -293,50 +303,26 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
                     ) : null
                   }
                 />
+                <LinhaChaveValor rotulo="SDR" valor={sdrNome ?? <span className="text-gray3">não informado</span>} />
+                <LinhaChaveValor rotulo="Closer" valor={closerNome ?? <span className="text-gray3">não informado</span>} />
+                <LinhaChaveValor rotulo="Licenças" valor={resumoLicencas ?? <span className="text-gray3">não informadas</span>} />
+                <LinhaChaveValor rotulo="Licença adicional" valor={valorAdicional !== null ? formatarMoeda(valorAdicional) : <span className="text-gray3">não informado</span>} />
                 {detalheBling?.numeroPedidoCompra && <LinhaChaveValor rotulo="Pedido de compra" valor={detalheBling.numeroPedidoCompra} />}
                 {!!detalheBling?.desconto && <LinhaChaveValor rotulo="Desconto" valor={formatarMoeda(detalheBling.desconto)} />}
                 <LinhaChaveValor rotulo="Valor total" valor={formatarMoeda(detalheBling?.total || contrato.valorTotal)} />
               </div>
-              <div
-                className={`flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-xs ${contrato.vigenciaDefinida ? "bg-page text-gray2" : "bg-orange3 font-semibold text-[#ce9232]"}`}
-              >
-                <span className="min-w-0 flex-1">
-                  {contrato.vigenciaDefinida
-                    ? `Vigência definida na plataforma${vigencia?.atualizadoPor ? ` por ${vigencia.atualizadoPor}` : ""}${vigencia ? ` em ${formatarDataCurta(vigencia.atualizadoEm)}` : ""}.`
-                    : "Vigência não definida — o Bling não tem esse dado. Até definir, a situação segue as parcelas (contrato pago à vista aparece como concluído)."}
-                </span>
-                <EditarVigenciaDialog blingPedidoId={blingPedidoId} inicio={contrato.inicio} fim={contrato.fim} definida={contrato.vigenciaDefinida} />
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-page px-3 py-2.5 text-xs text-gray2">
-                <span className="min-w-0 flex-1">
-                  <span className="font-bold tracking-[0.06em] text-gray3 uppercase">SDR</span>{" "}
-                  <span className="font-semibold text-darkPurple1">{sdrNome ?? "não informado"}</span>
-                  <span className="mx-2 text-gray3">·</span>
-                  <span className="font-bold tracking-[0.06em] text-gray3 uppercase">Closer</span>{" "}
-                  <span className="font-semibold text-darkPurple1">{closerNome ?? "não informado"}</span>
-                </span>
-                <EditarEquipeDialog
-                  blingPedidoId={blingPedidoId}
-                  sdrId={equipe?.sdr_id ?? null}
-                  closerId={equipe?.closer_id ?? null}
-                  usuarios={usuariosComercial.map((u) => ({ id: u.user_id, nome: u.nome }))}
-                />
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-page px-3 py-2.5 text-xs text-gray2">
-                <span className="min-w-0 flex-1">
-                  <span className="font-bold tracking-[0.06em] text-gray3 uppercase">Licenças</span>{" "}
-                  <span className="font-semibold text-darkPurple1">{resumoLicencas ?? "não informadas"}</span>
-                  <span className="mx-2 text-gray3">·</span>
-                  <span className="font-bold tracking-[0.06em] text-gray3 uppercase">Licença adicional</span>{" "}
-                  <span className="font-semibold text-darkPurple1">{valorAdicional !== null ? formatarMoeda(valorAdicional) : "não informado"}</span>
-                </span>
-                <EditarLicencasDialog
-                  blingPedidoId={blingPedidoId}
-                  licencasPagas={licencas?.licencas_pagas ?? null}
-                  licencasGratuitas={licencas?.licencas_gratuitas ?? null}
-                  valorLicencaAdicional={valorAdicional}
-                />
-              </div>
+              {faltando.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-orange3 px-3 py-2.5 text-xs font-semibold text-[#ce9232]">
+                  <span className="min-w-0 flex-1">
+                    Falta informar {faltando.join(", ").replace(/, ([^,]*)$/, " e $1")} — dados que o Bling não tem.
+                    {!contrato.vigenciaDefinida && " Sem a vigência, a situação segue as parcelas (contrato pago à vista aparece como concluído)."}
+                  </span>
+                  <Button variant="secondary" size="sm" nativeButton={false} render={<Link href={`/financeiro/contratos/${blingPedidoId}/editar`} />}>
+                    <MdEdit className="size-4" />
+                    Completar dados
+                  </Button>
+                </div>
+              )}
               {detalheBling && detalheBling.itens.length > 0 && (
                 <div className="flex flex-col gap-1">
                   <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Itens</span>

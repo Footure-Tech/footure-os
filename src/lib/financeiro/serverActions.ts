@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { exigirPapel } from "@/lib/auth/session";
 
@@ -67,87 +68,78 @@ export async function registrarArquivoContratoBlingAction(
   return {};
 }
 
-/** Vigência do contrato (pedido de venda do Bling) — controlada na plataforma (0034). */
-export async function salvarVigenciaContratoBlingAction(blingPedidoId: number, inicio: string, fim: string): Promise<{ erro?: string }> {
-  const sessao = await exigirPapel("admin");
-  const data = /^\d{4}-\d{2}-\d{2}$/;
-  if (!data.test(inicio) || !data.test(fim)) return { erro: "Informe as duas datas." };
-  if (fim < inicio) return { erro: "O fim da vigência precisa ser depois do início." };
-
-  const supabase = await createClient();
-  const { data: pedido } = await supabase.from("bling_pedidos").select("id").eq("id", blingPedidoId).maybeSingle();
-  if (!pedido) return { erro: "Pedido de venda não encontrado no cache do Bling." };
-
-  const { error } = await supabase.from("contrato_vigencia_bling").upsert({
-    bling_pedido_id: blingPedidoId,
-    vigencia_inicio: inicio,
-    vigencia_fim: fim,
-    atualizado_por: sessao.id,
-    atualizado_em: new Date().toISOString(),
-  });
-  if (error) return { erro: `Não foi possível salvar a vigência: ${error.message}` };
-
-  revalidatePath(`/financeiro/contratos/${blingPedidoId}`);
-  revalidatePath("/financeiro");
-  revalidatePath("/clientes", "layout");
-  return {};
+export interface EstadoDadosContrato {
+  erro?: string;
 }
 
-/** SDR e Closer de uma venda do Bling — controlados na plataforma (0035). Null = não informado. */
-export async function salvarEquipeContratoBlingAction(blingPedidoId: number, sdrId: string | null, closerId: string | null): Promise<{ erro?: string }> {
+/** "1.234,56" / "1234.56" / "150" → número; vazio → null; inválido → NaN. */
+function paraValor(texto: string): number | null {
+  const limpo = texto.trim().replace(/\s|R\$/g, "");
+  if (!limpo) return null;
+  const n = Number(limpo.includes(",") ? limpo.replace(/\./g, "").replace(",", ".") : limpo);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+/**
+ * Tela "Editar dados do contrato" (venda que veio do Bling): vigência (0034),
+ * SDR/Closer (0035) e licenças (0036) — dados que o Bling não tem — salvos
+ * juntos. Vigência e licenças são opcionais (em branco = não mexe); SDR e
+ * Closer aceitam "não informado".
+ */
+export async function salvarDadosContratoBlingAction(_prev: EstadoDadosContrato, formData: FormData): Promise<EstadoDadosContrato> {
   const sessao = await exigirPapel("admin");
+  const blingPedidoId = Number(formData.get("blingPedidoId"));
+  const campo = (nome: string) => String(formData.get(nome) ?? "").trim();
+  const inicio = campo("inicio");
+  const fim = campo("fim");
+  const sdrId = campo("sdr") || null;
+  const closerId = campo("closer") || null;
+  const textoPagas = campo("licencasPagas");
+  const textoGratuitas = campo("licencasGratuitas");
+  const valorAdicional = paraValor(campo("valorLicencaAdicional"));
+
+  // Vigência
+  if (!!inicio !== !!fim) return { erro: "Informe o início e o fim da vigência (ou deixe os dois em branco)." };
+  if (inicio && fim < inicio) return { erro: "O fim da vigência precisa ser depois do início." };
+  // Licenças
+  const temLicencas = !!textoPagas || !!textoGratuitas || valorAdicional !== null;
+  const pagas = Number(textoPagas || "0");
+  const gratuitas = Number(textoGratuitas || "0");
+  if (temLicencas && !textoPagas) return { erro: "Informe o número de licenças pagas." };
+  if (temLicencas && (!Number.isInteger(pagas) || !Number.isInteger(gratuitas) || pagas < 0 || gratuitas < 0)) {
+    return { erro: "Informe as licenças como números inteiros." };
+  }
+  if (valorAdicional !== null && (Number.isNaN(valorAdicional) || valorAdicional < 0)) return { erro: "Valor da licença adicional inválido — use o formato 1.234,56." };
+
   const supabase = await createClient();
   const { data: pedido } = await supabase.from("bling_pedidos").select("id").eq("id", blingPedidoId).maybeSingle();
   if (!pedido) return { erro: "Pedido de venda não encontrado no cache do Bling." };
-
   const ids = [sdrId, closerId].filter((id): id is string => !!id);
   if (ids.length) {
     const { data: validos } = await supabase.from("profiles").select("user_id").in("user_id", ids).in("papel", ["vendedor", "admin"]);
     if ((validos ?? []).length !== new Set(ids).size) return { erro: "Escolha SDR e Closer entre os usuários do comercial." };
   }
 
-  const { error } = await supabase.from("contrato_equipe_bling").upsert({
-    bling_pedido_id: blingPedidoId,
-    sdr_id: sdrId,
-    closer_id: closerId,
-    atualizado_por: sessao.id,
-    atualizado_em: new Date().toISOString(),
-  });
-  if (error) return { erro: `Não foi possível salvar SDR e Closer: ${error.message}` };
+  const auditoria = { atualizado_por: sessao.id, atualizado_em: new Date().toISOString() };
+  const [rVigencia, rEquipe, rLicencas] = await Promise.all([
+    inicio ? supabase.from("contrato_vigencia_bling").upsert({ bling_pedido_id: blingPedidoId, vigencia_inicio: inicio, vigencia_fim: fim, ...auditoria }) : null,
+    supabase.from("contrato_equipe_bling").upsert({ bling_pedido_id: blingPedidoId, sdr_id: sdrId, closer_id: closerId, ...auditoria }),
+    temLicencas
+      ? supabase.from("contrato_licencas_bling").upsert({
+          bling_pedido_id: blingPedidoId,
+          licencas_pagas: pagas,
+          licencas_gratuitas: gratuitas,
+          valor_licenca_adicional: valorAdicional === null ? null : Math.round(valorAdicional * 100) / 100,
+          ...auditoria,
+        })
+      : null,
+  ]);
+  const erro = rVigencia?.error ?? rEquipe.error ?? rLicencas?.error;
+  if (erro) return { erro: `Não foi possível salvar os dados do contrato: ${erro.message}` };
 
   revalidatePath(`/financeiro/contratos/${blingPedidoId}`);
+  revalidatePath("/financeiro");
   revalidatePath("/vendas");
-  return {};
-}
-
-/** Licenças de uma venda do Bling — controladas na plataforma (0036). Valor adicional null = não informado. */
-export async function salvarLicencasContratoBlingAction(
-  blingPedidoId: number,
-  licencasPagas: number,
-  licencasGratuitas: number,
-  valorLicencaAdicional: number | null,
-): Promise<{ erro?: string }> {
-  const sessao = await exigirPapel("admin");
-  const inteiro = (n: number) => Number.isInteger(n) && n >= 0;
-  if (!inteiro(licencasPagas) || !inteiro(licencasGratuitas)) return { erro: "Informe o número de licenças como um número inteiro." };
-  if (valorLicencaAdicional !== null && (!Number.isFinite(valorLicencaAdicional) || valorLicencaAdicional < 0)) {
-    return { erro: "Valor da licença adicional inválido." };
-  }
-
-  const supabase = await createClient();
-  const { data: pedido } = await supabase.from("bling_pedidos").select("id").eq("id", blingPedidoId).maybeSingle();
-  if (!pedido) return { erro: "Pedido de venda não encontrado no cache do Bling." };
-
-  const { error } = await supabase.from("contrato_licencas_bling").upsert({
-    bling_pedido_id: blingPedidoId,
-    licencas_pagas: licencasPagas,
-    licencas_gratuitas: licencasGratuitas,
-    valor_licenca_adicional: valorLicencaAdicional === null ? null : Math.round(valorLicencaAdicional * 100) / 100,
-    atualizado_por: sessao.id,
-    atualizado_em: new Date().toISOString(),
-  });
-  if (error) return { erro: `Não foi possível salvar as licenças: ${error.message}` };
-
-  revalidatePath(`/financeiro/contratos/${blingPedidoId}`);
-  return {};
+  revalidatePath("/clientes", "layout");
+  redirect(`/financeiro/contratos/${blingPedidoId}`);
 }
