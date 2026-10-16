@@ -5,9 +5,8 @@
 // inventar — ver decisões do redesign.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, StatusPedido } from "@/lib/supabase/database.types";
-import { carregarBaseParcelas, hojeLocal, montarContratosDaBase } from "@/lib/financeiro/carteira";
+import { carregarBaseParcelas, hojeLocal, montarContratosDaBase, mrrDoContrato } from "@/lib/financeiro/carteira";
 import { carregarInadimplencia } from "@/lib/inadimplencia/consultas";
-import { mesesEntre } from "@/lib/formatacao";
 
 type Supa = SupabaseClient<Database>;
 
@@ -116,15 +115,8 @@ export async function carregarDashboard(supabase: Supa, periodo: Periodo) {
   const vigentes = contratosBling.filter((c) => c.ativo && !!c.inicio && c.inicio <= hoje && !!c.fim && c.fim >= hoje);
   // MRR: com vigência definida na plataforma, valor ÷ meses de vigência (cobre
   // à vista); sem ela, valor ÷ nº de parcelas (≈ a mensalidade do parcelado).
-  const mrr = vigentes.reduce((s, c) => {
-    const meses = c.vigenciaDefinida && c.inicio && c.fim ? (mesesEntre(c.inicio, c.fim) ?? 12) : Math.max(1, c.totalParcelas);
-    return s + c.valorTotal / meses;
-  }, 0);
-  const mrrPorPerfil = porPerfil(
-    vigentes,
-    (c) => c.contatoId,
-    (c) => c.valorTotal / (c.vigenciaDefinida && c.inicio && c.fim ? (mesesEntre(c.inicio, c.fim) ?? 12) : Math.max(1, c.totalParcelas)),
-  );
+  const mrr = vigentes.reduce((s, c) => s + mrrDoContrato(c), 0);
+  const mrrPorPerfil = porPerfil(vigentes, (c) => c.contatoId, mrrDoContrato);
 
   // Receita mensal (cache do Bling, por VENCIMENTO): 9 meses atrás até 2 à frente.
   const receitaMensal = Array.from({ length: 12 }, (_, i) => {

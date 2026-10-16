@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { classificarSituacaoParcela, pedidoBlingCancelado, type SituacaoParcela } from "@/lib/integracoes/bling";
+import { mesesEntre } from "@/lib/formatacao";
 
 type Supa = SupabaseClient<Database>;
 
@@ -300,6 +301,18 @@ export async function carregarContrato(supabase: Supa, blingPedidoId: number) {
     },
     sincronizadoEm: contato?.sincronizado_em ?? null,
   };
+}
+
+/**
+ * Valor mensal (MRR) de um contrato: com vigência definida na plataforma,
+ * valor ÷ meses de vigência. Sem ela, valor ÷ max(12, nº de parcelas) — 12
+ * meses é o prazo padrão; dividir só pelas parcelas fazia um contrato à vista
+ * (1 parcela) entrar com o valor inteiro como se fosse mensal. Usado no
+ * Dashboard e em Vendas.
+ */
+export function mrrDoContrato(c: Pick<ContratoFinanceiro, "valorTotal" | "vigenciaDefinida" | "inicio" | "fim" | "totalParcelas">) {
+  const meses = c.vigenciaDefinida && c.inicio && c.fim ? (mesesEntre(c.inicio, c.fim) ?? 12) : Math.max(12, c.totalParcelas);
+  return c.valorTotal / meses;
 }
 
 export function contratoNoFiltro(c: ContratoFinanceiro, filtro: FiltroContratos) {

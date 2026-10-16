@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { formatarMoedaCompacta } from "@/lib/formatacao";
 
 export type TomDelta = "positivo" | "negativo" | "marca" | "neutro";
 
@@ -55,4 +56,29 @@ export function KpiCard({
 
 export function GradeKpis({ children, className }: { children: ReactNode; className?: string }) {
   return <div className={cn("grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5", className)}>{children}</div>;
+}
+
+/** Rodapé de KPI dividido por perfil do cliente (clubes × agentes; contato sem
+ * cadastro só aparece se houver). `formatar` padrão = moeda compacta. */
+export function DivisaoPerfil({
+  valores,
+  formatar = formatarMoedaCompacta,
+}: {
+  valores: { clube: number; agente: number; semPerfil: number };
+  formatar?: (valor: number) => string;
+}) {
+  const partes = [
+    { rotulo: "Clubes", valor: valores.clube },
+    { rotulo: "Agentes", valor: valores.agente },
+    ...(valores.semPerfil > 0 ? [{ rotulo: "Sem cadastro", valor: valores.semPerfil }] : []),
+  ];
+  return (
+    <span className="flex flex-col gap-0.5">
+      {partes.map((p) => (
+        <span key={p.rotulo} className="flex items-baseline justify-between gap-3">
+          {p.rotulo} <strong className="font-bold text-darkPurple1">{formatar(p.valor)}</strong>
+        </span>
+      ))}
+    </span>
+  );
 }

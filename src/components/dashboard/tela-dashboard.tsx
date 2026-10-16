@@ -4,7 +4,7 @@ import { MdChevronRight, MdError, MdEventAvailable, MdFactCheck, MdGavel, MdHist
 import type { carregarDashboard, Periodo, PontoAtencao } from "@/lib/dashboard/indicadores";
 import { formatarDataCurta, formatarMoeda, formatarMoedaCompacta } from "@/lib/formatacao";
 import { PageHeader } from "@/components/shell/page-header";
-import { GradeKpis, KpiCard } from "@/components/ds/kpi-card";
+import { DivisaoPerfil, GradeKpis, KpiCard } from "@/components/ds/kpi-card";
 import { SegmentedToggle } from "@/components/ds/alternadores";
 import { StatusPill } from "@/components/ds/status-pill";
 import { Avatar } from "@/components/ds/avatar";
@@ -71,24 +71,6 @@ function ReceitaPorLinha({ valor }: { valor: number }) {
       </div>
       <p className="text-xs text-gray3">Academy e Consultoria ainda não fazem parte do sistema.</p>
     </div>
-  );
-}
-
-/** Rodapé dos KPIs: valor de clubes e de agentes (perfil do cadastro do cliente); contato sem cadastro só aparece se houver. */
-function DivisaoPerfil({ valores }: { valores: { clube: number; agente: number; semPerfil: number } }) {
-  const partes = [
-    { rotulo: "Clubes", valor: valores.clube },
-    { rotulo: "Agentes", valor: valores.agente },
-    ...(valores.semPerfil > 0 ? [{ rotulo: "Sem cadastro", valor: valores.semPerfil }] : []),
-  ];
-  return (
-    <span className="flex flex-col gap-0.5">
-      {partes.map((p) => (
-        <span key={p.rotulo} className="flex items-baseline justify-between gap-3">
-          {p.rotulo} <strong className="font-bold text-darkPurple1">{formatarMoedaCompacta(p.valor)}</strong>
-        </span>
-      ))}
-    </span>
   );
 }
 

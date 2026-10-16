@@ -5,7 +5,7 @@
 // fechados pela plataforma, os do pedido — o Bling não tem esse dado.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, TipoCliente } from "@/lib/supabase/database.types";
-import { carregarBaseParcelas, hojeLocal, montarContratosDaBase } from "@/lib/financeiro/carteira";
+import { carregarBaseParcelas, hojeLocal, montarContratosDaBase, mrrDoContrato } from "@/lib/financeiro/carteira";
 
 type Supa = SupabaseClient<Database>;
 
@@ -30,6 +30,8 @@ export interface Venda {
   dataFechamento: string;
   primeiraParcela: string | null;
   valorTotal: number;
+  /** Valor mensal que a venda adiciona (mesma conta do MRR do Dashboard). */
+  mrr: number;
   sdr: string | null;
   closer: string | null;
 }
@@ -74,6 +76,7 @@ export async function carregarVendas(supabase: Supa) {
         dataFechamento: c.dataVenda!,
         primeiraParcela: primeiraParcela.get(`${c.contatoId}:${c.numeroPedido}`) ?? null,
         valorTotal: c.valorTotal,
+        mrr: mrrDoContrato(c),
         sdr: equipe?.sdr ?? null,
         closer: equipe?.closer ?? null,
       };

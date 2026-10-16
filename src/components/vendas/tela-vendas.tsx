@@ -7,6 +7,7 @@ import { AbasFiltro } from "@/components/ds/alternadores";
 import { BadgeTom } from "@/components/ds/badge-tom";
 import { LinhaClicavel } from "@/components/ds/linha-clicavel";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
+import { DivisaoPerfil, GradeKpis, KpiCard } from "@/components/ds/kpi-card";
 import { LogoCliente } from "@/components/clientes/logo-cliente";
 import { AvisoSemCache, IndicadorBling } from "@/components/financeiro/tela-contratos";
 
@@ -38,6 +39,13 @@ export function TelaVendas({
   urlLogo: (logoPath: string | null) => string | null;
 }) {
   const total = vendas.reduce((s, v) => s + v.valorTotal, 0);
+  const mrr = vendas.reduce((s, v) => s + v.mrr, 0);
+  const porPerfil = (valor: (v: Venda) => number) => {
+    const r = { clube: 0, agente: 0, semPerfil: 0 };
+    for (const v of vendas) r[v.tipo ?? "semPerfil"] += valor(v);
+    return r;
+  };
+  const sufixo = periodo === "mes" ? "mês" : periodo === "tri" ? "trimestre" : "12 meses";
   const aba = ABAS.find((a) => a.valor === periodo)!;
 
   return (
@@ -58,12 +66,28 @@ export function TelaVendas({
               valor={periodo}
               opcoes={ABAS.map((a) => ({ valor: a.valor, rotulo: a.rotulo, href: a.valor === "mes" ? "/vendas" : `/vendas?periodo=${a.valor}`, contagem: contagens[a.valor] }))}
             />
-            {vendas.length > 0 && (
-              <span className="ml-auto text-sm text-gray3">
-                {vendas.length} {vendas.length === 1 ? "venda" : "vendas"} · <strong className="font-bold text-darkPurple1">{formatarMoedaCompacta(total)}</strong>
-              </span>
-            )}
           </div>
+
+          <GradeKpis>
+            <KpiCard
+              rotulo={`Total contratado · ${sufixo}`}
+              valor={formatarMoedaCompacta(total)}
+              apoio="valor total dos contratos vendidos"
+              rodape={<DivisaoPerfil valores={porPerfil((v) => v.valorTotal)} />}
+            />
+            <KpiCard
+              rotulo={`MRR adicionado · ${sufixo}`}
+              valor={formatarMoedaCompacta(mrr)}
+              apoio="valor mensal dos novos contratos"
+              rodape={<DivisaoPerfil valores={porPerfil((v) => v.mrr)} />}
+            />
+            <KpiCard
+              rotulo={`Vendas · ${sufixo}`}
+              valor={String(vendas.length)}
+              apoio={vendas.length === 1 ? "contrato fechado" : "contratos fechados"}
+              rodape={<DivisaoPerfil valores={porPerfil(() => 1)} formatar={(n) => String(n)} />}
+            />
+          </GradeKpis>
 
           {vendas.length === 0 ? (
             <div className="rounded-xl border border-gray5 bg-surface shadow-table">
