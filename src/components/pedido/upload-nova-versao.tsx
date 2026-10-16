@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { prepararNovaVersaoAction, registrarNovaVersaoAction } from "@/lib/pedidos/serverActions";
+import { AnaliseEmAndamento } from "@/components/pedido/analise-em-andamento";
 
 // Nova versão do contrato: o .docx vai do navegador direto para o Storage (URL
 // assinada) — o corpo de uma Server Action é limitado a 1 MB e um .docx
@@ -45,6 +46,8 @@ export function UploadNovaVersao({ pedidoId, onSucesso }: { pedidoId: string; on
     }
   }
 
+  if (etapa !== "parado") return <AnaliseEmAndamento key={etapa} etapa={etapa} />;
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-2">
@@ -58,8 +61,8 @@ export function UploadNovaVersao({ pedidoId, onSucesso }: { pedidoId: string; on
       {erro && <p className="text-sm text-destructive">{erro}</p>}
       <DialogFooter>
         <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
-        <Button type="button" disabled={etapa !== "parado"} onClick={enviar}>
-          {etapa === "enviando" ? "Enviando…" : etapa === "analisando" ? "Analisando mudanças…" : "Subir versão"}
+        <Button type="button" onClick={enviar}>
+          Subir versão
         </Button>
       </DialogFooter>
     </div>

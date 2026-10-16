@@ -315,3 +315,40 @@
 [data-theme="dark"] header.bg-appbar {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
 }
+
+/* Loader da análise de nova versão do contrato (upload-nova-versao.tsx). */
+@keyframes analise-varredura {
+  0% { transform: translateY(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(86px); opacity: 0; }
+}
+@keyframes analise-destaque {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.9; }
+}
+@keyframes analise-flutuar {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes analise-brilho {
+  0%, 100% { transform: scale(0.7) rotate(0deg); opacity: 0.5; }
+  50% { transform: scale(1.1) rotate(20deg); opacity: 1; }
+}
+@keyframes analise-progresso {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+@keyframes analise-mensagem {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.analise-varredura { animation: analise-varredura 2.4s var(--ease-standard) infinite; }
+.analise-destaque { animation: analise-destaque 2.4s ease-in-out infinite; }
+.analise-flutuar { animation: analise-flutuar 3s ease-in-out infinite; }
+.analise-brilho { animation: analise-brilho 1.8s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+.analise-progresso { animation: analise-progresso 1.6s var(--ease-standard) infinite; }
+.analise-mensagem { animation: analise-mensagem 400ms var(--ease-standard); }
+@media (prefers-reduced-motion: reduce) {
+  .analise-varredura, .analise-destaque, .analise-flutuar, .analise-brilho, .analise-progresso { animation: none; }
+}

@@ -22,12 +22,13 @@ export async function decidirMudancaAction(mudancaId: string, decisao: "agregar"
   const sessao = await exigirPapel("juridico", "admin");
   const supabase = await createClient();
 
-  const { data: mudanca } = await supabase
+  const { data: mudanca, error: erroMudanca } = await supabase
     .from("contrato_mudancas")
-    .select("id, tipo, trecho_original, trecho_novo, sugestao, decisao, contrato_analises(contratos(pedido_id))")
+    // contrato_analises aponta duas vezes para contratos (versão nova e base) — precisa nomear a ligação.
+    .select("id, tipo, trecho_original, trecho_novo, sugestao, decisao, contrato_analises(contratos!contrato_analises_contrato_id_fkey(pedido_id))")
     .eq("id", mudancaId)
     .single();
-  if (!mudanca) return { erro: "Mudança não encontrada." };
+  if (erroMudanca || !mudanca) return { erro: erroMudanca ? `Não foi possível ler a mudança: ${erroMudanca.message}` : "Mudança não encontrada." };
   const pedidoId = (mudanca.contrato_analises as unknown as { contratos: { pedido_id: string } | null } | null)?.contratos?.pedido_id;
   if (!pedidoId) return { erro: "Contrato da mudança não encontrado." };
 
