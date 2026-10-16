@@ -29,6 +29,7 @@ import { AcoesPedido } from "@/components/pedido/acoes-pedido";
 import { CancelarPedidoDialog } from "@/components/pedido/cancelar-pedido-dialog";
 import { TimelineTransicoes, type EventoTimeline } from "@/components/pedido/timeline-transicoes";
 import { ROTULO_STATUS } from "@/components/rotulo-status";
+import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 
 const VOLTAR_POR_PAPEL = { vendedor: "/vendedor", admin: "/admin", juridico: "/juridico" } as const;
 const ROTULO_PERFIL_CLIENTE = { clube: "Clube", agente: "Agente" } as const;
@@ -222,6 +223,8 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
               )}
               {!!pedido.valor_licenca_adicional && <LinhaChaveValor rotulo="Licença adicional" valor={formatarMoeda(pedido.valor_licenca_adicional)} />}
               <LinhaChaveValor rotulo="Vigência" valor={`${formatarDataCurta(pedido.vigencia_inicio)} a ${formatarDataCurta(pedido.vigencia_fim)}`} />
+              <LinhaChaveValor rotulo="Tipo de venda" valor={pedido.tipo_venda ? ROTULO_TIPO_VENDA[pedido.tipo_venda] : <span className="text-gray3">não informado</span>} />
+              <LinhaChaveValor rotulo="Origem" valor={pedido.origem ? ROTULO_ORIGEM_VENDA[pedido.origem] : <span className="text-gray3">não informada</span>} />
               {pedido.condicao_especial && <LinhaChaveValor rotulo="Condição especial" valor={pedido.condicao_especial} longo className="md:col-span-2" />}
             </div>
           </CardModulo>

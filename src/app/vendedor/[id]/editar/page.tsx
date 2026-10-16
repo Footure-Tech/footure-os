@@ -85,6 +85,8 @@ export default async function EditarPedidoPage({ params }: PageProps<"/vendedor/
     testemunhasFooture: testemunhasFooture.map((t) => ({ nomeCompleto: t.nome_completo, email: t.email, cpf: t.cpf })),
     sdrId: pedido.sdr_id ?? "",
     closerId: pedido.closer_id ?? "",
+    tipoVenda: pedido.tipo_venda,
+    origem: pedido.origem,
   };
 
   return (

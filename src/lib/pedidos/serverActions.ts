@@ -73,6 +73,9 @@ const PedidoPayloadSchema = z.object({
   testemunhasFooture: z.array(SignatarioSchema),
   sdrId: z.string().uuid(),
   closerId: z.string().uuid(),
+  // 0039 — opcionais (vazio = não informado)
+  tipoVenda: z.enum(["novo", "renovacao", "reativacao"]).nullable().optional(),
+  origem: z.enum(["carteira", "inbound", "outbound"]).nullable().optional(),
 });
 
 export type PedidoPayload = z.infer<typeof PedidoPayloadSchema>;
@@ -193,6 +196,8 @@ export async function salvarPedido(_prev: SalvarPedidoState, formData: FormData)
     plano_legado_nome_original: payload.planoLegadoNomeOriginal || null,
     sdr_id: payload.sdrId,
     closer_id: payload.closerId,
+    tipo_venda: payload.tipoVenda ?? null,
+    origem: payload.origem ?? null,
   };
 
   let pedidoId = payload.pedidoId;

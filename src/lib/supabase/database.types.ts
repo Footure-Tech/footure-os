@@ -225,6 +225,9 @@ export interface Database {
           bling_pedido_id: string | null;
           sdr_id: string | null;
           closer_id: string | null;
+          // 0039_pedidos_tipo_origem.sql
+          tipo_venda: TipoVenda | null;
+          origem: OrigemVenda | null;
           criado_em: string;
           atualizado_em: string;
         },
@@ -266,6 +269,8 @@ export interface Database {
           bling_pedido_id?: string | null;
           sdr_id?: string | null;
           closer_id?: string | null;
+          tipo_venda?: TipoVenda | null;
+          origem?: OrigemVenda | null;
         },
         Partial<{
           cliente_id: string;
@@ -304,6 +309,8 @@ export interface Database {
           bling_pedido_id: string | null;
           sdr_id: string | null;
           closer_id: string | null;
+          tipo_venda: TipoVenda | null;
+          origem: OrigemVenda | null;
         }>
       >;
       pedido_signatarios: TableDef<

@@ -20,7 +20,8 @@ import { gerarAlertas, FORO_DEFAULT } from "@/lib/validacoes/pedido";
 import { normalizePlan, listarPlanosCanonicos } from "@/lib/plans/normalize";
 import { textoMultaDefault } from "@/lib/contratos/multa";
 import { ROTULO_MEIO_PAGAMENTO } from "@/lib/contratos/meioPagamento";
-import type { MultaTipo, MeioPagamento, Divulgacao, ApiModelo } from "@/lib/supabase/database.types";
+import type { MultaTipo, MeioPagamento, Divulgacao, ApiModelo, OrigemVenda, TipoVenda } from "@/lib/supabase/database.types";
+import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 
 export interface ClienteOption {
   id: string;
@@ -74,6 +75,8 @@ export interface DadosIniciaisPedido {
   testemunhasFooture: SignatarioForm[];
   sdrId: string;
   closerId: string;
+  tipoVenda: TipoVenda | null;
+  origem: OrigemVenda | null;
 }
 
 interface Props {
@@ -109,6 +112,7 @@ function somarMeses(dataISO: string, meses: number): string {
 // Rótulos exibidos no gatilho dos selects (sem `items`, o Select do base-ui
 // mostra o valor cru, ex.: "parcelado" em vez de "Parcelado").
 const ROTULOS_PERFIL = { clube: "Clube", agente: "Agente" };
+const NAO_INFORMADO = "nao_informado";
 const ROTULOS_FORMA = { parcelado: "Parcelado", avista: "À vista" };
 const ROTULOS_API_MODELO = {
   combinado: "Combinado (um boleto só, valor somado)",
@@ -154,6 +158,8 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
 
   const [sdrId, setSdrId] = useState(d?.sdrId ?? "");
   const [closerId, setCloserId] = useState(d?.closerId ?? "");
+  const [tipoVenda, setTipoVenda] = useState<string>(d?.tipoVenda ?? NAO_INFORMADO);
+  const [origem, setOrigem] = useState<string>(d?.origem ?? NAO_INFORMADO);
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteId);
   const perfil: "clube" | "agente" = cadastrandoNovo ? novoCliente.tipo : (clienteSelecionado?.tipo ?? "clube");
@@ -291,6 +297,8 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
       testemunhasFooture,
       sdrId,
       closerId,
+      tipoVenda: tipoVenda === NAO_INFORMADO ? null : tipoVenda,
+      origem: origem === NAO_INFORMADO ? null : origem,
     };
     formData.set("payload", JSON.stringify(payload));
     formData.set("intencao", intencaoRef.current);
@@ -764,8 +772,43 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           <SignatarioListEditor titulo="Testemunhas da Footure" itens={testemunhasFooture} onChange={setTestemunhasFooture} />
         </BlocoFormulario>
 
-        <BlocoFormulario titulo="SDR e Closer" descricao="Definem a comissão de cada um sobre esse pedido — podem ser a mesma pessoa.">
+        <BlocoFormulario
+          titulo="Dados comerciais"
+          descricao="Tipo e origem da venda, e SDR e Closer — que definem a comissão de cada um sobre esse pedido (podem ser a mesma pessoa)."
+        >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Label variante="campo">Tipo de venda</Label>
+              <Select items={{ [NAO_INFORMADO]: "Não informado", ...ROTULO_TIPO_VENDA }} value={tipoVenda} onValueChange={(v) => v && setTipoVenda(v as string)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NAO_INFORMADO}>Não informado</SelectItem>
+                  {Object.entries(ROTULO_TIPO_VENDA).map(([valor, rotulo]) => (
+                    <SelectItem key={valor} value={valor}>
+                      {rotulo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label variante="campo">Origem</Label>
+              <Select items={{ [NAO_INFORMADO]: "Não informado", ...ROTULO_ORIGEM_VENDA }} value={origem} onValueChange={(v) => v && setOrigem(v as string)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NAO_INFORMADO}>Não informado</SelectItem>
+                  {Object.entries(ROTULO_ORIGEM_VENDA).map(([valor, rotulo]) => (
+                    <SelectItem key={valor} value={valor}>
+                      {rotulo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex flex-col gap-2">
               <Label variante="campo">SDR</Label>
               <Select items={rotulosUsuarios} value={sdrId} onValueChange={(v) => v && setSdrId(v)}>
