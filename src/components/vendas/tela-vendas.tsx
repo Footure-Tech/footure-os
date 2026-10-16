@@ -70,21 +70,21 @@ export function TelaVendas({
 
           <GradeKpis>
             <KpiCard
-              rotulo={`Total contratado · ${sufixo}`}
+              rotulo={`Total vendido · ${sufixo}`}
               valor={formatarMoedaCompacta(total)}
-              apoio="valor total dos contratos vendidos"
+              apoio="valor total das vendas"
               rodape={<DivisaoPerfil valores={porPerfil((v) => v.valorTotal)} />}
             />
             <KpiCard
               rotulo={`MRR adicionado · ${sufixo}`}
               valor={formatarMoedaCompacta(mrr)}
-              apoio="valor mensal dos novos contratos"
+              apoio="valor mensal das novas vendas"
               rodape={<DivisaoPerfil valores={porPerfil((v) => v.mrr)} />}
             />
             <KpiCard
               rotulo={`Vendas · ${sufixo}`}
               valor={String(vendas.length)}
-              apoio={vendas.length === 1 ? "contrato fechado" : "contratos fechados"}
+              apoio={vendas.length === 1 ? "venda fechada" : "vendas fechadas"}
               rodape={<DivisaoPerfil valores={porPerfil(() => 1)} formatar={(n) => String(n)} />}
             />
           </GradeKpis>
