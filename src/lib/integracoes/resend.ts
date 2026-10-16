@@ -2,6 +2,7 @@
 // simples — sem SDK, evita mais uma dependência). O conteúdo e a marca ficam
 // em src/lib/email (template único); aqui só o transporte e as mensagens.
 import { NOME_DO_SISTEMA, montarEmail, urlDoSistema } from "@/lib/email/layout";
+import { LOGO_EMAIL_BASE64, LOGO_EMAIL_CID } from "@/lib/email/logo";
 
 /** Remetente sempre exibido como "Footure OS", mesmo que RESEND_FROM_EMAIL
  * venha só com o endereço ou com outro nome ("Fulano <x@y>"). */
@@ -19,7 +20,15 @@ async function enviarEmail(para: string, assunto: string, conteudo: Parameters<t
   const resposta = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: comNomeDoSistema(remetente), to: para, subject: assunto, html, text: texto }),
+    body: JSON.stringify({
+      from: comNomeDoSistema(remetente),
+      to: para,
+      subject: assunto,
+      html,
+      text: texto,
+      // Logo do cabeçalho embutido (cid:) — ver lib/email/logo.ts.
+      attachments: [{ filename: "footure-logo.png", content: LOGO_EMAIL_BASE64, content_id: LOGO_EMAIL_CID }],
+    }),
   });
 
   if (!resposta.ok) {

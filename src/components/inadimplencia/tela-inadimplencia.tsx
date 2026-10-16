@@ -1,5 +1,5 @@
 import { MdCheckCircle, MdNotificationsActive, MdSync } from "react-icons/md";
-import type { carregarInadimplencia } from "@/lib/inadimplencia/consultas";
+import type { carregarInadimplencia, FiltroContratosInadimplencia } from "@/lib/inadimplencia/consultas";
 import { ETAPAS_REGUA, etapaReguaSugerida } from "@/lib/inadimplencia/consultas";
 import { statusAtrasoVisual } from "@/lib/status/visual";
 import { formatarDataCurta, formatarMoeda, tempoDecorrido } from "@/lib/formatacao";
@@ -10,6 +10,7 @@ import { KpiCard } from "@/components/ds/kpi-card";
 import { StatusPill } from "@/components/ds/status-pill";
 import { LinhaClicavel } from "@/components/ds/linha-clicavel";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
+import { AbasFiltro } from "@/components/ds/alternadores";
 import { LogoCliente } from "@/components/clientes/logo-cliente";
 import { ExportarCsv } from "@/components/inadimplencia/exportar-csv";
 import { cn } from "@/lib/utils";
@@ -24,9 +25,14 @@ function hrefCliente(clienteId: string | null, contatoId: number) {
 // vêm prontos do cache do Bling (carregarInadimplencia).
 export function TelaInadimplencia({
   dados: { temCache, sincronizadoEm, clientes, faixas, resumo },
+  filtro,
+  contagens,
   urlLogo,
 }: {
   dados: Awaited<ReturnType<typeof carregarInadimplencia>>;
+  filtro: FiltroContratosInadimplencia;
+  /** Clientes inadimplentes em cada aba. */
+  contagens: Record<FiltroContratosInadimplencia, number>;
   urlLogo: (logoPath: string | null) => string | null;
 }) {
   const maiorFaixa = Math.max(...faixas.map((f) => f.valor), 1);
@@ -41,7 +47,7 @@ export function TelaInadimplencia({
           <>
             {sincronizadoEm && <span className="text-sm text-gray">Bling · {tempoDecorrido(sincronizadoEm)}</span>}
             <ExportarCsv
-              nomeArquivo="inadimplencia.csv"
+              nomeArquivo={filtro === "ativos" ? "inadimplencia-contratos-ativos.csv" : "inadimplencia.csv"}
               cabecalho={["Cliente", "Pedidos Bling", "Em atraso (R$)", "Parcelas vencidas", "Vencido desde", "Dias de atraso", "Etapa sugerida da régua"]}
               linhas={clientes.map((c) => [
                 c.nome,
@@ -71,6 +77,14 @@ export function TelaInadimplencia({
         </div>
       ) : (
         <>
+          <AbasFiltro
+            valor={filtro}
+            opcoes={[
+              { valor: "ativos", rotulo: "Contratos ativos", href: "/inadimplencia", contagem: contagens.ativos },
+              { valor: "todos", rotulo: "Todos os contratos", href: "/inadimplencia?contratos=todos", contagem: contagens.todos },
+            ]}
+          />
+
           <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,400px),1fr))] items-stretch gap-5">
             <div className="grid grid-cols-2 gap-5">
               <KpiCard
@@ -118,7 +132,15 @@ export function TelaInadimplencia({
 
           {clientes.length === 0 ? (
             <div className="rounded-xl border border-gray5 bg-surface shadow-table">
-              <EstadoVazio icone={MdCheckCircle} titulo="Nenhum cliente com parcela em atraso" descricao="Todas as cobranças vencidas sincronizadas do Bling foram recebidas." />
+              <EstadoVazio
+                icone={MdCheckCircle}
+                titulo="Nenhum cliente com parcela em atraso"
+                descricao={
+                  filtro === "ativos"
+                    ? "Nenhum contrato com vigência em curso tem parcela vencida."
+                    : "Todas as cobranças vencidas sincronizadas do Bling foram recebidas."
+                }
+              />
             </div>
           ) : (
             <Table minWidth={1000}>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { IconType } from "react-icons";
-import { MdBusiness, MdDashboard, MdDescription, MdGavel, MdPayments, MdManageAccounts, MdReceipt, MdSettings, MdWarning } from "react-icons/md";
+import { MdBusiness, MdDashboard, MdDescription, MdGavel, MdPayments, MdManageAccounts, MdReceipt, MdSettings, MdTrendingUp, MdWarning } from "react-icons/md";
 import { cn } from "@/lib/utils";
 import { SincronizarBlingButton } from "@/components/clientes/sincronizar-bling-button";
 import type { PapelUsuario } from "@/lib/supabase/database.types";
@@ -49,6 +49,7 @@ const PEDIDOS_ADMIN: SidebarLink = {
   contador: "aprovacao",
 };
 const CLIENTES: SidebarLink = { href: "/clientes", label: "Clientes", icon: MdBusiness, cor: "bg-iconBlue" };
+const VENDAS: SidebarLink = { href: "/vendas", label: "Vendas", icon: MdTrendingUp, cor: "bg-iconPurple", exact: true };
 const CONTRATOS: SidebarLink = {
   href: "/juridico",
   label: "Assinatura de contratos",
@@ -63,6 +64,7 @@ const CONTRATOS_FINANCEIRO: SidebarLink = {
   icon: MdDescription,
   cor: "bg-iconYellow",
   exact: true,
+  ativoEm: ["/financeiro/contratos/"],
 };
 const PAGAMENTOS: SidebarLink = {
   href: "/financeiro/pagamentos",
@@ -94,7 +96,7 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
     { label: "Gestão", links: [{ href: "/dashboard", label: "Dashboard", icon: MdDashboard, cor: "bg-iconPurple", exact: true }] },
     {
       label: "Comercial",
-      links: [PEDIDOS_ADMIN, CLIENTES],
+      links: [PEDIDOS_ADMIN, VENDAS, CLIENTES],
     },
     { label: "Jurídico", links: [CONTRATOS] },
     { label: "Financeiro", links: [CONTRATOS_FINANCEIRO, PAGAMENTOS, INADIMPLENCIA] },

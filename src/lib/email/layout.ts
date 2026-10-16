@@ -2,7 +2,9 @@
 // branco). Logo/nome da marca ficam só aqui. HTML de e-mail: tabelas
 // e estilos inline (Gmail/Outlook ignoram <style> e flexbox), largura máx.
 // 560px, logo em PNG (SVG não é exibido no Gmail/Outlook), sempre com versão
-// em texto puro.
+// em texto puro. O logo vai embutido como anexo inline (cid:, ver logo.ts).
+
+import { LOGO_EMAIL_CID } from "./logo";
 
 export const NOME_DO_SISTEMA = "Footure OS";
 
@@ -87,7 +89,7 @@ export function montarEmail(conteudo: ConteudoEmail): { html: string; texto: str
     <tr><td align="center" style="padding:32px 16px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
         <tr><td style="background:${MARCA};border-radius:12px 12px 0 0;padding:22px 32px;">
-          <img src="${url}/email/footure-logo.png" width="94" height="36" alt="Footure Football Company" style="display:block;border:0;outline:none;width:94px;height:36px;">
+          <img src="cid:${LOGO_EMAIL_CID}" width="94" height="36" alt="Footure Football Company" style="display:block;border:0;outline:none;width:94px;height:36px;">
         </td></tr>
         <tr><td style="background:#ffffff;border:1px solid ${BORDA};border-top:0;border-radius:0 0 12px 12px;padding:32px;">
           <h1 style="margin:0 0 20px;font-family:${FONTE};font-size:22px;line-height:1.3;font-weight:700;color:${TEXTO};">${escaparHtml(conteudo.titulo)}</h1>

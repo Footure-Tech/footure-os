@@ -3,7 +3,7 @@
 // da tela Financeiro (carregarBaseParcelas).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
-import { carregarBaseParcelas, hojeLocal } from "@/lib/financeiro/carteira";
+import { carregarBaseParcelas, hojeLocal, montarContratosDaBase } from "@/lib/financeiro/carteira";
 
 type Supa = SupabaseClient<Database>;
 
@@ -52,10 +52,22 @@ export interface ClienteInadimplente {
   diasAtraso: number;
 }
 
-/** `base` opcional: quem já carregou o cache (ex.: Dashboard) evita ler de novo. */
-export async function carregarInadimplencia(supabase: Supa, base?: Awaited<ReturnType<typeof carregarBaseParcelas>>) {
-  const { parcelas, clientePorContato, nomeDoContato, sincronizadoEm, temCache } = base ?? (await carregarBaseParcelas(supabase));
+export type FiltroContratosInadimplencia = "todos" | "ativos";
+
+/**
+ * `base` opcional: quem já carregou o cache (ex.: Dashboard) evita ler de novo.
+ * `filtro = "ativos"`: só parcelas de contratos ativos — vigência em curso,
+ * mesmo critério de Financeiro · Contratos (parcela avulsa, sem pedido de
+ * origem, fica de fora). Todos os números (KPIs, faixas, lista) seguem o filtro.
+ */
+export async function carregarInadimplencia(supabase: Supa, base?: Awaited<ReturnType<typeof carregarBaseParcelas>>, filtro: FiltroContratosInadimplencia = "todos") {
+  const baseCarregada = base ?? (await carregarBaseParcelas(supabase));
+  const { clientePorContato, nomeDoContato, sincronizadoEm, temCache } = baseCarregada;
   const hoje = hojeLocal();
+  const ativos = filtro === "ativos" ? new Set(montarContratosDaBase(baseCarregada, hoje).filter((c) => c.ativo).map((c) => `${c.contatoId}:${c.numeroPedido}`)) : null;
+  const parcelas = ativos
+    ? baseCarregada.parcelas.filter((p) => !!p.numeroPedidoOrigem && ativos.has(`${p.contatoId}:${p.numeroPedidoOrigem}`))
+    : baseCarregada.parcelas;
   const vencidas = parcelas.filter((p) => p.situacao === "atrasada");
   const aVencer = parcelas.filter((p) => p.situacao === "em_aberto");
 

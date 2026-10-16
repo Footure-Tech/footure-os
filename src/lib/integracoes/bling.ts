@@ -290,7 +290,7 @@ export async function sincronizarContatosBling(
         situacao_valor: p.situacao?.valor ?? null,
       });
     }
-    const parcelas = await buscarContasReceberBling(token, candidato.id);
+    const parcelas = await buscarContasReceberBling(token, candidato.id, dataPrimeiroPedido(pedidosVenda));
     for (const p of parcelas) {
       parcelasParaCache.push({
         id: p.id,
@@ -533,17 +533,62 @@ async function salvarCacheParcelas(
   return baixas;
 }
 
-async function buscarContasReceberBling(token: string, idContato: number): Promise<Array<ParcelaBling & { numeroPedidoOrigem: string | null }>> {
-  const receberResp = await chamarApiBling<{
-    data: Array<{ id: number; vencimento: string; valor: number; situacao: number; origem?: { numero: string } }>;
-  }>(token, `/contas/receber?idContato=${idContato}&limite=100`);
-  return (receberResp.data ?? []).map((c) => ({
+/** aaaa-mm-dd + n dias (UTC, sem fuso). */
+function somarDias(iso: string, dias: number) {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + dias * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Contas a receber de um contato. ATENÇÃO (confirmado contra dados reais,
+ * out/2026): sem filtro de data o Bling devolve só as contas EMITIDAS nos
+ * últimos ~12 meses — contratos mais antigos (ex.: Atlético Mineiro, pedidos
+ * de 2025) ficavam sem parcelas. E o filtro aceita no máximo 366 dias por
+ * consulta. Por isso, com `desde` (data do primeiro pedido de venda do
+ * contato), busca em janelas de 366 dias por data de emissão
+ * (tipoFiltroData=E) até hoje, paginando cada janela. Sem `desde` (contato
+ * sem pedido de venda), fica a consulta padrão.
+ */
+async function buscarContasReceberBling(
+  token: string,
+  idContato: number,
+  desde?: string | null,
+): Promise<Array<ParcelaBling & { numeroPedidoOrigem: string | null }>> {
+  type ContaListada = { id: number; vencimento: string; valor: number; situacao: number; origem?: { numero: string } };
+  const consultas: string[] = [];
+  const hoje = new Date().toISOString().slice(0, 10);
+  if (desde && desde <= hoje) {
+    for (let inicio = desde; inicio <= hoje; inicio = somarDias(inicio, 366)) {
+      const fim = somarDias(inicio, 365) < hoje ? somarDias(inicio, 365) : hoje;
+      consultas.push(`&tipoFiltroData=E&dataInicial=${inicio}&dataFinal=${fim}`);
+    }
+  } else {
+    consultas.push("");
+  }
+
+  const porId = new Map<number, ContaListada>();
+  for (const filtro of consultas) {
+    for (let pagina = 1; pagina <= 20; pagina++) {
+      const resp = await chamarApiBling<{ data: ContaListada[] }>(token, `/contas/receber?idContato=${idContato}&limite=100&pagina=${pagina}${filtro}`);
+      const lista = resp.data ?? [];
+      for (const c of lista) porId.set(c.id, c);
+      if (lista.length < 100) break;
+    }
+  }
+  return [...porId.values()].map((c) => ({
     id: c.id,
     vencimento: c.vencimento,
     valor: c.valor,
     situacao: c.situacao,
     numeroPedidoOrigem: c.origem?.numero ?? null,
   }));
+}
+
+/** Data do pedido de venda mais antigo (aaaa-mm-dd) — início das janelas de contas a receber. */
+function dataPrimeiroPedido(pedidos: Array<{ data?: string }>): string | null {
+  return pedidos.reduce<string | null>((min, p) => {
+    const d = p.data && /^\d{4}-\d{2}-\d{2}/.test(p.data) && !p.data.startsWith("0000") ? p.data.slice(0, 10) : null;
+    return d && (!min || d < min) ? d : min;
+  }, null);
 }
 
 /** Versão leve só pra saber se há parcela atrasada — usada na listagem de
@@ -569,7 +614,7 @@ export async function buscarSituacaoPagamentoPorIdContato(supabase: Supa, idCont
   } catch {
     return { temParcelaAtrasada: false };
   }
-  const parcelas = await buscarContasReceberBling(token, idContato);
+  const parcelas = await buscarContasReceberBling(token, idContato, dataPrimeiroPedido(await buscarPedidosVenda(token, idContato)));
   return { temParcelaAtrasada: parcelas.some((p) => classificarSituacaoParcela(p.situacao, p.vencimento) === "atrasada") };
 }
 
@@ -638,6 +683,70 @@ export async function buscarDetalheContatoBling(supabase: Supa, idContato: numbe
   return buscarDetalheContatoBlingComToken(token, idContato);
 }
 
+export interface DetalhePedidoVendaBling {
+  id: number;
+  numero: string;
+  data: string | null;
+  total: number;
+  totalProdutos: number;
+  desconto: number;
+  numeroPedidoCompra: string | null;
+  observacoes: string | null;
+  observacoesInternas: string | null;
+  itens: { descricao: string; codigo: string | null; quantidade: number; valor: number }[];
+}
+
+/** Data do Bling ("0000-00-00" = vazia) → aaaa-mm-dd ou null. */
+function dataBling(valor: string | undefined | null): string | null {
+  return valor && !valor.startsWith("0000") ? valor.slice(0, 10) : null;
+}
+
+/**
+ * Detalhe de um pedido de venda (GET /pedidos/vendas/{id}) — itens,
+ * observações e observações internas não vêm na listagem nem ficam no cache,
+ * então a tela de detalhe do contrato busca ao vivo (uma chamada). Null se o
+ * Bling não estiver conectado ou a chamada falhar — a tela cai no cache.
+ */
+export async function buscarPedidoVendaBling(supabase: Supa, idPedido: number): Promise<DetalhePedidoVendaBling | null> {
+  try {
+    const token = await obterAccessTokenValido(supabase);
+    const { data: d } = await chamarApiBling<{
+      data: {
+        id: number;
+        numero: number | string;
+        data?: string;
+        total?: number;
+        totalProdutos?: number;
+        desconto?: { valor?: number };
+        numeroPedidoCompra?: string;
+        observacoes?: string;
+        observacoesInternas?: string;
+        itens?: Array<{ descricao?: string; codigo?: string; quantidade?: number; valor?: number }>;
+      };
+    }>(token, `/pedidos/vendas/${idPedido}`);
+    return {
+      id: d.id,
+      numero: String(d.numero),
+      data: dataBling(d.data),
+      total: Number(d.total ?? 0),
+      totalProdutos: Number(d.totalProdutos ?? 0),
+      desconto: Number(d.desconto?.valor ?? 0),
+      numeroPedidoCompra: d.numeroPedidoCompra?.trim() || null,
+      observacoes: d.observacoes?.trim() || null,
+      observacoesInternas: d.observacoesInternas?.trim() || null,
+      itens: (d.itens ?? []).map((i) => ({
+        descricao: i.descricao?.trim() || "Item",
+        codigo: i.codigo?.trim() || null,
+        quantidade: Number(i.quantidade ?? 1),
+        valor: Number(i.valor ?? 0),
+      })),
+    };
+  } catch (erro) {
+    console.error("[bling] detalhe do pedido de venda:", erro instanceof Error ? erro.message : erro);
+    return null;
+  }
+}
+
 /**
  * Cruza o cliente com o Bling por CNPJ. Confirmado contra dados reais: GET
  * /contatos?numeroDocumento=X encontra o contato, e tanto /pedidos/vendas
@@ -654,13 +763,12 @@ export async function buscarVisaoBlingDoCliente(supabase: Supa, cnpj: string): P
   const idContato = await buscarIdContatoBling(token, cnpj);
   if (!idContato) return { conectado: true, contatoEncontrado: false, pedidos: [] };
 
-  const [pedidosResp, contasReceber] = await Promise.all([
-    chamarApiBling<{ data: Array<{ id: number; numero: number; data: string; total: number }> }>(
-      token,
-      `/pedidos/vendas?idContato=${idContato}&limite=100`,
-    ),
-    buscarContasReceberBling(token, idContato),
-  ]);
+  // Pedidos primeiro: a data do mais antigo define as janelas das contas a receber.
+  const pedidosResp = await chamarApiBling<{ data: Array<{ id: number; numero: number; data: string; total: number }> }>(
+    token,
+    `/pedidos/vendas?idContato=${idContato}&limite=100`,
+  );
+  const contasReceber = await buscarContasReceberBling(token, idContato, dataPrimeiroPedido(pedidosResp.data ?? []));
 
   const parcelasPorNumeroPedido = new Map<string, ParcelaBling[]>();
   for (const conta of contasReceber) {

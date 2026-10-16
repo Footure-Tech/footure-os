@@ -18,7 +18,7 @@ import { CamposEndereco } from "@/components/clientes/campos-endereco";
 import { salvarPedido, type SalvarPedidoState } from "@/lib/pedidos/serverActions";
 import { gerarAlertas, FORO_DEFAULT } from "@/lib/validacoes/pedido";
 import { normalizePlan, listarPlanosCanonicos } from "@/lib/plans/normalize";
-import { ROTULO_MULTA, textoMultaDefault } from "@/lib/contratos/multa";
+import { textoMultaDefault } from "@/lib/contratos/multa";
 import { ROTULO_MEIO_PAGAMENTO } from "@/lib/contratos/meioPagamento";
 import type { MultaTipo, MeioPagamento, Divulgacao, ApiModelo } from "@/lib/supabase/database.types";
 
@@ -197,7 +197,10 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
   const [convencaoParcelas, setConvencaoParcelas] = useState<"calendario" | "ciclo">(d?.convencaoParcelas ?? "calendario");
   const [vigenciaInicio, setVigenciaInicio] = useState(d?.vigenciaInicio ?? "");
   const [vigenciaFim, setVigenciaFim] = useState(d?.vigenciaFim ?? "");
-  const [robusta, setRobusta] = useState(d?.robusta ?? false);
+  // Multa, linhagem (enxuta/robusta) e foro não são decisão do vendedor: seguem o
+  // padrão do contrato (pedido novo) ou o que já estava salvo (edição) — ajustes
+  // ficam com o jurídico, numa nova versão do contrato.
+  const robusta = d?.robusta ?? false;
   // Padrão "simples" (revisão jurídica, set/2026): a cláusula de autorização de
   // divulgação deve constar por padrão, retirada só a pedido do cliente — "nenhuma"
   // vira uma escolha explícita do vendedor, não o caminho de menor esforço.
@@ -205,9 +208,9 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
   const [percentualDescontoDivulgacao, setPercentualDescontoDivulgacao] = useState(d?.percentualDescontoDivulgacao ?? 0);
   const [postDivulgacao, setPostDivulgacao] = useState(d?.postDivulgacao ?? "");
   const [apiModelo, setApiModelo] = useState<ApiModelo>(d?.apiModelo ?? "distintos");
-  const [multaTipo, setMultaTipo] = useState<MultaTipo>(d?.multaTipo ?? "tres_mensalidades");
-  const [multaTexto, setMultaTexto] = useState(d?.multaTexto ?? textoMultaDefault("tres_mensalidades"));
-  const [foro, setForo] = useState(d?.foro ?? FORO_DEFAULT);
+  const multaTipo: MultaTipo = d?.multaTipo ?? "tres_mensalidades";
+  const multaTexto = d?.multaTexto ?? textoMultaDefault("tres_mensalidades");
+  const foro = d?.foro ?? FORO_DEFAULT;
   const [condicaoEspecial, setCondicaoEspecial] = useState(d?.condicaoEspecial ?? "");
 
   const [representantesLegais, setRepresentantesLegais] = useState<SignatarioForm[]>(d?.representantesLegais ?? []);
@@ -676,43 +679,10 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           </div>
         </BlocoFormulario>
 
-        <BlocoFormulario titulo="Cláusulas negociáveis" descricao="Multa, divulgação, foro e condições especiais.">
-          <div className="flex flex-col gap-2">
-            <Label variante="campo">Multa de rescisão</Label>
-            <Select
-              items={ROTULO_MULTA}
-              value={multaTipo}
-              onValueChange={(v) => {
-                const tipo = v as MultaTipo;
-                setMultaTipo(tipo);
-                setMultaTexto(textoMultaDefault(tipo));
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(ROTULO_MULTA).map(([valor, rotulo]) => (
-                  <SelectItem key={valor} value={valor}>
-                    {rotulo}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Textarea value={multaTexto} onChange={(e) => setMultaTexto(e.target.value)} rows={3} />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <Checkbox checked={robusta} onCheckedChange={(v) => setRobusta(!!v)} />
-              <Label>Linhagem robusta</Label>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Só marque se o cliente exigir: SLA de 98%, LGPD reforçada e garantia de features. O padrão (desmarcado)
-              já é o que a maioria dos contratos usa.
-            </p>
-          </div>
-
+        <BlocoFormulario
+          titulo="Cláusulas negociáveis"
+          descricao="Divulgação da parceria e condições especiais. Multa, foro e as demais cláusulas seguem o padrão do contrato."
+        >
           <div className="flex flex-col gap-2">
             <Label variante="campo">Divulgação da parceria</Label>
             <Select items={ROTULOS_DIVULGACAO} value={divulgacao} onValueChange={(v) => v && setDivulgacao(v as Divulgacao)}>
@@ -752,11 +722,6 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                 </div>
               </div>
             )}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label variante="campo">Foro</Label>
-            <Input value={foro} onChange={(e) => setForo(e.target.value)} />
           </div>
 
           <div className="flex flex-col gap-2">

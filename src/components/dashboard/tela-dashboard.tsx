@@ -75,6 +75,24 @@ function ReceitaPorLinha({ valor }: { valor: number }) {
   );
 }
 
+/** Rodapé dos KPIs: valor de clubes e de agentes (perfil do cadastro do cliente); contato sem cadastro só aparece se houver. */
+function DivisaoPerfil({ valores }: { valores: { clube: number; agente: number; semPerfil: number } }) {
+  const partes = [
+    { rotulo: "Clubes", valor: valores.clube },
+    { rotulo: "Agentes", valor: valores.agente },
+    ...(valores.semPerfil > 0 ? [{ rotulo: "Sem cadastro", valor: valores.semPerfil }] : []),
+  ];
+  return (
+    <span className="flex flex-col gap-0.5">
+      {partes.map((p) => (
+        <span key={p.rotulo} className="flex items-baseline justify-between gap-3">
+          {p.rotulo} <strong className="font-bold text-darkPurple1">{formatarMoedaCompacta(p.valor)}</strong>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 // Tela "Gestão · Indicadores do negócio" do handoff — só apresentação.
 export function TelaDashboard({
   dados,
@@ -121,30 +139,48 @@ export function TelaDashboard({
 
       <GradeKpis>
         <KpiCard
-          rotulo={`Receita contratada · ${periodo === "mes" ? "mês" : periodo === "tri" ? "trimestre" : "12m"}`}
-          valor={formatarMoedaCompacta(kpis.receitaContratada)}
-          destaque={variacao === null ? `${kpis.contratosAssinados} contratos` : `${variacao >= 0 ? "+" : ""}${(variacao * 100).toFixed(0)}%`}
+          rotulo={`Receita prevista · ${periodo === "mes" ? "mês" : periodo === "tri" ? "trimestre" : "12m"}`}
+          valor={formatarMoedaCompacta(kpis.receitaPrevista)}
+          destaque={variacao === null ? undefined : `${variacao >= 0 ? "+" : ""}${(variacao * 100).toFixed(0)}%`}
           tomDestaque={variacao === null ? "marca" : variacao >= 0 ? "positivo" : "negativo"}
-          apoio={variacao === null ? `assinados ${rotuloPeriodo.curto}` : rotuloPeriodo.anterior}
+          apoio={variacao === null ? `parcelas que vencem ${rotuloPeriodo.curto}` : rotuloPeriodo.anterior}
+          rodape={
+            <>
+              Realizado <strong className="font-bold text-green1">{formatarMoedaCompacta(kpis.receitaRealizada)}</strong>
+              {kpis.receitaPrevista > 0 && <span className="text-gray3"> · {Math.round((kpis.receitaRealizada / kpis.receitaPrevista) * 100)}% do previsto</span>}
+            </>
+          }
         />
         <KpiCard
           rotulo="MRR Footlink"
           valor={formatarMoedaCompacta(kpis.mrr)}
           destaque={`${kpis.contratosVigentes} contratos`}
-          apoio="vigentes no sistema"
+          apoio="ativos hoje (Bling)"
+          rodape={<DivisaoPerfil valores={kpis.mrrPorPerfil} />}
         />
         <KpiCard
-          rotulo="Pipeline aberto"
-          valor={formatarMoedaCompacta(kpis.pipeline)}
-          destaque={`${kpis.pedidosEmAndamento} pedidos`}
-          apoio="em andamento"
+          rotulo={`Vendas · ${periodo === "mes" ? "mês" : periodo === "tri" ? "trimestre" : "12m"}`}
+          valor={formatarMoedaCompacta(kpis.vendas)}
+          destaque={
+            kpis.variacaoVendas === null
+              ? `${kpis.contratosVendidos} ${kpis.contratosVendidos === 1 ? "contrato" : "contratos"}`
+              : `${kpis.variacaoVendas >= 0 ? "+" : ""}${(kpis.variacaoVendas * 100).toFixed(0)}%`
+          }
+          tomDestaque={kpis.variacaoVendas === null ? "marca" : kpis.variacaoVendas >= 0 ? "positivo" : "negativo"}
+          apoio={
+            kpis.variacaoVendas === null
+              ? `vendidos ${rotuloPeriodo.curto}`
+              : `${kpis.contratosVendidos} ${kpis.contratosVendidos === 1 ? "contrato" : "contratos"} · ${rotuloPeriodo.anterior}`
+          }
+          rodape={<DivisaoPerfil valores={kpis.vendasPorPerfil} />}
         />
         <KpiCard
           rotulo="Inadimplência"
           valor={dados.temCacheBling ? `${(kpis.taxaInadimplencia * 100).toFixed(1).replace(".", ",")}%` : "—"}
           destaque={dados.temCacheBling ? formatarMoedaCompacta(kpis.vencido) : undefined}
           tomDestaque="negativo"
-          apoio={dados.temCacheBling ? "vencido em carteira" : "sincronize o Bling"}
+          apoio={dados.temCacheBling ? "vencido em contratos ativos" : "sincronize o Bling"}
+          rodape={dados.temCacheBling ? <DivisaoPerfil valores={kpis.vencidoPorPerfil} /> : undefined}
         />
       </GradeKpis>
 
@@ -184,7 +220,7 @@ function VisaoGeral({ dados, urlLogo, rotuloPeriodo }: { dados: Dados; urlLogo: 
           )}
         </Card>
         <Card titulo="Receita por linha">
-          <ReceitaPorLinha valor={dados.kpis.receitaContratada} />
+          <ReceitaPorLinha valor={dados.kpis.receitaPrevista} />
         </Card>
       </div>
 
@@ -290,7 +326,9 @@ function Fluxo({ dados, rotuloPeriodo }: { dados: Dados; rotuloPeriodo: string }
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,420px),1fr))] items-start gap-5">
         <Card titulo={`Realizado por vendedor · ${rotuloPeriodo}`}>
-          <p className="-mt-2 text-xs text-gray3">Contratos assinados. Metas por vendedor ainda não são cadastradas no sistema.</p>
+          <p className="-mt-2 text-xs text-gray3">
+            Contratos assinados pela plataforma — o Bling não informa o vendedor do pedido de venda. Metas por vendedor ainda não são cadastradas.
+          </p>
           {dados.vendedores.length === 0 ? (
             <EstadoVazio compacto titulo="Nenhum contrato assinado no período" />
           ) : (
@@ -319,7 +357,7 @@ function Fluxo({ dados, rotuloPeriodo }: { dados: Dados; rotuloPeriodo: string }
               <span className="size-2.5 rounded-sm bg-chart-1" />
               Footlink
             </span>
-            <span className="font-bold text-darkPurple1">{formatarMoedaCompacta(dados.kpis.receitaContratada)}</span>
+            <span className="font-bold text-darkPurple1">{formatarMoedaCompacta(dados.vendedores.reduce((s, v) => s + v.valor, 0))}</span>
           </div>
         </Card>
 

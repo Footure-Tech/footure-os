@@ -21,15 +21,11 @@ const ABAS: { valor: FiltroContratos; rotulo: string }[] = [
 ];
 
 const DESCRICAO_VAZIO: Record<FiltroContratos, string> = {
-  ativos: "Nenhum contrato com parcelas a receber.",
+  ativos: "Nenhum contrato com vigência em curso.",
   vencem_3_meses: "Nenhum contrato ativo termina nos próximos 3 meses.",
-  inativos: "Nenhum contrato concluído (todas as parcelas recebidas).",
+  inativos: "Nenhum contrato com vigência encerrada.",
   cancelados: "Nenhum pedido de venda cancelado no Bling.",
 };
-
-function hrefCliente(clienteId: string | null, contatoId: number) {
-  return clienteId ? `/clientes/${clienteId}` : `/clientes/bling/${contatoId}`;
-}
 
 export function IndicadorBling({ sincronizadoEm }: { sincronizadoEm: string | null }) {
   return (
@@ -136,7 +132,7 @@ export function TelaContratos({
                 {visiveis.map((c) => {
                   const situacao = STATUS_CONTRATO_VISUAL[c.situacao];
                   return (
-                    <LinhaClicavel key={c.pedidoId} href={hrefCliente(c.clienteId, c.contatoId)}>
+                    <LinhaClicavel key={c.pedidoId} href={`/financeiro/contratos/${c.pedidoId}`}>
                       <TableCell className="max-w-[320px] whitespace-normal">
                         <div className="flex items-center gap-3">
                           <LogoCliente url={urlLogo(c.logoPath)} nome={c.cliente} />
@@ -148,6 +144,11 @@ export function TelaContratos({
                       </TableCell>
                       <TableCell className="text-gray2">
                         {c.inicio ? formatarDataCurta(c.inicio) : "—"} a {c.fim ? formatarDataCurta(c.fim) : "—"}
+                        {!c.vigenciaDefinida && (
+                          <span className="block text-xs text-gray3" title="Vigência ainda não definida na plataforma — data da venda até o último vencimento">
+                            estimada
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="font-bold text-darkPurple1">{formatarMoeda(c.valorTotal)}</TableCell>
                       <TableCell>{c.totalParcelas > 0 ? <BarraProgresso feito={c.pagas} total={c.totalParcelas} /> : <span className="text-gray3">—</span>}</TableCell>
@@ -165,7 +166,8 @@ export function TelaContratos({
             </Table>
           )}
           <p className="text-xs text-gray3">
-            Vigência = data do pedido até o vencimento da última parcela. A execução do ano considera as parcelas que vencem no ano; parcelas pagas só em
+            Vigência = a definida na tela do contrato; sem ela, é estimada (data da venda até o vencimento da última parcela). Ativo = vigência em
+            curso; contrato encerrado com parcela em atraso fica em Inativos, como “Atrasado”. A execução do ano considera as parcelas que vencem no ano; parcelas pagas só em
             parte contam como “a executar”.
           </p>
         </>

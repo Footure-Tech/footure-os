@@ -23,7 +23,7 @@ export function LogoCliente({
       <div
         className={cn(
           DIMENSAO[tamanho],
-          "flex shrink-0 items-center justify-center rounded-lg border border-dashed border-gray5 bg-light text-gray3",
+          "flex shrink-0 items-center justify-center rounded-lg border border-dashed border-gray5 bg-page text-gray3",
           className,
         )}
       >

@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
-import { ImagePlus } from "lucide-react";
+import { MdImage } from "react-icons/md";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,11 +20,13 @@ import {
   ComboboxItem,
 } from "@/components/ui/combobox";
 import { BlocoFormulario } from "@/components/pedido/bloco-formulario";
+import { LogoCliente } from "@/components/clientes/logo-cliente";
 import { formatarCnpj } from "@/lib/clientes/formatacao";
 import { salvarClienteAction, type SalvarClienteState } from "@/lib/clientes/serverActions";
 import type { TipoCliente } from "@/lib/supabase/database.types";
 
 const ESTADO_INICIAL: SalvarClienteState = {};
+const ROTULOS_PERFIL: Record<TipoCliente, string> = { clube: "Clube", agente: "Agente" };
 
 export interface ClienteFormValores {
   id: string;
@@ -96,6 +98,8 @@ export function ClienteForm({
   });
   const [foroPreferencial, setForoPreferencial] = useState(cliente?.foroPreferencial ?? "Porto Alegre/RS");
   const [previewImagem, setPreviewImagem] = useState<string | null>(cliente?.logoUrl ?? null);
+  const [nomeImagem, setNomeImagem] = useState<string | null>(null);
+  const entradaImagem = useRef<HTMLInputElement>(null);
 
   const contatoInicial = contatosBling.find((c) => c.id === (cliente?.blingContatoId ?? blingContatoIdInicial)) ?? null;
   const [contatoSelecionado, setContatoSelecionado] = useState<ContatoBlingOpcao | null>(contatoInicial);
@@ -113,19 +117,32 @@ export function ClienteForm({
 
   const payload = { clienteId: cliente?.id, blingContatoId, tipo, nomeFantasia, apelido, ...endereco, foroPreferencial };
 
+  const nomeExibido = nomeFantasia || razaoSocial;
+
   return (
-    <form action={formAction} className="flex max-w-2xl flex-col gap-6">
+    <form action={formAction} className="grid grid-cols-1 items-start gap-5 pb-16 lg:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
       <input type="hidden" name="payload" value={JSON.stringify(payload)} />
 
-      <BlocoFormulario titulo="Dados do cliente">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <Label>Contato no Bling</Label>
-            {contatoBloqueado ? (
-              <p className="text-sm">
-                {razaoSocial} — {formatarCnpj(cnpj)}
-              </p>
-            ) : (
+      <div className="flex flex-col gap-5">
+        {estado.erro && (
+          <p className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">{estado.erro}</p>
+        )}
+
+        <BlocoFormulario titulo="Contato no Bling" descricao="Razão social e CNPJ vêm do Bling — a base oficial da identidade do cliente.">
+          {contatoBloqueado ? (
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 rounded-lg bg-page px-4 py-3">
+              <div className="flex flex-col gap-1">
+                <Label variante="campo">Razão social</Label>
+                <span className="text-sm font-semibold text-darkPurple1">{razaoSocial}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label variante="campo">CNPJ</Label>
+                <span className="text-sm font-semibold text-darkPurple1">{formatarCnpj(cnpj)}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Label variante="campo">Contato</Label>
               <Combobox
                 items={itensBusca}
                 value={buscaValue as ItemBusca | null}
@@ -140,7 +157,7 @@ export function ClienteForm({
                   <ComboboxIcon />
                 </ComboboxInputGroup>
                 <ComboboxPopup>
-                  <ComboboxEmpty>Nenhum contato encontrado — sincronize com o Bling em /clientes.</ComboboxEmpty>
+                  <ComboboxEmpty>Nenhum contato encontrado — use “Sincronizar Bling” na barra lateral.</ComboboxEmpty>
                   <ComboboxList>
                     {(item: ItemBusca) => (
                       <ComboboxItem key={item.value} value={item}>
@@ -150,21 +167,16 @@ export function ClienteForm({
                   </ComboboxList>
                 </ComboboxPopup>
               </Combobox>
-            )}
-            {!contatoBloqueado && (
-              <p className="text-xs text-muted-foreground">
-                Razão social e CNPJ vêm do Bling e não são digitados aqui. Não achou o contato? Sincronize em{" "}
-                <Link href="/clientes" className="underline underline-offset-2">
-                  /clientes
-                </Link>{" "}
-                e volte.
-              </p>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+              <p className="text-xs text-gray3">Não achou o contato? Use “Sincronizar Bling” no card de Integrações da barra lateral e volte.</p>
+            </div>
+          )}
+        </BlocoFormulario>
+
+        <BlocoFormulario titulo="Perfil e contrato" descricao="Como o cliente aparece no sistema e nos contratos.">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
             <div className="flex flex-col gap-2">
-              <Label>Perfil</Label>
-              <Select value={tipo} onValueChange={(v) => setTipo((v as TipoCliente) ?? "clube")}>
+              <Label variante="campo">Perfil</Label>
+              <Select items={ROTULOS_PERFIL} value={tipo} onValueChange={(v) => setTipo((v as TipoCliente) ?? "clube")}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -175,64 +187,72 @@ export function ClienteForm({
               </Select>
             </div>
             <div className="flex flex-col gap-2">
-              <Label>Nome fantasia</Label>
+              <Label variante="campo">Nome fantasia</Label>
               <Input value={nomeFantasia} onChange={(e) => setNomeFantasia(e.target.value)} />
             </div>
-          </div>
-          {tipo === "clube" && (
-            <div className="grid grid-cols-2 gap-4">
+            {tipo === "clube" && (
               <div className="flex flex-col gap-2">
-                <Label>Apelido</Label>
+                <Label variante="campo">Apelido</Label>
                 <Input value={apelido} onChange={(e) => setApelido(e.target.value)} placeholder="ex.: Timão" />
               </div>
+            )}
+            <div className="flex flex-col gap-2">
+              <Label variante="campo">Foro preferencial</Label>
+              <Input value={foroPreferencial} onChange={(e) => setForoPreferencial(e.target.value)} required />
             </div>
-          )}
+          </div>
+        </BlocoFormulario>
+
+        <BlocoFormulario titulo="Endereço" descricao="Usado na qualificação do cliente no contrato.">
           <CamposEndereco
             valores={endereco}
             aoAlterar={(campo, valor) => setEndereco((atual) => ({ ...atual, [campo]: valor }))}
             enderecoLegado={cliente?.enderecoLegado}
           />
-          <div className="flex flex-col gap-2">
-            <Label>Foro preferencial</Label>
-            <Input value={foroPreferencial} onChange={(e) => setForoPreferencial(e.target.value)} required />
-          </div>
-        </div>
-      </BlocoFormulario>
-
-      <BlocoFormulario titulo="Logo" descricao="Logo da agência ou escudo do clube.">
-        <div className="flex items-center gap-4">
-          {previewImagem ? (
-            // eslint-disable-next-line @next/next/no-img-element -- prévia local (blob:) ou URL pública do Storage, sem otimização necessária
-            <img src={previewImagem} alt="Prévia do logo" className="size-20 rounded-lg border border-border bg-muted object-contain p-1" />
-          ) : (
-            <div className="flex size-20 items-center justify-center rounded-lg border border-dashed border-border bg-muted text-muted-foreground">
-              <ImagePlus className="size-6" />
-            </div>
-          )}
-          <div className="flex flex-1 flex-col gap-2">
-            <Input
-              type="file"
-              name="imagem"
-              accept="image/*"
-              onChange={(e) => {
-                const arquivo = e.target.files?.[0];
-                if (arquivo) setPreviewImagem(URL.createObjectURL(arquivo));
-              }}
-            />
-          </div>
-        </div>
-      </BlocoFormulario>
-
-      {estado.erro && (
-        <p className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">{estado.erro}</p>
-      )}
-
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" nativeButton={false} render={<Link href="/clientes">Cancelar</Link>} />
-        <Button type="submit" disabled={pendente || !blingContatoId}>
-          {pendente ? "Salvando…" : "Salvar"}
-        </Button>
+        </BlocoFormulario>
       </div>
+
+      <aside className="flex flex-col gap-4 rounded-xl border border-gray5 bg-surface p-6 shadow-card lg:sticky lg:top-[90px]">
+        <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Resumo do cliente</span>
+        <div className="flex items-center gap-3">
+          <LogoCliente url={previewImagem} nome={nomeExibido || "Cliente"} tamanho="md" />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="truncate text-xl font-bold text-darkPurple1">{nomeExibido || "Contato não selecionado"}</span>
+            <span className="text-sm text-gray">{[ROTULOS_PERFIL[tipo], cnpj && formatarCnpj(cnpj)].filter(Boolean).join(" · ")}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 border-y border-gray5 py-4">
+          <Label variante="campo">Logo</Label>
+          <p className="text-xs text-gray3">Logo da agência ou escudo do clube (PNG, JPG ou SVG).</p>
+          <input
+            ref={entradaImagem}
+            type="file"
+            name="imagem"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const arquivo = e.target.files?.[0];
+              if (arquivo) {
+                setPreviewImagem(URL.createObjectURL(arquivo));
+                setNomeImagem(arquivo.name);
+              }
+            }}
+          />
+          <Button type="button" variant="white" className="w-full" onClick={() => entradaImagem.current?.click()}>
+            <MdImage className="size-4" />
+            {previewImagem ? "Trocar logo" : "Escolher logo"}
+          </Button>
+          {nomeImagem && <span className="truncate text-xs text-gray3">{nomeImagem} — salva junto com o cadastro</span>}
+        </div>
+
+        <Button type="submit" disabled={pendente || !blingContatoId} className="w-full">
+          {pendente ? "Salvando…" : cliente ? "Salvar alterações" : "Cadastrar cliente"}
+        </Button>
+        <Button type="button" variant="white" className="w-full" nativeButton={false} render={<Link href={cliente ? `/clientes/${cliente.id}` : "/clientes"} />}>
+          Cancelar
+        </Button>
+      </aside>
     </form>
   );
 }

@@ -5,7 +5,7 @@
 // inventar — ver decisões do redesign.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, StatusPedido } from "@/lib/supabase/database.types";
-import { carregarBaseParcelas, hojeLocal } from "@/lib/financeiro/carteira";
+import { carregarBaseParcelas, hojeLocal, montarContratosDaBase } from "@/lib/financeiro/carteira";
 import { carregarInadimplencia } from "@/lib/inadimplencia/consultas";
 import { mesesEntre } from "@/lib/formatacao";
 
@@ -61,7 +61,8 @@ export async function carregarDashboard(supabase: Supa, periodo: Periodo) {
   ]);
   if (erroPedidos) console.error("[dashboard] pedidos:", erroPedidos.message);
   if (erroTransicoes) console.error("[dashboard] transicoes:", erroTransicoes.message);
-  const inadimplencia = await carregarInadimplencia(supabase, base);
+  // Inadimplência só de contratos ativos (vigência em curso) — mesma visão padrão da tela Inadimplência.
+  const inadimplencia = await carregarInadimplencia(supabase, base, "ativos");
 
   const transicoesPorPedido = new Map<string, { para: StatusPedido; criado_em: string }[]>();
   for (const t of transicoes ?? []) transicoesPorPedido.set(t.pedido_id, [...(transicoesPorPedido.get(t.pedido_id) ?? []), t]);
@@ -84,22 +85,52 @@ export async function carregarDashboard(supabase: Supa, periodo: Periodo) {
     };
   });
 
-  // KPIs
-  const assinadosNaJanela = pedidos.filter((p) => naJanela(p.assinadoEm, janela));
-  const receitaContratada = assinadosNaJanela.reduce((s, p) => s + Number(p.valor_total), 0);
-  const receitaAnterior = pedidos.filter((p) => naJanela(p.assinadoEm, anterior)).reduce((s, p) => s + Number(p.valor_total), 0);
-  const vigentes = pedidos.filter(
-    (p) => (p.status === "assinado" || p.status === "concluido") && p.vigencia_inicio <= hoje && p.vigencia_fim >= hoje,
+  // Receita do período = parcelas do Bling por VENCIMENTO (mesma regra do
+  // gráfico Receita mensal, fora as de pedido cancelado): prevista = tudo que
+  // vence no período; realizada = o que disso já foi pago. A variação compara
+  // a prevista com a do período anterior de mesmo tamanho.
+  const parcelasValidas = base.parcelas.filter((p) => !base.deCancelado(p));
+  const somaVencendo = (j: { inicio: string; fim: string }, pagas = false) =>
+    parcelasValidas.filter((p) => naJanela(p.vencimento, j) && (!pagas || p.situacao === "recebida")).reduce((s, p) => s + p.valor, 0);
+  const receitaPrevista = somaVencendo(janela);
+  const receitaRealizada = somaVencendo(janela, true);
+  const receitaPrevistaAnterior = somaVencendo(anterior);
+  // Contratos = pedidos de venda do Bling (a maioria nunca passou pelo fluxo da plataforma); MRR pelos ativos hoje.
+  const contratosBling = montarContratosDaBase(base, hoje).filter((c) => c.situacao !== "cancelado");
+  // Vendas = valor dos pedidos de venda do Bling pela DATA DA VENDA no período.
+  const somaValorContratos = (lista: typeof contratosBling) => lista.reduce((s, c) => s + c.valorTotal, 0);
+  const vendidosNaJanela = contratosBling.filter((c) => naJanela(c.dataVenda, janela));
+  const vendasAnterior = somaValorContratos(contratosBling.filter((c) => naJanela(c.dataVenda, anterior)));
+  // Divisão por perfil do cliente cadastrado (clientes.tipo); contato sem cadastro fica à parte.
+  const perfilDo = (contatoId: number) => base.clientePorContato.get(contatoId)?.tipo ?? null;
+  const porPerfil = <T,>(itens: T[], contatoId: (x: T) => number, valor: (x: T) => number) => {
+    const r = { clube: 0, agente: 0, semPerfil: 0 };
+    for (const x of itens) {
+      const perfil = perfilDo(contatoId(x));
+      r[perfil === "clube" ? "clube" : perfil === "agente" ? "agente" : "semPerfil"] += valor(x);
+    }
+    return r;
+  };
+  // Vigente = ativo e com o período (vigência ou estimativa pelas parcelas) cobrindo hoje — contrato já
+  // encerrado que só ficou com parcela atrasada é inadimplência, não receita recorrente.
+  const vigentes = contratosBling.filter((c) => c.ativo && !!c.inicio && c.inicio <= hoje && !!c.fim && c.fim >= hoje);
+  // MRR: com vigência definida na plataforma, valor ÷ meses de vigência (cobre
+  // à vista); sem ela, valor ÷ nº de parcelas (≈ a mensalidade do parcelado).
+  const mrr = vigentes.reduce((s, c) => {
+    const meses = c.vigenciaDefinida && c.inicio && c.fim ? (mesesEntre(c.inicio, c.fim) ?? 12) : Math.max(1, c.totalParcelas);
+    return s + c.valorTotal / meses;
+  }, 0);
+  const mrrPorPerfil = porPerfil(
+    vigentes,
+    (c) => c.contatoId,
+    (c) => c.valorTotal / (c.vigenciaDefinida && c.inicio && c.fim ? (mesesEntre(c.inicio, c.fim) ?? 12) : Math.max(1, c.totalParcelas)),
   );
-  // MRR = valor do contrato ÷ meses de vigência (valor_mensal não serve para à vista).
-  const mrr = vigentes.reduce((s, p) => s + Number(p.valor_total) / (mesesEntre(p.vigencia_inicio, p.vigencia_fim) ?? 12), 0);
-  const emAndamento = pedidos.filter((p) => ETAPA_DO_STATUS[p.status] >= 0 && ETAPA_DO_STATUS[p.status] < 4);
 
   // Receita mensal (cache do Bling, por VENCIMENTO): 9 meses atrás até 2 à frente.
   const receitaMensal = Array.from({ length: 12 }, (_, i) => {
     const inicio = inicioDoMes(agora, i - 9);
     const chave = inicio.slice(0, 7);
-    const doMes = base.parcelas.filter((p) => p.vencimento.startsWith(chave));
+    const doMes = parcelasValidas.filter((p) => p.vencimento.startsWith(chave));
     const [ano, mes] = chave.split("-").map(Number);
     return {
       chave,
@@ -139,7 +170,9 @@ export async function carregarDashboard(supabase: Supa, periodo: Periodo) {
     href: "/financeiro/pagamentos",
   });
 
-  // Realizado por vendedor (não há metas cadastradas).
+  // Realizado por vendedor (não há metas cadastradas): só pedidos fechados na
+  // plataforma — o Bling não informa o vendedor do pedido de venda.
+  const assinadosNaJanela = pedidos.filter((p) => naJanela(p.assinadoEm, janela));
   const porVendedor = new Map<string, { nome: string; valor: number; contratos: number }>();
   for (const p of assinadosNaJanela) {
     const atual = porVendedor.get(p.vendedor) ?? { nome: p.vendedor, valor: 0, contratos: 0 };
@@ -202,13 +235,17 @@ export async function carregarDashboard(supabase: Supa, periodo: Periodo) {
   return {
     temCacheBling: base.temCache,
     kpis: {
-      receitaContratada,
-      variacaoReceita: receitaAnterior > 0 ? (receitaContratada - receitaAnterior) / receitaAnterior : null,
-      contratosAssinados: assinadosNaJanela.length,
+      receitaPrevista,
+      receitaRealizada,
+      variacaoReceita: receitaPrevistaAnterior > 0 ? (receitaPrevista - receitaPrevistaAnterior) / receitaPrevistaAnterior : null,
       mrr,
       contratosVigentes: vigentes.length,
-      pipeline: somaValor(emAndamento),
-      pedidosEmAndamento: emAndamento.length,
+      vendas: somaValorContratos(vendidosNaJanela),
+      contratosVendidos: vendidosNaJanela.length,
+      variacaoVendas: vendasAnterior > 0 ? (somaValorContratos(vendidosNaJanela) - vendasAnterior) / vendasAnterior : null,
+      mrrPorPerfil,
+      vendasPorPerfil: porPerfil(vendidosNaJanela, (c) => c.contatoId, (c) => c.valorTotal),
+      vencidoPorPerfil: porPerfil(inadimplencia.clientes, (c) => c.contatoId, (c) => c.totalAtrasado),
       taxaInadimplencia: inadimplencia.resumo.taxa,
       vencido: inadimplencia.resumo.totalVencido,
     },

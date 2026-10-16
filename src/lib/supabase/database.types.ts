@@ -411,6 +411,24 @@ export interface Database {
           situacao_detalhada: number | null;
         }>
       >;
+      // supabase/migrations/0035_contrato_equipe_bling.sql
+      contrato_equipe_bling: TableDef<
+        { bling_pedido_id: number; sdr_id: string | null; closer_id: string | null; atualizado_por: string | null; atualizado_em: string },
+        { bling_pedido_id: number; sdr_id?: string | null; closer_id?: string | null; atualizado_por?: string | null; atualizado_em?: string },
+        Partial<{ sdr_id: string | null; closer_id: string | null; atualizado_por: string | null; atualizado_em: string }>
+      >;
+      // supabase/migrations/0034_contrato_vigencia_bling.sql
+      contrato_vigencia_bling: TableDef<
+        { bling_pedido_id: number; vigencia_inicio: string; vigencia_fim: string; atualizado_por: string | null; atualizado_em: string },
+        { bling_pedido_id: number; vigencia_inicio: string; vigencia_fim: string; atualizado_por?: string | null; atualizado_em?: string },
+        Partial<{ vigencia_inicio: string; vigencia_fim: string; atualizado_por: string | null; atualizado_em: string }>
+      >;
+      // supabase/migrations/0033_contrato_arquivos_bling.sql
+      contrato_arquivos_bling: TableDef<
+        { id: string; bling_pedido_id: number; arquivo_path: string; nome_arquivo: string; tamanho_bytes: number | null; enviado_por: string | null; enviado_em: string },
+        { id?: string; bling_pedido_id: number; arquivo_path: string; nome_arquivo: string; tamanho_bytes?: number | null; enviado_por?: string | null },
+        never
+      >;
       // supabase/migrations/0029_contrato_validacao.sql
       contrato_validacao: TableDef<
         { id: string; contrato_id: string; item: ItemValidacaoContrato; marcado_por: string | null; marcado_em: string },

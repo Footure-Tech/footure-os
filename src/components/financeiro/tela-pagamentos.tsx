@@ -21,8 +21,10 @@ export function deslocarMes(mes: string, delta: number) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function hrefCliente(clienteId: string | null, contatoId: number) {
-  return clienteId ? `/clientes/${clienteId}` : `/clientes/bling/${contatoId}`;
+/** Parcela abre o detalhe do contrato; parcela avulsa (sem pedido de origem) cai no cliente. */
+function hrefParcela(p: { contratoId: number | null; clienteId: string | null; contatoId: number }) {
+  if (p.contratoId) return `/financeiro/contratos/${p.contratoId}`;
+  return p.clienteId ? `/clientes/${p.clienteId}` : `/clientes/bling/${p.contatoId}`;
 }
 
 // Navegação por mês (‹ Outubro de 2026 ›); o mês corrente é o padrão.
@@ -138,7 +140,7 @@ export function TelaPagamentos({
                 {visiveis.map((p) => {
                   const s = STATUS_PARCELA_VISUAL[p.situacao];
                   return (
-                    <LinhaClicavel key={p.id} href={hrefCliente(p.clienteId, p.contatoId)}>
+                    <LinhaClicavel key={p.id} href={hrefParcela(p)}>
                       <TableCell className="max-w-[280px] font-bold whitespace-normal text-purple-text">{p.cliente}</TableCell>
                       <TableCell className="text-gray2">
                         {p.numero}/{p.totalDoPedido}

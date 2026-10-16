@@ -1,9 +1,14 @@
+import { formatarDataCurta } from "@/lib/formatacao";
+
 export interface EventoTimeline {
   id: string;
   data: string;
-  nome: string;
+  /** Autor do evento; sem nome (ex.: eventos vindos do Bling) a linha mostra só a data. */
+  nome?: string | null;
   titulo: string;
   comentario?: string | null;
+  /** Data sem hora (aaaa-mm-dd, como as do Bling) — exibe só o dia. */
+  soData?: boolean;
 }
 
 function formatarDataHora(iso: string) {
@@ -30,7 +35,8 @@ export function TimelineTransicoes({ eventos }: { eventos: EventoTimeline[] }) {
           <div className="flex flex-1 flex-col gap-0.5">
             <p className="text-sm font-semibold text-foreground">{e.titulo}</p>
             <p className="text-xs text-muted-foreground">
-              {formatarDataHora(e.data)} · por {e.nome}
+              {e.soData ? formatarDataCurta(e.data) : formatarDataHora(e.data)}
+              {e.nome ? ` · por ${e.nome}` : ""}
             </p>
             {e.comentario && <p className="mt-1 text-sm text-foreground">{e.comentario}</p>}
           </div>

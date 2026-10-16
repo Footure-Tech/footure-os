@@ -19,6 +19,7 @@ export function KpiCard({
   tomDestaque = "marca",
   apoio,
   corValor,
+  rodape,
   className,
 }: {
   rotulo: string;
@@ -28,6 +29,8 @@ export function KpiCard({
   apoio?: ReactNode;
   /** Ex.: "text-red" para "Vencido", "text-green1" para "Recebido". */
   corValor?: string;
+  /** Linha secundária abaixo, separada por um divisor (ex.: o realizado sob o previsto). */
+  rodape?: ReactNode;
   className?: string;
 }) {
   return (
@@ -45,6 +48,7 @@ export function KpiCard({
           {apoio && <span className="text-gray3">{apoio}</span>}
         </div>
       )}
+      {rodape && <div className="mt-1 border-t border-gray5 pt-2 text-[13px] text-gray2">{rodape}</div>}
     </div>
   );
 }

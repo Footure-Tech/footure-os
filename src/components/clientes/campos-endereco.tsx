@@ -27,41 +27,41 @@ export function CamposEndereco({
   return (
     <div className="flex flex-col gap-3">
       {enderecoLegado && !valores.endereco && (
-        <p className="text-xs text-muted-foreground">
+        <p className="rounded-lg bg-orange3 px-3 py-2 text-xs font-semibold text-[#ce9232]">
           Endereço cadastrado antes da integração estruturada (referência): {enderecoLegado}
         </p>
       )}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 flex flex-col gap-2">
-          <Label>Logradouro</Label>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="flex flex-col gap-2 sm:col-span-2">
+          <Label variante="campo">Logradouro</Label>
           <Input value={valores.endereco} onChange={(e) => aoAlterar("endereco", e.target.value)} required />
         </div>
         <div className="flex flex-col gap-2">
-          <Label>Número</Label>
+          <Label variante="campo">Número</Label>
           <Input value={valores.numero} onChange={(e) => aoAlterar("numero", e.target.value)} required />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <Label>Complemento</Label>
+          <Label variante="campo">Complemento</Label>
           <Input value={valores.complemento} onChange={(e) => aoAlterar("complemento", e.target.value)} placeholder="Opcional" />
         </div>
         <div className="flex flex-col gap-2">
-          <Label>Bairro</Label>
+          <Label variante="campo">Bairro</Label>
           <Input value={valores.bairro} onChange={(e) => aoAlterar("bairro", e.target.value)} required />
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="flex flex-col gap-2">
-          <Label>CEP</Label>
+          <Label variante="campo">CEP</Label>
           <Input value={valores.cep} onChange={(e) => aoAlterar("cep", e.target.value)} required />
         </div>
         <div className="flex flex-col gap-2">
-          <Label>Município</Label>
+          <Label variante="campo">Município</Label>
           <Input value={valores.municipio} onChange={(e) => aoAlterar("municipio", e.target.value)} required />
         </div>
         <div className="flex flex-col gap-2">
-          <Label>UF</Label>
+          <Label variante="campo">UF</Label>
           <Input value={valores.uf} onChange={(e) => aoAlterar("uf", e.target.value.toUpperCase())} maxLength={2} required />
         </div>
       </div>

@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, TipoCliente } from "@/lib/supabase/database.types";
 import { calcularSituacaoCliente, type SituacaoCliente } from "@/lib/clientes/situacao";
+import { pedidoBlingCancelado } from "@/lib/integracoes/bling";
+import { hojeLocal } from "@/lib/financeiro/carteira";
 
 type Supa = SupabaseClient<Database>;
 
@@ -38,6 +40,20 @@ export interface ClienteListado {
  * clientes reais, checar cada um na hora de abrir a lista estouraria o
  * limite de 3 req/s do Bling e deixaria a tela muito lenta.
  */
+/** Contatos do Bling com algum contrato (pedido de venda não cancelado) cuja
+ * vigência informada na plataforma (0034) ainda não terminou. */
+async function contatosComVigenciaBlingEmCurso(supabase: Supa): Promise<Set<number>> {
+  const hoje = hojeLocal();
+  const { data: vigentes, error } = await supabase.from("contrato_vigencia_bling").select("bling_pedido_id").gte("vigencia_fim", hoje);
+  logSeErro("contatosComVigenciaBlingEmCurso", error);
+  if (!vigentes?.length) return new Set();
+  const { data: pedidos } = await supabase
+    .from("bling_pedidos")
+    .select("contato_id, situacao_id, situacao_valor")
+    .in("id", vigentes.map((v) => v.bling_pedido_id));
+  return new Set((pedidos ?? []).filter((p) => !pedidoBlingCancelado(p.situacao_id, p.situacao_valor)).map((p) => p.contato_id));
+}
+
 export async function listarClientesComContagemPedidos(supabase: Supa): Promise<ClienteListado[]> {
   const [{ data: contatosBling, error: erroContatos }, { data: clientesLocais, error: erroClientes }, { data: pedidos, error: erroPedidos }] =
     await Promise.all([
@@ -49,6 +65,7 @@ export async function listarClientesComContagemPedidos(supabase: Supa): Promise<
   logSeErro("listarClientesComContagemPedidos:clientes", erroClientes);
   logSeErro("listarClientesComContagemPedidos:pedidos", erroPedidos);
 
+  const contatosComContratoVigente = await contatosComVigenciaBlingEmCurso(supabase);
   const clientesPorBlingId = new Map((clientesLocais ?? []).filter((c) => c.bling_contato_id != null).map((c) => [c.bling_contato_id!, c]));
 
   const pedidosPorCliente = new Map<string, NonNullable<typeof pedidos>>();
@@ -66,6 +83,7 @@ export async function listarClientesComContagemPedidos(supabase: Supa): Promise<
       contato.tem_parcela_atrasada,
       contato.tem_parcela_a_vencer,
       contato.total_pedidos_venda,
+      contatosComContratoVigente.has(contato.id),
     );
     return {
       blingContatoId: contato.id,

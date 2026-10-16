@@ -29,12 +29,17 @@ export interface ResultadoSituacaoCliente {
  * pro CNPJ dele (totalPedidosBling = 0, ex.: ainda não faturado lá) continua
  * "em dia" pela vigência local — nesse caso não dá pra concluir "inativo" só
  * por falta de dado.
+ *
+ * `temContratoBlingVigente`: algum pedido de venda do Bling (não cancelado)
+ * com vigência informada na plataforma (0034) ainda em curso — conta como
+ * "em dia" mesmo sem parcela a vencer (ex.: pagou à vista).
  */
 export function calcularSituacaoCliente(
   pedidosLocais: PedidoLocal[],
   temParcelaAtrasadaBling = false,
   temParcelaAVencerBling = false,
   totalPedidosBling = 0,
+  temContratoBlingVigente = false,
 ): ResultadoSituacaoCliente {
   const naoCancelados = pedidosLocais.filter((p) => p.status !== "cancelado");
 
@@ -45,13 +50,13 @@ export function calcularSituacaoCliente(
     const hoje = new Date().toISOString().slice(0, 10);
     if (contratoAtual.vigencia_fim < hoje) return { situacao: "inativo", contratoVigente: null };
     if (temParcelaAtrasadaBling) return { situacao: "atrasado", contratoVigente: contratoAtual };
-    if (totalPedidosBling === 0 || temParcelaAVencerBling) return { situacao: "em_dia", contratoVigente: contratoAtual };
+    if (totalPedidosBling === 0 || temParcelaAVencerBling || temContratoBlingVigente) return { situacao: "em_dia", contratoVigente: contratoAtual };
     return { situacao: "inativo", contratoVigente: null };
   }
 
   if (totalPedidosBling === 0) return { situacao: "sem_contrato", contratoVigente: null };
   if (temParcelaAtrasadaBling) return { situacao: "atrasado", contratoVigente: null };
-  return { situacao: temParcelaAVencerBling ? "em_dia" : "inativo", contratoVigente: null };
+  return { situacao: temParcelaAVencerBling || temContratoBlingVigente ? "em_dia" : "inativo", contratoVigente: null };
 }
 
 export const ROTULO_SITUACAO_CLIENTE: Record<SituacaoCliente, string> = {

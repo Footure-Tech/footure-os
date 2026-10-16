@@ -43,17 +43,27 @@ async function lerTudo<T>(consulta: (de: number, ate: number) => PromiseLike<{ d
   return linhas;
 }
 
-/** Base comum (Financeiro e Inadimplência): parcelas do cache já classificadas
- * e numeradas n/N, e o nome/logo/cadastro local de cada contato do Bling. */
+/** CNPJs que não são clientes: a própria Footure aparece no Bling ("Footure FC")
+ * com pedidos de TESTE — fica fora de vendas, contratos, receita e inadimplência. */
+const CNPJS_FORA_DA_CARTEIRA = new Set(["32527841000148"]);
+
+/** Base comum (Financeiro, Inadimplência, Dashboard e Vendas): parcelas do cache já
+ * classificadas e numeradas n/N, e o nome/logo/cadastro local de cada contato do Bling. */
 export async function carregarBaseParcelas(supabase: Supa) {
-  const [parcelasBrutas, pedidos, contatos, clientesLocais] = await Promise.all([
+  const [parcelasTodas, pedidosTodos, contatosTodos, clientesLocais, vigencias] = await Promise.all([
     lerTudo((de, ate) => supabase.from("bling_parcelas").select("*").order("vencimento").range(de, ate)),
     lerTudo((de, ate) => supabase.from("bling_pedidos").select("*").range(de, ate)),
-    lerTudo((de, ate) => supabase.from("bling_contatos").select("id, nome, sincronizado_em").range(de, ate)),
+    lerTudo((de, ate) => supabase.from("bling_contatos").select("id, nome, cnpj, sincronizado_em").range(de, ate)),
     lerTudo((de, ate) =>
-      supabase.from("clientes").select("id, razao_social, nome_fantasia, logo_path, bling_contato_id").not("bling_contato_id", "is", null).range(de, ate),
+      supabase.from("clientes").select("id, razao_social, nome_fantasia, logo_path, tipo, bling_contato_id").not("bling_contato_id", "is", null).range(de, ate),
     ),
+    lerTudo((de, ate) => supabase.from("contrato_vigencia_bling").select("bling_pedido_id, vigencia_inicio, vigencia_fim").range(de, ate)),
   ]);
+  const foraDaCarteira = new Set(contatosTodos.filter((c) => CNPJS_FORA_DA_CARTEIRA.has(c.cnpj)).map((c) => c.id));
+  const contatos = contatosTodos.filter((c) => !foraDaCarteira.has(c.id));
+  const pedidos = pedidosTodos.filter((p) => !foraDaCarteira.has(p.contato_id));
+  const parcelasBrutas = parcelasTodas.filter((p) => !foraDaCarteira.has(p.contato_id));
+  const vigenciaPorPedido = new Map<number, VigenciaContrato>(vigencias.map((v) => [v.bling_pedido_id, { inicio: v.vigencia_inicio, fim: v.vigencia_fim }]));
 
   const clientePorContato = new Map(clientesLocais.map((c) => [c.bling_contato_id!, c]));
   const contatoPorId = new Map(contatos.map((c) => [c.id, c]));
@@ -95,7 +105,7 @@ export async function carregarBaseParcelas(supabase: Supa) {
     return !!pedido && pedidoBlingCancelado(pedido.situacao_id, pedido.situacao_valor);
   };
 
-  return { parcelas, pedidos, pedidoPorChave, deCancelado, clientePorContato, nomeDoContato, sincronizadoEm, temCache: parcelasBrutas.length > 0 };
+  return { parcelas, pedidos, pedidoPorChave, deCancelado, clientePorContato, nomeDoContato, vigenciaPorPedido, sincronizadoEm, temCache: parcelasBrutas.length > 0 };
 }
 
 function chavePedido(contatoId: number, numero: string) {
@@ -118,9 +128,13 @@ export interface ContratoFinanceiro {
   clienteId: string | null;
   cliente: string;
   logoPath: string | null;
+  /** Início/fim da vigência informada na plataforma (0034); sem ela, data da venda e vencimento da última parcela. */
   inicio: string | null;
-  /** Fim = vencimento da última parcela (a vigência formal fica no pedido local, ainda sem vínculo). */
   fim: string | null;
+  /** Vigência informada na plataforma — o Bling não tem esse dado. */
+  vigenciaDefinida: boolean;
+  /** Data do pedido de venda no Bling (independe da vigência). */
+  dataVenda: string | null;
   valorTotal: number;
   pagas: number;
   totalParcelas: number;
@@ -137,44 +151,77 @@ function somarMeses(iso: string, meses: number) {
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
 }
 
-export async function carregarContratos(supabase: Supa) {
-  const base = await carregarBaseParcelas(supabase);
-  const hoje = hojeLocal();
-  const em3Meses = somarMeses(hoje, 3);
-  const ano = hoje.slice(0, 4);
+type PedidoBlingCache = Database["public"]["Tables"]["bling_pedidos"]["Row"];
+export interface VigenciaContrato {
+  inicio: string;
+  fim: string;
+}
 
+/**
+ * Situação de um contrato (pedido de venda do Bling) — usado na lista e no
+ * detalhe. Ativo = não cancelado e com a vigência cobrindo hoje: a definida
+ * na plataforma (0034) ou, sem ela, a estimada (data da venda até o último
+ * vencimento). Parcela atrasada não mantém o contrato ativo — ele aparece
+ * como "Atrasado" entre os inativos (é inadimplência, não contrato em vigor).
+ */
+function montarContrato(
+  pedido: PedidoBlingCache,
+  parcelas: ParcelaCarteira[],
+  ctx: { clienteId: string | null; cliente: string; logoPath: string | null; hoje: string; em3Meses: string; vigencia: VigenciaContrato | null },
+): ContratoFinanceiro {
+  const cancelado = pedidoBlingCancelado(pedido.situacao_id, pedido.situacao_valor);
+  const fim = ctx.vigencia?.fim ?? (parcelas.length ? parcelas[parcelas.length - 1].vencimento : pedido.data);
+  const ativo = !cancelado && !!fim && fim >= ctx.hoje;
+  return {
+    pedidoId: pedido.id,
+    numeroPedido: pedido.numero,
+    contatoId: pedido.contato_id,
+    clienteId: ctx.clienteId,
+    cliente: ctx.cliente,
+    logoPath: ctx.logoPath,
+    inicio: ctx.vigencia?.inicio ?? pedido.data,
+    fim,
+    vigenciaDefinida: !!ctx.vigencia,
+    dataVenda: pedido.data,
+    valorTotal: Number(pedido.total) || soma(parcelas),
+    pagas: parcelas.filter((p) => p.situacao === "recebida").length,
+    totalParcelas: parcelas.length,
+    proximoVencimento: parcelas.find((p) => p.situacao === "em_aberto")?.vencimento ?? null,
+    situacao: cancelado ? "cancelado" : parcelas.some((p) => p.situacao === "atrasada") ? "atrasado" : ativo ? "em_dia" : "concluido",
+    ativo,
+    // Termina nos próximos 3 meses (renovação): ativo e fim (vigência ou última parcela) entre hoje e hoje + 3 meses.
+    venceEm3Meses: ativo && !!fim && fim >= ctx.hoje && fim <= ctx.em3Meses,
+  };
+}
+
+/** Todos os contratos (pedidos de venda do Bling) da base já carregada — Financeiro · Contratos e Dashboard. */
+export function montarContratosDaBase(base: Awaited<ReturnType<typeof carregarBaseParcelas>>, hoje = hojeLocal()): ContratoFinanceiro[] {
+  const em3Meses = somarMeses(hoje, 3);
   const parcelasPorPedido = new Map<string, ParcelaCarteira[]>();
   for (const p of base.parcelas) {
     if (!p.numeroPedidoOrigem) continue;
     const k = chavePedido(p.contatoId, p.numeroPedidoOrigem);
     parcelasPorPedido.set(k, [...(parcelasPorPedido.get(k) ?? []), p]);
   }
-
-  const contratos: ContratoFinanceiro[] = base.pedidos.map((pedido) => {
-    const parcelas = parcelasPorPedido.get(chavePedido(pedido.contato_id, pedido.numero)) ?? [];
-    const cancelado = pedidoBlingCancelado(pedido.situacao_id, pedido.situacao_valor);
-    const ativo = !cancelado && parcelas.some(emAberto);
-    const fim = parcelas.length ? parcelas[parcelas.length - 1].vencimento : pedido.data;
+  return base.pedidos.map((pedido) => {
     const local = base.clientePorContato.get(pedido.contato_id);
-    return {
-      pedidoId: pedido.id,
-      numeroPedido: pedido.numero,
-      contatoId: pedido.contato_id,
+    return montarContrato(pedido, parcelasPorPedido.get(chavePedido(pedido.contato_id, pedido.numero)) ?? [], {
       clienteId: local?.id ?? null,
       cliente: base.nomeDoContato(pedido.contato_id),
       logoPath: local?.logo_path ?? null,
-      inicio: pedido.data,
-      fim,
-      valorTotal: Number(pedido.total) || soma(parcelas),
-      pagas: parcelas.filter((p) => p.situacao === "recebida").length,
-      totalParcelas: parcelas.length,
-      proximoVencimento: parcelas.find((p) => p.situacao === "em_aberto")?.vencimento ?? null,
-      situacao: cancelado ? "cancelado" : !ativo ? "concluido" : parcelas.some((p) => p.situacao === "atrasada") ? "atrasado" : "em_dia",
-      ativo,
-      // Termina nos próximos 3 meses (renovação à vista): ativo e última parcela entre hoje e hoje + 3 meses.
-      venceEm3Meses: ativo && !!fim && fim >= hoje && fim <= em3Meses,
-    };
+      hoje,
+      em3Meses,
+      vigencia: base.vigenciaPorPedido.get(pedido.id) ?? null,
+    });
   });
+}
+
+export async function carregarContratos(supabase: Supa) {
+  const base = await carregarBaseParcelas(supabase);
+  const hoje = hojeLocal();
+  const ano = hoje.slice(0, 4);
+
+  const contratos = montarContratosDaBase(base, hoje);
   contratos.sort((a, b) => Number(b.situacao === "atrasado") - Number(a.situacao === "atrasado") || (a.fim ?? "").localeCompare(b.fim ?? ""));
 
   // KPIs do ano corrente — regra de produto: parcelas que VENCEM no ano (pagas ou não), como em Pagamentos.
@@ -191,10 +238,74 @@ export async function carregarContratos(supabase: Supa) {
   return { contratos, resumo, sincronizadoEm: base.sincronizadoEm, temCache: base.temCache };
 }
 
+/**
+ * Um contrato (pedido de venda do Bling, pelo id) para a tela de detalhe: o
+ * pedido do cache, as parcelas numeradas n/N, o cliente (cadastro local, se
+ * houver, ou o contato do cache) e os arquivos anexados (0033). Só lê o que é
+ * desse pedido — não carrega a carteira inteira.
+ */
+export async function carregarContrato(supabase: Supa, blingPedidoId: number) {
+  const { data: pedido } = await supabase.from("bling_pedidos").select("*").eq("id", blingPedidoId).maybeSingle();
+  if (!pedido) return null;
+
+  const [{ data: brutas }, { data: contato }, { data: clienteLocal }, { data: arquivos }, { data: vigencia }] = await Promise.all([
+    supabase.from("bling_parcelas").select("*").eq("contato_id", pedido.contato_id).eq("numero_pedido_origem", pedido.numero).order("vencimento"),
+    supabase.from("bling_contatos").select("id, nome, cnpj, sincronizado_em").eq("id", pedido.contato_id).maybeSingle(),
+    supabase.from("clientes").select("*").eq("bling_contato_id", pedido.contato_id).maybeSingle(),
+    supabase
+      .from("contrato_arquivos_bling")
+      .select("id, arquivo_path, nome_arquivo, tamanho_bytes, enviado_em, profiles(nome)")
+      .eq("bling_pedido_id", blingPedidoId)
+      .order("enviado_em", { ascending: false }),
+    supabase.from("contrato_vigencia_bling").select("vigencia_inicio, vigencia_fim, atualizado_em, profiles(nome)").eq("bling_pedido_id", blingPedidoId).maybeSingle(),
+  ]);
+
+  const parcelas: ParcelaCarteira[] = (brutas ?? []).map((p, i, todas) => ({
+    id: p.id,
+    contatoId: p.contato_id,
+    numeroPedidoOrigem: p.numero_pedido_origem,
+    vencimento: p.vencimento,
+    valor: Number(p.valor),
+    situacao: classificarSituacaoParcela(p.situacao, p.vencimento),
+    numero: i + 1,
+    totalDoPedido: todas.length,
+    dataPagamento: p.data_pagamento,
+    valorPago: p.valor_pago === null ? null : Number(p.valor_pago),
+  }));
+
+  const hoje = hojeLocal();
+  const contrato = montarContrato(pedido, parcelas, {
+    clienteId: clienteLocal?.id ?? null,
+    cliente: clienteLocal?.nome_fantasia || clienteLocal?.razao_social || contato?.nome || "Cliente",
+    logoPath: clienteLocal?.logo_path ?? null,
+    hoje,
+    em3Meses: somarMeses(hoje, 3),
+    vigencia: vigencia ? { inicio: vigencia.vigencia_inicio, fim: vigencia.vigencia_fim } : null,
+  });
+
+  return {
+    pedido,
+    contrato,
+    parcelas,
+    contato: contato ?? null,
+    clienteLocal: clienteLocal ?? null,
+    vigencia: vigencia
+      ? { atualizadoEm: vigencia.atualizado_em, atualizadoPor: (vigencia.profiles as unknown as { nome: string } | null)?.nome ?? null }
+      : null,
+    arquivos: (arquivos ?? []).map((a) => ({ ...a, enviadoPor: (a.profiles as unknown as { nome: string } | null)?.nome ?? null })),
+    resumo: {
+      pago: parcelas.reduce((s, p) => s + (p.situacao === "recebida" ? (p.valorPago ?? p.valor) : p.situacao === "recebida_parcial" ? (p.valorPago ?? 0) : 0), 0),
+      emAberto: soma(parcelas.filter((p) => p.situacao === "em_aberto")),
+      vencido: soma(parcelas.filter((p) => p.situacao === "atrasada")),
+    },
+    sincronizadoEm: contato?.sincronizado_em ?? null,
+  };
+}
+
 export function contratoNoFiltro(c: ContratoFinanceiro, filtro: FiltroContratos) {
   if (filtro === "ativos") return c.ativo;
   if (filtro === "vencem_3_meses") return c.venceEm3Meses;
-  if (filtro === "inativos") return c.situacao === "concluido";
+  if (filtro === "inativos") return !c.ativo && c.situacao !== "cancelado";
   return c.situacao === "cancelado";
 }
 
@@ -214,7 +325,14 @@ export async function carregarPagamentos(supabase: Supa, mes: string) {
   const base = await carregarBaseParcelas(supabase);
   const doMes = base.parcelas
     .filter((p) => p.vencimento.startsWith(mes) && !base.deCancelado(p))
-    .map((p) => ({ ...p, cliente: base.nomeDoContato(p.contatoId), clienteId: base.clientePorContato.get(p.contatoId)?.id ?? null, status: statusPagamento(p) }))
+    .map((p) => ({
+      ...p,
+      cliente: base.nomeDoContato(p.contatoId),
+      clienteId: base.clientePorContato.get(p.contatoId)?.id ?? null,
+      /** Pedido de venda (contrato) de origem — destino do clique na lista; nulo para parcela avulsa. */
+      contratoId: p.numeroPedidoOrigem ? (base.pedidoPorChave.get(chavePedido(p.contatoId, p.numeroPedidoOrigem))?.id ?? null) : null,
+      status: statusPagamento(p),
+    }))
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento) || a.cliente.localeCompare(b.cliente));
 
   // Previsto = recebido + a receber + vencido (cada parcela cai em exatamente um).

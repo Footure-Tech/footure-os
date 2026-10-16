@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { buscarCliente, listarContatosBlingSemCadastro, urlLogoCliente } from "@/lib/clientes/consultas";
 import { ClienteForm } from "@/components/clientes/cliente-form";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default async function EditarClientePage({ params }: PageProps<"/clientes/[id]/editar">) {
   const { id } = await params;
@@ -15,8 +16,8 @@ export default async function EditarClientePage({ params }: PageProps<"/clientes
   const contatosBling = cliente.bling_contato_id == null ? await listarContatosBlingSemCadastro(supabase) : [];
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">Editar cliente</h1>
+    <div className="flex max-w-[1300px] flex-col gap-6">
+      <PageHeader modulo="Comercial · Clientes" titulo="Editar cliente" descricao="Perfil, endereço de contrato, foro e logo — a razão social e o CNPJ seguem o Bling." voltarHref={`/clientes/${cliente.id}`} />
       <ClienteForm
         cliente={{
           id: cliente.id,
