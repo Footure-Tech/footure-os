@@ -1,5 +1,6 @@
 "use server";
 
+import { executar, type ResultadoAcao } from "@/lib/acaoServidor";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -102,32 +103,37 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
   redirect("/clientes");
 }
 
-export async function sincronizarContatosBlingAction(): Promise<Awaited<ReturnType<typeof sincronizarContatosBling>>> {
-  await exigirPapel("vendedor", "admin");
-  const supabase = await createClient();
-  const resultado = await sincronizarContatosBling(supabase);
-  revalidatePath("/clientes");
-  revalidatePath("/financeiro");
-  revalidatePath("/financeiro/pagamentos");
-  revalidatePath("/inadimplencia");
-  return resultado;
+export async function sincronizarContatosBlingAction(): Promise<Partial<Awaited<ReturnType<typeof sincronizarContatosBling>>> & ResultadoAcao> {
+  let resultado: Awaited<ReturnType<typeof sincronizarContatosBling>> | null = null;
+  const r = await executar(async () => {
+    await exigirPapel("vendedor", "admin");
+    const supabase = await createClient();
+    resultado = await sincronizarContatosBling(supabase);
+    revalidatePath("/clientes");
+    revalidatePath("/financeiro");
+    revalidatePath("/financeiro/pagamentos");
+    revalidatePath("/inadimplencia");
+  });
+  return r.erro || !resultado ? r : resultado;
 }
 
 /** Só remove clientes sem pedido vinculado — a FK (sem cascade) é o backstop caso essa checagem seja pulada. */
-export async function excluirClienteAction(clienteId: string) {
-  await exigirPapel("vendedor", "admin");
-  const supabase = await createClient();
+export async function excluirClienteAction(clienteId: string): Promise<ResultadoAcao> {
+  return executar(async () => {
+    await exigirPapel("vendedor", "admin");
+    const supabase = await createClient();
 
-  const { count, error: erroContagem } = await supabase
-    .from("pedidos")
-    .select("id", { count: "exact", head: true })
-    .eq("cliente_id", clienteId);
-  if (erroContagem) throw new Error(erroContagem.message);
-  if ((count ?? 0) > 0) {
-    throw new Error("Este cliente possui pedidos vinculados e não pode ser excluído.");
-  }
+    const { count, error: erroContagem } = await supabase
+      .from("pedidos")
+      .select("id", { count: "exact", head: true })
+      .eq("cliente_id", clienteId);
+    if (erroContagem) throw new Error(erroContagem.message);
+    if ((count ?? 0) > 0) {
+      throw new Error("Este cliente possui pedidos vinculados e não pode ser excluído.");
+    }
 
-  const { error } = await supabase.from("clientes").delete().eq("id", clienteId);
-  if (error) throw new Error(error.message);
-  revalidatePath("/clientes");
+    const { error } = await supabase.from("clientes").delete().eq("id", clienteId);
+    if (error) throw new Error(error.message);
+    revalidatePath("/clientes");
+  });
 }

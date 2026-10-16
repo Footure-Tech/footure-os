@@ -1,5 +1,6 @@
 "use client";
 
+import { exigirSucesso } from "@/lib/resultadoAcao";
 import { useOptimistic, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -42,7 +43,7 @@ export function ChecklistValidacao({
     iniciar(async () => {
       aplicar({ item, marcado });
       try {
-        await marcarItemValidacaoAction(pedidoId, contratoId, item, marcado);
+        exigirSucesso(await marcarItemValidacaoAction(pedidoId, contratoId, item, marcado));
         router.refresh();
       } catch (erro) {
         toast.error(erro instanceof Error ? erro.message : "Falha ao salvar a validação.");

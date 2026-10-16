@@ -1,5 +1,6 @@
 "use client";
 
+import { exigirSucesso } from "@/lib/resultadoAcao";
 import { useState, useTransition, type FocusEvent } from "react";
 import { toast } from "sonner";
 import { MdPercent } from "react-icons/md";
@@ -43,12 +44,12 @@ export function BlocoComissionamento({
   function salvar() {
     iniciar(async () => {
       try {
-        await salvarConfiguracaoComissionamento({
+        exigirSucesso(await salvarConfiguracaoComissionamento({
           percentualImposto: imposto,
           percentualComissaoTotal: comissaoTotal,
           percentualComissaoSdr: comissaoSdr,
           percentualComissaoCloser: comissaoCloser,
-        });
+        }));
         toast.success("Configuração de comissionamento salva.");
       } catch (erro) {
         toast.error(erro instanceof Error ? erro.message : "Falha ao salvar.");

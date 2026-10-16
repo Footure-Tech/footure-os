@@ -1,5 +1,6 @@
 "use server";
 
+import { executar, type ResultadoAcao } from "@/lib/acaoServidor";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { exigirPapel } from "@/lib/auth/session";
@@ -17,25 +18,27 @@ function validarPercentual(valor: number, campo: string) {
   }
 }
 
-export async function salvarConfiguracaoComissionamento(dados: ConfiguracaoComissionamentoInput) {
-  const sessao = await exigirPapel("admin");
-  validarPercentual(dados.percentualImposto, "% de imposto");
-  validarPercentual(dados.percentualComissaoTotal, "% de comissão total");
-  validarPercentual(dados.percentualComissaoSdr, "% de comissão SDR");
-  validarPercentual(dados.percentualComissaoCloser, "% de comissão Closer");
+export async function salvarConfiguracaoComissionamento(dados: ConfiguracaoComissionamentoInput): Promise<ResultadoAcao> {
+  return executar(async () => {
+    const sessao = await exigirPapel("admin");
+    validarPercentual(dados.percentualImposto, "% de imposto");
+    validarPercentual(dados.percentualComissaoTotal, "% de comissão total");
+    validarPercentual(dados.percentualComissaoSdr, "% de comissão SDR");
+    validarPercentual(dados.percentualComissaoCloser, "% de comissão Closer");
 
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("configuracoes_comissionamento")
-    .update({
-      percentual_imposto: dados.percentualImposto,
-      percentual_comissao_total: dados.percentualComissaoTotal,
-      percentual_comissao_sdr: dados.percentualComissaoSdr,
-      percentual_comissao_closer: dados.percentualComissaoCloser,
-      atualizado_por: sessao.id,
-    })
-    .eq("id", true);
-  if (error) throw new Error(error.message);
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("configuracoes_comissionamento")
+      .update({
+        percentual_imposto: dados.percentualImposto,
+        percentual_comissao_total: dados.percentualComissaoTotal,
+        percentual_comissao_sdr: dados.percentualComissaoSdr,
+        percentual_comissao_closer: dados.percentualComissaoCloser,
+        atualizado_por: sessao.id,
+      })
+      .eq("id", true);
+    if (error) throw new Error(error.message);
 
-  revalidatePath("/admin/configuracoes");
+    revalidatePath("/admin/configuracoes");
+  });
 }

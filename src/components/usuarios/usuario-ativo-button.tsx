@@ -1,5 +1,6 @@
 "use client";
 
+import { exigirSucesso } from "@/lib/resultadoAcao";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -14,7 +15,7 @@ export function UsuarioAtivoButton({ userId, ativo }: { userId: string; ativo: b
   function alternar() {
     iniciar(async () => {
       try {
-        await definirAtivoUsuario(userId, !ativo);
+        exigirSucesso(await definirAtivoUsuario(userId, !ativo));
         toast.success(ativo ? "Usuário inativado." : "Usuário ativado.");
         router.refresh();
       } catch (erro) {

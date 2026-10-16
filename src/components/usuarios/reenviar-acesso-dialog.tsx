@@ -1,5 +1,6 @@
 "use client";
 
+import { exigirSucesso } from "@/lib/resultadoAcao";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { MdForwardToInbox } from "react-icons/md";
@@ -16,7 +17,7 @@ export function ReenviarAcessoDialog({ userId, nome }: { userId: string; nome: s
   function confirmar() {
     iniciar(async () => {
       try {
-        await reenviarAcessoAction(userId);
+        exigirSucesso(await reenviarAcessoAction(userId));
         toast.success(`Acesso reenviado para ${nome}`, { description: "Uma nova senha temporária foi enviada por e-mail." });
         setAberto(false);
       } catch (erro) {

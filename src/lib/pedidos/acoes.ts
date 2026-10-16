@@ -117,37 +117,32 @@ export async function reenviarPedidoAoBling(supabase: Supa, pedidoId: string) {
 }
 
 /** Jurídico sobe uma edição — nova versão, SEM mudar o estado (permanece em EM_REVISAO_JURIDICA). */
-export async function subirNovaVersaoContrato(
-  supabase: Supa,
-  pedidoId: string,
-  arquivo: Buffer,
-  geradoPor: string,
-  motivoVersao: string,
-) {
+/**
+ * Upload de nova versão pelo jurídico, em duas etapas: o navegador sobe o
+ * .docx direto para o Storage (URL assinada — Server Actions limitam o corpo a
+ * 1 MB e a Vercel a 4,5 MB, e um .docx editado no Word passa disso fácil) e
+ * depois registramos a versão. 1) reserva o caminho da próxima versão:
+ */
+export async function prepararUploadNovaVersao(supabase: Supa, pedidoId: string) {
   const versao = await proximaVersaoContrato(supabase, pedidoId);
   const path = `${pedidoId}/v${versao}.docx`;
+  const { data, error } = await supabase.storage.from("contratos").createSignedUploadUrl(path);
+  if (error || !data) throw new Error(`Não foi possível preparar o envio: ${error?.message ?? "erro desconhecido"}`);
+  return { versao, path: data.path, token: data.token };
+}
 
-  const { error: erroUpload } = await supabase.storage.from("contratos").upload(path, arquivo, {
-    contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  });
-  if (erroUpload) throw new Error(`Falha ao salvar o .docx no Storage: ${erroUpload.message}`);
-
+/** 2) registra a versão já enviada ao Storage e compara com a anterior (análise 0041). */
+export async function registrarNovaVersaoEnviada(supabase: Supa, pedidoId: string, versao: number, path: string, geradoPor: string, motivoVersao: string) {
+  if (path !== `${pedidoId}/v${versao}.docx`) throw new Error("Caminho de arquivo inválido.");
   const { data: registro, error: erroInsert } = await supabase
     .from("contratos")
-    .insert({
-      pedido_id: pedidoId,
-      versao,
-      arquivo_path: path,
-      gerado_por: geradoPor,
-      motivo_versao: motivoVersao,
-    })
+    .insert({ pedido_id: pedidoId, versao, arquivo_path: path, gerado_por: geradoPor, motivo_versao: motivoVersao || null })
     .select("id")
     .single();
   if (erroInsert || !registro) throw new Error(`Falha ao registrar a versão do contrato: ${erroInsert?.message}`);
 
   // Compara com a versão anterior e resume as mudanças (IA) para o jurídico decidir o que vai para o modelo.
   if (versao > 1) await analisarNovaVersao(supabase, pedidoId, registro.id, versao);
-
   return { versao, path };
 }
 

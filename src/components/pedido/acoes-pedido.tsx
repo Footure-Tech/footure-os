@@ -1,5 +1,6 @@
 "use client";
 
+import { exigirSucesso } from "@/lib/resultadoAcao";
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -33,10 +34,10 @@ import type { PapelUsuario, StatusPedido } from "@/lib/supabase/database.types";
 function useAcao() {
   const router = useRouter();
   const [pendente, iniciar] = useTransition();
-  function rodar(acao: () => Promise<void>, msgSucesso: string) {
+  function rodar(acao: () => Promise<unknown>, msgSucesso: string) {
     iniciar(async () => {
       try {
-        await acao();
+        exigirSucesso((await acao()) as { erro?: string } | void);
         toast.success(msgSucesso);
         router.refresh();
       } catch (erro) {
@@ -209,7 +210,7 @@ function ReenviarLembreteBotao({ pedidoId }: { pedidoId: string }) {
       onClick={() =>
         iniciar(async () => {
           try {
-            const { notificados } = await reenviarLembreteAction(pedidoId);
+            const { notificados = 0 } = exigirSucesso(await reenviarLembreteAction(pedidoId));
             toast.success(`Lembrete enviado a ${notificados} ${notificados === 1 ? "signatário" : "signatários"}`);
             router.refresh();
           } catch (erro) {
@@ -243,7 +244,7 @@ function CancelarAssinaturaDialog({ pedidoId }: { pedidoId: string }) {
 
   function confirmar() {
     rodar(async () => {
-      await cancelarAssinaturaAction(pedidoId, comentario || undefined);
+      exigirSucesso(await cancelarAssinaturaAction(pedidoId, comentario || undefined));
       setAberto(false);
       setComentario("");
     }, "Assinatura cancelada · contrato voltou para validação");
@@ -286,7 +287,7 @@ function RegenerarContratoDialog({ pedidoId }: { pedidoId: string }) {
 
   function confirmar() {
     rodar(async () => {
-      await rejeitarContratoAction(pedidoId, comentario);
+      exigirSucesso(await rejeitarContratoAction(pedidoId, comentario));
       setAberto(false);
       setComentario("");
     }, "Contrato em regeneração");

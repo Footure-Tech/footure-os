@@ -1,5 +1,6 @@
 "use client";
 
+import { exigirSucesso } from "@/lib/resultadoAcao";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { MdSync } from "react-icons/md";
@@ -24,7 +25,7 @@ export function SincronizarBlingButton({
   function aoClicar() {
     iniciar(async () => {
       try {
-        const { novosClientesRegistrados, baixasImportadas, baixas } = await sincronizarContatosBlingAction();
+        const { novosClientesRegistrados = 0, baixasImportadas = 0, baixas = { detalhadas: 0, pendentes: 0, escopoBorderosAusente: false } } = exigirSucesso(await sincronizarContatosBlingAction());
         toast.success(
           `Bling sincronizado · ${baixasImportadas} ${baixasImportadas === 1 ? "baixa de pagamento importada" : "baixas de pagamento importadas"}` +
             (novosClientesRegistrados > 0 ? ` · ${novosClientesRegistrados} novos clientes` : ""),

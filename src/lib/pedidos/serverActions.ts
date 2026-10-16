@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { executar, type ResultadoAcao } from "@/lib/acaoServidor";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { exigirPapel } from "@/lib/auth/session";
@@ -309,20 +310,24 @@ async function salvarSignatariosDoPedido(
   return null;
 }
 
-export async function enviarParaAprovacaoAction(pedidoId: string) {
-  await exigirPapel("vendedor", "admin");
-  const supabase = await createClient();
-  await acoes.enviarParaAprovacao(supabase, pedidoId);
-  revalidatePath("/vendedor");
-  revalidatePath(`/pedidos/${pedidoId}`);
+export async function enviarParaAprovacaoAction(pedidoId: string): Promise<ResultadoAcao> {
+  return executar(async () => {
+    await exigirPapel("vendedor", "admin");
+    const supabase = await createClient();
+    await acoes.enviarParaAprovacao(supabase, pedidoId);
+    revalidatePath("/vendedor");
+    revalidatePath(`/pedidos/${pedidoId}`);
+  });
 }
 
-export async function aprovarPedidoAction(pedidoId: string) {
-  const sessao = await exigirPapel("admin");
-  const supabase = await createClient();
-  await acoes.aprovarPedido(supabase, pedidoId, sessao.id);
-  revalidatePath("/admin");
-  revalidatePath(`/pedidos/${pedidoId}`);
+export async function aprovarPedidoAction(pedidoId: string): Promise<ResultadoAcao> {
+  return executar(async () => {
+    const sessao = await exigirPapel("admin");
+    const supabase = await createClient();
+    await acoes.aprovarPedido(supabase, pedidoId, sessao.id);
+    revalidatePath("/admin");
+    revalidatePath(`/pedidos/${pedidoId}`);
+  });
 }
 
 /** "Reenviar ao Bling" — admin; não duplica o pedido no Bling (ver blingPedido.ts). */
@@ -340,112 +345,129 @@ export async function reenviarAoBlingAction(pedidoId: string): Promise<{ erro?: 
   }
 }
 
-export async function reprovarPedidoAction(pedidoId: string, comentario: string) {
-  await exigirPapel("admin");
-  const supabase = await createClient();
-  await acoes.reprovarPedido(supabase, pedidoId, comentario);
-  revalidatePath("/admin");
-  revalidatePath(`/pedidos/${pedidoId}`);
+export async function reprovarPedidoAction(pedidoId: string, comentario: string): Promise<ResultadoAcao> {
+  return executar(async () => {
+    await exigirPapel("admin");
+    const supabase = await createClient();
+    await acoes.reprovarPedido(supabase, pedidoId, comentario);
+    revalidatePath("/admin");
+    revalidatePath(`/pedidos/${pedidoId}`);
+  });
 }
 
-export async function tentarGerarNovamenteAction(pedidoId: string) {
-  const sessao = await exigirPapel("admin", "juridico");
-  const supabase = await createClient();
-  await acoes.tentarGerarContrato(supabase, pedidoId, sessao.id);
-  revalidatePath(`/pedidos/${pedidoId}`);
+export async function tentarGerarNovamenteAction(pedidoId: string): Promise<ResultadoAcao> {
+  return executar(async () => {
+    const sessao = await exigirPapel("admin", "juridico");
+    const supabase = await createClient();
+    await acoes.tentarGerarContrato(supabase, pedidoId, sessao.id);
+    revalidatePath(`/pedidos/${pedidoId}`);
+  });
 }
 
-export async function liberarParaAssinaturaAction(pedidoId: string, comentario?: string) {
-  await exigirPapel("juridico", "admin");
-  const supabase = await createClient();
-  await acoes.liberarParaAssinatura(supabase, pedidoId, comentario);
-  revalidatePath("/juridico");
-  revalidatePath(`/pedidos/${pedidoId}`);
+export async function liberarParaAssinaturaAction(pedidoId: string, comentario?: string): Promise<ResultadoAcao> {
+  return executar(async () => {
+    await exigirPapel("juridico", "admin");
+    const supabase = await createClient();
+    await acoes.liberarParaAssinatura(supabase, pedidoId, comentario);
+    revalidatePath("/juridico");
+    revalidatePath(`/pedidos/${pedidoId}`);
+  });
 }
 
-export async function rejeitarContratoAction(pedidoId: string, comentario: string) {
-  const sessao = await exigirPapel("juridico", "admin");
-  const supabase = await createClient();
-  await acoes.rejeitarContrato(supabase, pedidoId, sessao.id, comentario);
-  revalidatePath("/juridico");
-  revalidatePath(`/pedidos/${pedidoId}`);
+export async function rejeitarContratoAction(pedidoId: string, comentario: string): Promise<ResultadoAcao> {
+  return executar(async () => {
+    const sessao = await exigirPapel("juridico", "admin");
+    const supabase = await createClient();
+    await acoes.rejeitarContrato(supabase, pedidoId, sessao.id, comentario);
+    revalidatePath("/juridico");
+    revalidatePath(`/pedidos/${pedidoId}`);
+  });
 }
 
-export async function enviarParaAssinaturaAction(pedidoId: string) {
-  await exigirPapel("juridico", "admin");
-  const supabase = await createClient();
-  await acoes.enviarPedidoParaAssinatura(supabase, pedidoId);
-  revalidatePath(`/pedidos/${pedidoId}`);
+export async function enviarParaAssinaturaAction(pedidoId: string): Promise<ResultadoAcao> {
+  return executar(async () => {
+    await exigirPapel("juridico", "admin");
+    const supabase = await createClient();
+    await acoes.enviarPedidoParaAssinatura(supabase, pedidoId);
+    revalidatePath(`/pedidos/${pedidoId}`);
+  });
 }
 
-export async function cancelarAssinaturaAction(pedidoId: string, comentario?: string) {
-  await exigirPapel("juridico", "admin");
-  const supabase = await createClient();
-  await acoes.cancelarAssinatura(supabase, pedidoId, comentario);
-  revalidatePath("/juridico");
-  revalidatePath(`/pedidos/${pedidoId}`);
+export async function cancelarAssinaturaAction(pedidoId: string, comentario?: string): Promise<ResultadoAcao> {
+  return executar(async () => {
+    await exigirPapel("juridico", "admin");
+    const supabase = await createClient();
+    await acoes.cancelarAssinatura(supabase, pedidoId, comentario);
+    revalidatePath("/juridico");
+    revalidatePath(`/pedidos/${pedidoId}`);
+  });
 }
 
-export async function cancelarPedidoAction(pedidoId: string, motivo: string, observacao?: string) {
-  await exigirPapel("vendedor", "admin", "juridico");
-  const supabase = await createClient();
-  const comentario = observacao?.trim() ? `Motivo: ${motivo}. Observação: ${observacao.trim()}` : `Motivo: ${motivo}.`;
-  await acoes.cancelarPedido(supabase, pedidoId, comentario);
-  revalidatePath("/vendedor");
-  revalidatePath("/admin");
-  revalidatePath("/juridico");
-  revalidatePath(`/pedidos/${pedidoId}`);
+export async function cancelarPedidoAction(pedidoId: string, motivo: string, observacao?: string): Promise<ResultadoAcao> {
+  return executar(async () => {
+    await exigirPapel("vendedor", "admin", "juridico");
+    const supabase = await createClient();
+    const comentario = observacao?.trim() ? `Motivo: ${motivo}. Observação: ${observacao.trim()}` : `Motivo: ${motivo}.`;
+    await acoes.cancelarPedido(supabase, pedidoId, comentario);
+    revalidatePath("/vendedor");
+    revalidatePath("/admin");
+    revalidatePath("/juridico");
+    revalidatePath(`/pedidos/${pedidoId}`);
+  });
 }
 
-export interface SubirVersaoState {
-  erro?: string;
-  sucesso?: boolean;
+/** Nova versão do contrato, etapa 1: autoriza e devolve a URL assinada de upload (ver acoes.prepararUploadNovaVersao). */
+export async function prepararNovaVersaoAction(pedidoId: string, nomeArquivo: string, tamanho: number): Promise<ResultadoAcao & { versao?: number; path?: string; token?: string }> {
+  let preparo: { versao: number; path: string; token: string } | null = null;
+  const r = await executar(async () => {
+    await exigirPapel("juridico", "admin");
+    if (!/\.docx$/i.test(nomeArquivo)) throw new Error("Envie o contrato editado em .docx (Word).");
+    if (tamanho <= 0) throw new Error("O arquivo está vazio.");
+    if (tamanho > 20 * 1024 * 1024) throw new Error("O arquivo passa de 20 MB.");
+    preparo = await acoes.prepararUploadNovaVersao(await createClient(), pedidoId);
+  });
+  return r.erro || !preparo ? r : preparo;
 }
 
-export async function subirNovaVersaoAction(_prev: SubirVersaoState, formData: FormData): Promise<SubirVersaoState> {
-  const sessao = await exigirPapel("juridico", "admin");
-  const pedidoId = String(formData.get("pedidoId") ?? "");
-  const motivo = String(formData.get("motivo") ?? "");
-  const arquivo = formData.get("arquivo") as File | null;
-  if (!pedidoId || !arquivo || arquivo.size === 0) {
-    return { erro: "Selecione o arquivo .docx editado." };
-  }
-
-  const supabase = await createClient();
-  const buffer = Buffer.from(await arquivo.arrayBuffer());
-  try {
-    await acoes.subirNovaVersaoContrato(supabase, pedidoId, buffer, sessao.id, motivo);
-  } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : String(erro) };
-  }
-  revalidatePath("/juridico");
-  revalidatePath(`/pedidos/${pedidoId}`);
-  return { sucesso: true };
+/** Nova versão do contrato, etapa 2: registra a versão enviada e roda a análise das mudanças. */
+export async function registrarNovaVersaoAction(pedidoId: string, versao: number, path: string, motivo: string): Promise<ResultadoAcao> {
+  return executar(async () => {
+    const sessao = await exigirPapel("juridico", "admin");
+    await acoes.registrarNovaVersaoEnviada(await createClient(), pedidoId, versao, path, sessao.id, motivo);
+    revalidatePath("/juridico");
+    revalidatePath(`/pedidos/${pedidoId}`);
+  });
 }
 
 /** Checklist de validação jurídica (0029): marca/desmarca um item da versão atual do contrato. */
-export async function marcarItemValidacaoAction(pedidoId: string, contratoId: string, item: ItemValidacaoContrato, marcado: boolean) {
-  const sessao = await exigirPapel("juridico", "admin");
-  const supabase = await createClient();
-  const { error } = marcado
-    ? await supabase.from("contrato_validacao").upsert({ contrato_id: contratoId, item, marcado_por: sessao.id }, { onConflict: "contrato_id,item" })
-    : await supabase.from("contrato_validacao").delete().eq("contrato_id", contratoId).eq("item", item);
-  if (error) throw new Error(`Falha ao salvar a validação: ${error.message}`);
-  revalidatePath("/juridico");
-  revalidatePath(`/pedidos/${pedidoId}`);
+export async function marcarItemValidacaoAction(pedidoId: string, contratoId: string, item: ItemValidacaoContrato, marcado: boolean): Promise<ResultadoAcao> {
+  return executar(async () => {
+    const sessao = await exigirPapel("juridico", "admin");
+    const supabase = await createClient();
+    const { error } = marcado
+      ? await supabase.from("contrato_validacao").upsert({ contrato_id: contratoId, item, marcado_por: sessao.id }, { onConflict: "contrato_id,item" })
+      : await supabase.from("contrato_validacao").delete().eq("contrato_id", contratoId).eq("item", item);
+    if (error) throw new Error(`Falha ao salvar a validação: ${error.message}`);
+    revalidatePath("/juridico");
+    revalidatePath(`/pedidos/${pedidoId}`);
+  });
 }
 
 /** "Reenviar lembrete aos signatários": só para quem ainda não assinou. */
-export async function reenviarLembreteAction(pedidoId: string): Promise<{ notificados: number }> {
-  await exigirPapel("juridico", "admin");
-  const supabase = await createClient();
-  const { data: contrato } = await supabase
-    .from("contratos")
-    .select("id")
-    .eq("pedido_id", pedidoId)
-    .order("versao", { ascending: false })
-    .limit(1)
-    .single();
-  if (!contrato) throw new Error("Pedido sem contrato gerado.");
-  return notificarSignatariosPendentes(supabase, contrato.id);
+export async function reenviarLembreteAction(pedidoId: string): Promise<ResultadoAcao & { notificados?: number }> {
+  let notificados = 0;
+  const r = await executar(async () => {
+    await exigirPapel("juridico", "admin");
+    const supabase = await createClient();
+    const { data: contrato } = await supabase
+      .from("contratos")
+      .select("id")
+      .eq("pedido_id", pedidoId)
+      .order("versao", { ascending: false })
+      .limit(1)
+      .single();
+    if (!contrato) throw new Error("Pedido sem contrato gerado.");
+    ({ notificados } = await notificarSignatariosPendentes(supabase, contrato.id));
+  });
+  return r.erro ? r : { notificados };
 }

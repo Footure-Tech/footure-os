@@ -1,5 +1,6 @@
 "use client";
 
+import { exigirSucesso } from "@/lib/resultadoAcao";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -36,7 +37,7 @@ export function CancelarPedidoDialog({ pedidoId }: { pedidoId: string }) {
   function confirmar() {
     iniciar(async () => {
       try {
-        await cancelarPedidoAction(pedidoId, motivo, observacao || undefined);
+        exigirSucesso(await cancelarPedidoAction(pedidoId, motivo, observacao || undefined));
         toast.success("Pedido cancelado.");
         setAberto(false);
         router.refresh();

@@ -1,5 +1,6 @@
 "use client";
 
+import { exigirSucesso } from "@/lib/resultadoAcao";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -41,7 +42,7 @@ export function ExcluirClienteDialog({
   function confirmar() {
     iniciar(async () => {
       try {
-        await excluirClienteAction(clienteId);
+        exigirSucesso(await excluirClienteAction(clienteId));
         toast.success("Cliente excluído.");
         setAberto(false);
         router.refresh();

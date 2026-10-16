@@ -36,6 +36,10 @@ import { ITENS_VALIDACAO } from "@/lib/contratos/validacao";
 import { carregarAnaliseVersao } from "@/lib/contratos/consultasAnalise";
 import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 
+// Ações desta página incluem o registro de nova versão do contrato, que roda a
+// análise das mudanças com IA (pode levar ~1 min) — mais tempo que o padrão.
+export const maxDuration = 300;
+
 const VOLTAR_POR_PAPEL = { vendedor: "/vendedor", admin: "/admin", juridico: "/juridico" } as const;
 const ROTULO_PERFIL_CLIENTE = { clube: "Clube", agente: "Agente" } as const;
 const MODELO_CONTRATO = { clube: "Footlink Clube", agente: "Footlink Agente" } as const;

@@ -1,5 +1,6 @@
 "use client";
 
+import { exigirSucesso } from "@/lib/resultadoAcao";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -41,10 +42,10 @@ export function UsuarioFormDialog(props: Props) {
     iniciar(async () => {
       try {
         if (props.modo === "criar") {
-          await criarUsuario({ nome, email, papel });
+          exigirSucesso(await criarUsuario({ nome, email, papel }));
           toast.success("Usuário criado — e-mail com a senha temporária enviado.");
         } else {
-          await editarUsuario(props.usuario.id, { nome, papel });
+          exigirSucesso(await editarUsuario(props.usuario.id, { nome, papel }));
           toast.success("Usuário atualizado.");
         }
         setAberto(false);
