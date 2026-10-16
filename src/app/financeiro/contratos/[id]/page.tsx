@@ -25,6 +25,7 @@ import { IndicadorBling } from "@/components/financeiro/tela-contratos";
 import { AnexarContratoBling } from "@/components/financeiro/anexar-contrato-bling";
 import { EditarVigenciaDialog } from "@/components/financeiro/editar-vigencia-dialog";
 import { EditarEquipeDialog } from "@/components/financeiro/editar-equipe-dialog";
+import { EditarLicencasDialog } from "@/components/financeiro/editar-licencas-dialog";
 import { ROTULO_STATUS } from "@/components/rotulo-status";
 
 const ROTULO_PERFIL_CLIENTE = { clube: "Clube", agente: "Agente" } as const;
@@ -88,13 +89,22 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
   const { pedido, contrato, parcelas, clienteLocal, contato, arquivos, resumo, vigencia } = dados;
 
   const { data: vinculo } = await supabase.from("pedidos").select("id").eq("bling_pedido_id", String(blingPedidoId)).maybeSingle();
-  const [detalheLocal, detalheBling, contatoBling, { data: equipe }, usuariosComercial] = await Promise.all([
+  const [detalheLocal, detalheBling, contatoBling, { data: equipe }, usuariosComercial, { data: licencas }] = await Promise.all([
     vinculo ? buscarPedidoDetalhe(supabase, vinculo.id) : Promise.resolve(null),
     buscarPedidoVendaBling(supabase, blingPedidoId),
     clienteLocal ? Promise.resolve(null) : buscarDetalheContatoBling(supabase, pedido.contato_id),
     supabase.from("contrato_equipe_bling").select("sdr_id, closer_id, atualizado_por, atualizado_em").eq("bling_pedido_id", blingPedidoId).maybeSingle(),
     listarUsuariosParaAtribuicaoVenda(supabase),
+    supabase
+      .from("contrato_licencas_bling")
+      .select("licencas_pagas, licencas_gratuitas, valor_licenca_adicional, atualizado_por, atualizado_em")
+      .eq("bling_pedido_id", blingPedidoId)
+      .maybeSingle(),
   ]);
+  const valorAdicional = licencas?.valor_licenca_adicional === null || licencas?.valor_licenca_adicional === undefined ? null : Number(licencas.valor_licenca_adicional);
+  const resumoLicencas = licencas
+    ? `${licencas.licencas_pagas} ${licencas.licencas_pagas === 1 ? "paga" : "pagas"}${licencas.licencas_gratuitas > 0 ? ` + ${licencas.licencas_gratuitas} ${licencas.licencas_gratuitas === 1 ? "gratuita" : "gratuitas"}` : ""}`
+    : null;
   // SDR e Closer de venda do Bling (0035) — nomes pela lista do comercial.
   const nomeUsuario = (id: string | null | undefined) => (id ? (usuariosComercial.find((u) => u.user_id === id)?.nome ?? null) : null);
   const sdrNome = nomeUsuario(equipe?.sdr_id);
@@ -160,6 +170,17 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
             nome: nomeUsuario(equipe.atualizado_por),
             titulo: "SDR e Closer definidos",
             comentario: `SDR: ${sdrNome ?? "não informado"} · Closer: ${closerNome ?? "não informado"}.`,
+          },
+        ]
+      : []),
+    ...(licencas
+      ? [
+          {
+            id: "licencas",
+            data: licencas.atualizado_em,
+            nome: nomeUsuario(licencas.atualizado_por),
+            titulo: "Licenças definidas",
+            comentario: `${resumoLicencas}${valorAdicional !== null ? ` · licença adicional ${formatarMoeda(valorAdicional)}` : ""}.`,
           },
         ]
       : []),
@@ -299,6 +320,21 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
                   sdrId={equipe?.sdr_id ?? null}
                   closerId={equipe?.closer_id ?? null}
                   usuarios={usuariosComercial.map((u) => ({ id: u.user_id, nome: u.nome }))}
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-page px-3 py-2.5 text-xs text-gray2">
+                <span className="min-w-0 flex-1">
+                  <span className="font-bold tracking-[0.06em] text-gray3 uppercase">Licenças</span>{" "}
+                  <span className="font-semibold text-darkPurple1">{resumoLicencas ?? "não informadas"}</span>
+                  <span className="mx-2 text-gray3">·</span>
+                  <span className="font-bold tracking-[0.06em] text-gray3 uppercase">Licença adicional</span>{" "}
+                  <span className="font-semibold text-darkPurple1">{valorAdicional !== null ? formatarMoeda(valorAdicional) : "não informado"}</span>
+                </span>
+                <EditarLicencasDialog
+                  blingPedidoId={blingPedidoId}
+                  licencasPagas={licencas?.licencas_pagas ?? null}
+                  licencasGratuitas={licencas?.licencas_gratuitas ?? null}
+                  valorLicencaAdicional={valorAdicional}
                 />
               </div>
               {detalheBling && detalheBling.itens.length > 0 && (

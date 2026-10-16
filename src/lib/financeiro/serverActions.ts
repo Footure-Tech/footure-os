@@ -119,3 +119,35 @@ export async function salvarEquipeContratoBlingAction(blingPedidoId: number, sdr
   revalidatePath("/vendas");
   return {};
 }
+
+/** Licenças de uma venda do Bling — controladas na plataforma (0036). Valor adicional null = não informado. */
+export async function salvarLicencasContratoBlingAction(
+  blingPedidoId: number,
+  licencasPagas: number,
+  licencasGratuitas: number,
+  valorLicencaAdicional: number | null,
+): Promise<{ erro?: string }> {
+  const sessao = await exigirPapel("admin");
+  const inteiro = (n: number) => Number.isInteger(n) && n >= 0;
+  if (!inteiro(licencasPagas) || !inteiro(licencasGratuitas)) return { erro: "Informe o número de licenças como um número inteiro." };
+  if (valorLicencaAdicional !== null && (!Number.isFinite(valorLicencaAdicional) || valorLicencaAdicional < 0)) {
+    return { erro: "Valor da licença adicional inválido." };
+  }
+
+  const supabase = await createClient();
+  const { data: pedido } = await supabase.from("bling_pedidos").select("id").eq("id", blingPedidoId).maybeSingle();
+  if (!pedido) return { erro: "Pedido de venda não encontrado no cache do Bling." };
+
+  const { error } = await supabase.from("contrato_licencas_bling").upsert({
+    bling_pedido_id: blingPedidoId,
+    licencas_pagas: licencasPagas,
+    licencas_gratuitas: licencasGratuitas,
+    valor_licenca_adicional: valorLicencaAdicional === null ? null : Math.round(valorLicencaAdicional * 100) / 100,
+    atualizado_por: sessao.id,
+    atualizado_em: new Date().toISOString(),
+  });
+  if (error) return { erro: `Não foi possível salvar as licenças: ${error.message}` };
+
+  revalidatePath(`/financeiro/contratos/${blingPedidoId}`);
+  return {};
+}

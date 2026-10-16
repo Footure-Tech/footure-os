@@ -411,6 +411,26 @@ export interface Database {
           situacao_detalhada: number | null;
         }>
       >;
+      // supabase/migrations/0036_contrato_licencas_bling.sql
+      contrato_licencas_bling: TableDef<
+        {
+          bling_pedido_id: number;
+          licencas_pagas: number;
+          licencas_gratuitas: number;
+          valor_licenca_adicional: number | null;
+          atualizado_por: string | null;
+          atualizado_em: string;
+        },
+        {
+          bling_pedido_id: number;
+          licencas_pagas: number;
+          licencas_gratuitas?: number;
+          valor_licenca_adicional?: number | null;
+          atualizado_por?: string | null;
+          atualizado_em?: string;
+        },
+        Partial<{ licencas_pagas: number; licencas_gratuitas: number; valor_licenca_adicional: number | null; atualizado_por: string | null; atualizado_em: string }>
+      >;
       // supabase/migrations/0035_contrato_equipe_bling.sql
       contrato_equipe_bling: TableDef<
         { bling_pedido_id: number; sdr_id: string | null; closer_id: string | null; atualizado_por: string | null; atualizado_em: string },
