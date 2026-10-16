@@ -367,7 +367,7 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
                 )}
 
                 {analiseVersao && (
-                  <AnaliseVersaoContrato analise={analiseVersao} versao={contratoAtual.versao} editavel={pedido.status === "em_revisao_juridica"} />
+                  <AnaliseVersaoContrato analise={analiseVersao} contratoId={contratoAtual.id} versao={contratoAtual.versao} editavel={pedido.status === "em_revisao_juridica"} />
                 )}
 
                 <div className="flex flex-col gap-2">

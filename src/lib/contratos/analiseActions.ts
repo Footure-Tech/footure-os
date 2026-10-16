@@ -7,6 +7,7 @@ import { montarDadosContrato } from "@/lib/contratos/montarDados";
 import { ajustesAplicadosNaUltimaGeracao, gerarContrato, gerarContratoBuffer } from "@/lib/contratos/gerarContrato";
 import { carregarAjustesModelo } from "@/lib/contratos/ajustesModelo";
 import { extrairParagrafos } from "@/lib/contratos/diffVersoes";
+import { analisarNovaVersao } from "@/lib/contratos/analisarVersao";
 
 /**
  * Decisão do jurídico sobre uma mudança da nova versão (0041). "agregar"
@@ -53,7 +54,9 @@ export async function decidirMudancaAction(mudancaId: string, decisao: "agregar"
 
     const textoAtual = (await extrairParagrafos(await gerarContratoBuffer(dados, ajustes))).join("\n");
     if (!textoAtual.includes(de)) {
-      return { erro: "O trecho original não está no contrato que o modelo gera hoje (pode ter vindo de uma edição anterior) — não dá para agregar automaticamente." };
+      return {
+        erro: "Este trecho não está mais no modelo atual (o modelo mudou desde que o contrato foi gerado). Use “Reanalisar com o modelo atual” para comparar a versão enviada com o modelo de hoje.",
+      };
     }
     gerarContrato(dados, [...ajustes, { id: "teste", de, para }]);
     if (!ajustesAplicadosNaUltimaGeracao().includes("teste")) {
@@ -83,5 +86,23 @@ export async function desativarAjusteModeloAction(ajusteId: string): Promise<{ e
     .eq("id", ajusteId);
   if (error) return { erro: error.message };
   revalidatePath("/admin/configuracoes");
+  return {};
+}
+
+/**
+ * Refaz a análise de uma versão enviada, agora contra o modelo atual — para
+ * análises feitas antes desta regra (comparadas com a versão anterior) ou
+ * depois de novos ajustes agregados. Descarta as decisões pendentes dessa análise.
+ */
+export async function reanalisarVersaoAction(contratoId: string): Promise<{ erro?: string }> {
+  await exigirPapel("juridico", "admin");
+  const supabase = await createClient();
+  const { data: contrato } = await supabase.from("contratos").select("pedido_id, versao").eq("id", contratoId).single();
+  if (!contrato) return { erro: "Versão do contrato não encontrada." };
+  const { error } = await supabase.from("contrato_analises").delete().eq("contrato_id", contratoId);
+  if (error) return { erro: `Não foi possível refazer a análise: ${error.message}` };
+  await analisarNovaVersao(supabase, contrato.pedido_id, contratoId, contrato.versao);
+  revalidatePath("/juridico");
+  revalidatePath(`/pedidos/${contrato.pedido_id}`);
   return {};
 }

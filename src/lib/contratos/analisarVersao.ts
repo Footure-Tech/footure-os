@@ -1,5 +1,8 @@
-// Análise da nova versão enviada pelo jurídico (0041): compara o texto com a
-// versão anterior (diffVersoes) e pede ao Claude um resumo de cada mudança e
+// Análise da nova versão enviada pelo jurídico (0041): compara o texto com o
+// contrato que o MODELO ATUAL gera para o mesmo pedido (com os ajustes já
+// agregados) — não com a versão anterior, que pode ter sido gerada por um
+// modelo mais antigo e faria aparecer como "mudança" texto que o modelo já
+// trocou (impossível de agregar). Depois pede ao Claude um resumo de cada mudança e
 // uma sugestão — "modelo" (melhoria que deveria valer para todos os contratos)
 // ou "especifico" (ajuste deste cliente/negociação). O jurídico decide depois,
 // na tela, o que agregar ao modelo. Sem ANTHROPIC_API_KEY, grava só a
@@ -10,6 +13,9 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { compararVersoes, type MudancaTexto } from "./diffVersoes";
+import { montarDadosContrato } from "./montarDados";
+import { gerarContratoBuffer } from "./gerarContrato";
+import { carregarAjustesModelo } from "./ajustesModelo";
 
 type Supa = SupabaseClient<Database>;
 
@@ -29,7 +35,7 @@ const RespostaIA = z.object({
 });
 
 const SISTEMA = `Você apoia o jurídico da Footure na revisão de contratos de licença de uso do software Footlink.
-O jurídico editou um contrato gerado pelo modelo padrão e enviou uma nova versão. Você recebe a lista das diferenças de texto entre a versão anterior e a nova.
+O jurídico editou um contrato e enviou uma nova versão. Você recebe a lista das diferenças de texto entre o contrato que o modelo padrão gera hoje para este pedido (ANTES) e a versão enviada pelo jurídico (DEPOIS).
 
 Para cada diferença:
 - resumo: diga em português, de forma direta, o que mudou e o efeito prático (1 ou 2 frases).
@@ -90,22 +96,22 @@ export async function analisarNovaVersao(supabase: Supa, pedidoId: string, contr
   };
 
   try {
-    const [{ data: base }, { data: nova }, { data: pedido }] = await Promise.all([
-      supabase.from("contratos").select("id, arquivo_path").eq("pedido_id", pedidoId).eq("versao", versao - 1).maybeSingle(),
+    const [{ data: anterior }, { data: nova }, { data: pedido }] = await Promise.all([
+      supabase.from("contratos").select("id").eq("pedido_id", pedidoId).eq("versao", versao - 1).maybeSingle(),
       supabase.from("contratos").select("arquivo_path").eq("id", contratoId).single(),
       supabase.from("pedidos").select("perfil").eq("id", pedidoId).single(),
     ]);
-    if (!base || !nova) return falhar("Não há versão anterior para comparar.");
-    await supabase.from("contrato_analises").update({ base_contrato_id: base.id }).eq("id", analise.id);
+    if (!nova || !pedido) return falhar("Versão ou pedido não encontrados.");
+    // Referência (só informativa): a versão anterior; a comparação é com o modelo atual.
+    if (anterior) await supabase.from("contrato_analises").update({ base_contrato_id: anterior.id }).eq("id", analise.id);
 
-    const baixar = async (path: string) => {
-      const { data, error } = await supabase.storage.from("contratos").download(path);
-      if (error || !data) throw new Error(`Falha ao ler ${path}: ${error?.message}`);
-      return Buffer.from(await data.arrayBuffer());
-    };
-    const mudancas = await compararVersoes(await baixar(base.arquivo_path), await baixar(nova.arquivo_path));
+    const { data: arquivo, error: erroArquivo } = await supabase.storage.from("contratos").download(nova.arquivo_path);
+    if (erroArquivo || !arquivo) return falhar(`Falha ao ler o arquivo enviado: ${erroArquivo?.message}`);
+    const dados = await montarDadosContrato(supabase, pedidoId);
+    const modeloAtual = await gerarContratoBuffer(dados, await carregarAjustesModelo(supabase, pedido.perfil));
+    const mudancas = await compararVersoes(modeloAtual, Buffer.from(await arquivo.arrayBuffer()));
     if (mudancas.length === 0) {
-      await supabase.from("contrato_analises").update({ status: "concluida", resumo: "Nenhuma diferença de texto em relação à versão anterior." }).eq("id", analise.id);
+      await supabase.from("contrato_analises").update({ status: "concluida", resumo: "Nenhuma diferença de texto em relação ao modelo atual." }).eq("id", analise.id);
       return;
     }
 
@@ -136,7 +142,7 @@ export async function analisarNovaVersao(supabase: Supa, pedidoId: string, contr
       .from("contrato_analises")
       .update({
         status: "concluida",
-        resumo: ia?.resumo ?? `${mudancas.length} ${mudancas.length === 1 ? "diferença encontrada" : "diferenças encontradas"} em relação à versão anterior.`,
+        resumo: ia?.resumo ?? `${mudancas.length} ${mudancas.length === 1 ? "diferença encontrada" : "diferenças encontradas"} em relação ao modelo atual.`,
         resumo_ia: !!ia,
       })
       .eq("id", analise.id);
