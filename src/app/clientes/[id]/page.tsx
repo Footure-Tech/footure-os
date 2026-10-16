@@ -245,6 +245,10 @@ export default async function ClienteDetalhePage({ params }: PageProps<"/cliente
               <LinhaChaveValor rotulo="Razão social" valor={razaoSocialExibida} longo />
               {nomeFantasiaExibido && <LinhaChaveValor rotulo="Nome fantasia" valor={nomeFantasiaExibido} />}
               {cliente.apelido && <LinhaChaveValor rotulo="Apelido" valor={cliente.apelido} />}
+              <LinhaChaveValor
+                rotulo="ID no Footlink"
+                valor={cliente.footlink_org_id ? <span className="font-mono">{cliente.footlink_org_id}</span> : <span className="text-gray3">sem conta vinculada</span>}
+              />
               <LinhaChaveValor rotulo="CNPJ" valor={formatarCnpj(cnpjExibido)} />
               <LinhaChaveValor rotulo="Perfil" valor={ROTULO_PERFIL_CLIENTE[cliente.tipo]} />
               <LinhaChaveValor rotulo="Endereço" valor={enderecoExibido} longo />

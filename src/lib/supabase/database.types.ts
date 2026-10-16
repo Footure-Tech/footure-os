@@ -63,6 +63,8 @@ export interface Database {
           razao_social: string;
           nome_fantasia: string | null;
           apelido: string | null;
+          // 0037_clientes_footlink_org_id.sql
+          footlink_org_id: string | null;
           cnpj: string;
           endereco: string | null;
           numero: string | null;
@@ -84,6 +86,7 @@ export interface Database {
           razao_social: string;
           nome_fantasia?: string | null;
           apelido?: string | null;
+          footlink_org_id?: string | null;
           cnpj: string;
           endereco?: string | null;
           numero?: string | null;
@@ -101,6 +104,7 @@ export interface Database {
           razao_social?: string;
           nome_fantasia?: string | null;
           apelido?: string | null;
+          footlink_org_id?: string | null;
           cnpj?: string;
           endereco?: string | null;
           numero?: string | null;

@@ -13,6 +13,7 @@ const ClientePayloadSchema = z.object({
   tipo: z.enum(["clube", "agente"]),
   nomeFantasia: z.string().optional(),
   apelido: z.string().optional(), // só faz sentido pra clube — validado na UI, não aqui
+  footlinkOrgId: z.string().max(100).optional(), // conta do cliente no Footlink (0037) — opcional, só existe aqui
   endereco: z.string().min(1),
   numero: z.string().min(1),
   complemento: z.string().optional(),
@@ -22,6 +23,13 @@ const ClientePayloadSchema = z.object({
   uf: z.string().length(2),
   foroPreferencial: z.string().min(1),
 });
+
+/** Índice único de 0037: a mesma organização do Footlink não pode ficar em dois clientes. */
+function erroFootlinkDuplicado(error: { code?: string; message: string }) {
+  return error.code === "23505" && error.message.includes("footlink_org_id")
+    ? "Esse ID de organização do Footlink já está vinculado a outro cliente."
+    : null;
+}
 
 export interface SalvarClienteState {
   erro?: string;
@@ -56,6 +64,7 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
     bling_contato_id: payload.blingContatoId,
     nome_fantasia: payload.nomeFantasia || null,
     apelido: payload.tipo === "clube" ? payload.apelido || null : null,
+    footlink_org_id: payload.footlinkOrgId?.trim() || null,
     endereco: payload.endereco,
     numero: payload.numero,
     complemento: payload.complemento || null,
@@ -69,10 +78,10 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
   let clienteId = payload.clienteId;
   if (clienteId) {
     const { error } = await supabase.from("clientes").update(linha).eq("id", clienteId);
-    if (error) return { erro: `Falha ao salvar cliente: ${error.message}` };
+    if (error) return { erro: erroFootlinkDuplicado(error) ?? `Falha ao salvar cliente: ${error.message}` };
   } else {
     const { data, error } = await supabase.from("clientes").insert(linha).select("id").single();
-    if (error || !data) return { erro: `Falha ao criar cliente: ${error?.message}` };
+    if (error || !data) return { erro: (error && erroFootlinkDuplicado(error)) ?? `Falha ao criar cliente: ${error?.message}` };
     clienteId = data.id;
   }
 

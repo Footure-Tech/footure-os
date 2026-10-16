@@ -34,6 +34,7 @@ export interface ClienteFormValores {
   razaoSocial: string;
   nomeFantasia: string | null;
   apelido: string | null;
+  footlinkOrgId: string | null;
   cnpj: string;
   endereco: string | null;
   numero: string | null;
@@ -87,6 +88,7 @@ export function ClienteForm({
   const [tipo, setTipo] = useState<TipoCliente>(cliente?.tipo ?? "clube");
   const [nomeFantasia, setNomeFantasia] = useState(cliente?.nomeFantasia ?? valoresIniciaisBling?.fantasia ?? "");
   const [apelido, setApelido] = useState(cliente?.apelido ?? "");
+  const [footlinkOrgId, setFootlinkOrgId] = useState(cliente?.footlinkOrgId ?? "");
   const [endereco, setEndereco] = useState<ValoresEndereco>({
     endereco: cliente?.endereco ?? valoresIniciaisBling?.endereco ?? "",
     numero: cliente?.numero ?? valoresIniciaisBling?.numero ?? "",
@@ -115,7 +117,7 @@ export function ClienteForm({
   const itensBusca: ItemBusca[] = contatosBling.map((c) => ({ value: String(c.id), label: `${c.nome} — ${formatarCnpj(c.cnpj)}` }));
   const buscaValue = contatoSelecionado ? { value: String(contatoSelecionado.id), label: contatoSelecionado.nome } : null;
 
-  const payload = { clienteId: cliente?.id, blingContatoId, tipo, nomeFantasia, apelido, ...endereco, foroPreferencial };
+  const payload = { clienteId: cliente?.id, blingContatoId, tipo, nomeFantasia, apelido, footlinkOrgId, ...endereco, foroPreferencial };
 
   const nomeExibido = nomeFantasia || razaoSocial;
 
@@ -200,6 +202,23 @@ export function ClienteForm({
               <Label variante="campo">Foro preferencial</Label>
               <Input value={foroPreferencial} onChange={(e) => setForoPreferencial(e.target.value)} required />
             </div>
+          </div>
+        </BlocoFormulario>
+
+        <BlocoFormulario titulo="Conta no Footlink" descricao="Liga este cadastro à conta do cliente na plataforma Footlink. Não existe no Bling.">
+          <div className="flex flex-col gap-2 sm:max-w-sm">
+            <Label variante="campo" htmlFor="footlink-org-id">
+              ID da organização no Footlink
+            </Label>
+            <Input
+              id="footlink-org-id"
+              value={footlinkOrgId}
+              onChange={(e) => setFootlinkOrgId(e.target.value)}
+              placeholder="Opcional"
+              autoComplete="off"
+              className="font-mono placeholder:font-sans"
+            />
+            <p className="text-xs text-gray3">Deixe em branco se o cliente ainda não tem conta no Footlink.</p>
           </div>
         </BlocoFormulario>
 

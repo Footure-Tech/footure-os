@@ -25,6 +25,7 @@ export default async function EditarClientePage({ params }: PageProps<"/clientes
           razaoSocial: cliente.razao_social,
           nomeFantasia: cliente.nome_fantasia,
           apelido: cliente.apelido,
+          footlinkOrgId: cliente.footlink_org_id,
           cnpj: cliente.cnpj,
           endereco: cliente.endereco,
           numero: cliente.numero,
