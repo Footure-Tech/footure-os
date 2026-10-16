@@ -9,7 +9,7 @@ import { UserMenu } from "@/components/user-menu";
 // sem seletor de perfil — o perfil é o papel do usuário logado.
 export function AppBar({ sessao }: { sessao: SessaoUsuario }) {
   return (
-    <header className="sticky top-0 z-[1000] flex h-[60px] shrink-0 items-center gap-5 bg-appbar pr-6 pl-5 text-white">
+    <header className="sticky top-0 z-40 flex h-[60px] shrink-0 items-center gap-5 bg-appbar pr-6 pl-5 text-white">
       <Link href="/" className="flex shrink-0 items-center rounded-lg focus-visible:shadow-focus focus-visible:outline-none">
         {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático, sem otimização necessária */}
         <img src="/brand/logo-footure-branco.svg" alt="Footure Football Company" width={73} height={28} className="h-7 w-auto" />

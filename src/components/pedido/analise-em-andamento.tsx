@@ -6,7 +6,7 @@ const MENSAGENS = {
   enviando: ["Enviando o documento…", "Guardando a nova versão com segurança…"],
   analisando: [
     "Lendo o contrato cláusula por cláusula…",
-    "Comparando com a versão anterior…",
+    "Comparando com o modelo atual…",
     "Identificando as mudanças no texto…",
     "Resumindo cada alteração…",
     "Separando melhorias do modelo e ajustes do cliente…",
