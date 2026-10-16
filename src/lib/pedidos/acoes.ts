@@ -6,11 +6,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { gerarContratoBuffer, type Signatario } from "@/lib/contratos/gerarContrato";
+import { carregarAjustesModelo } from "@/lib/contratos/ajustesModelo";
+import { analisarNovaVersao } from "@/lib/contratos/analisarVersao";
 
 type SignatarioClienteRow = Database["public"]["Tables"]["signatarios_cliente"]["Row"];
 import { montarDadosContrato } from "@/lib/contratos/montarDados";
 import { podeLiberarParaAssinatura } from "@/lib/validacoes/pedido";
 import { enviarPedidoAoBling } from "@/lib/integracoes/blingPedido";
+import { notificarJuridicoContratoParaValidacao } from "@/lib/contratos/notificarJuridico";
 import { enviarParaAssinatura } from "@/lib/integracoes/clicksign";
 
 type Supa = SupabaseClient<Database>;
@@ -36,7 +39,7 @@ async function proximaVersaoContrato(supabase: Supa, pedidoId: string): Promise<
 
 async function gerarEArmazenarContrato(supabase: Supa, pedidoId: string, geradoPor: string, motivoVersao?: string) {
   const dados = await montarDadosContrato(supabase, pedidoId);
-  const buffer = await gerarContratoBuffer(dados);
+  const buffer = await gerarContratoBuffer(dados, await carregarAjustesModelo(supabase, dados.perfil));
   const versao = await proximaVersaoContrato(supabase, pedidoId);
   const path = `${pedidoId}/v${versao}.docx`;
 
@@ -68,6 +71,7 @@ export async function tentarGerarContrato(supabase: Supa, pedidoId: string, gera
     await gerarEArmazenarContrato(supabase, pedidoId, geradoPor, "Geração automática na aprovação.");
     await supabase.from("pedidos").update({ geracao_contrato_erro: null }).eq("id", pedidoId);
     await registrarTransicao(supabase, pedidoId, "em_revisao_juridica", "Contrato gerado automaticamente na aprovação.");
+    await notificarJuridicoContratoParaValidacao(pedidoId, "Um novo contrato foi gerado e está aguardando a validação do jurídico.");
   } catch (erro) {
     const mensagem = erro instanceof Error ? erro.message : String(erro);
     await supabase.from("pedidos").update({ geracao_contrato_erro: mensagem }).eq("id", pedidoId);
@@ -128,14 +132,21 @@ export async function subirNovaVersaoContrato(
   });
   if (erroUpload) throw new Error(`Falha ao salvar o .docx no Storage: ${erroUpload.message}`);
 
-  const { error: erroInsert } = await supabase.from("contratos").insert({
-    pedido_id: pedidoId,
-    versao,
-    arquivo_path: path,
-    gerado_por: geradoPor,
-    motivo_versao: motivoVersao,
-  });
-  if (erroInsert) throw new Error(`Falha ao registrar a versão do contrato: ${erroInsert.message}`);
+  const { data: registro, error: erroInsert } = await supabase
+    .from("contratos")
+    .insert({
+      pedido_id: pedidoId,
+      versao,
+      arquivo_path: path,
+      gerado_por: geradoPor,
+      motivo_versao: motivoVersao,
+    })
+    .select("id")
+    .single();
+  if (erroInsert || !registro) throw new Error(`Falha ao registrar a versão do contrato: ${erroInsert?.message}`);
+
+  // Compara com a versão anterior e resume as mudanças (IA) para o jurídico decidir o que vai para o modelo.
+  if (versao > 1) await analisarNovaVersao(supabase, pedidoId, registro.id, versao);
 
   return { versao, path };
 }

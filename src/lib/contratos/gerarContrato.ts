@@ -92,8 +92,29 @@ const ASSET_LOGO_FOOTLINK = path.join(process.cwd(), "_docs/referencia-skill/ass
 const ASSET_LOGO_FOOTURE = path.join(process.cwd(), "_docs/referencia-skill/assets/footure-logo.png");
 
 // ---------- helpers de parágrafo ----------
-const R = (t: string) => new TextRun({ text: t, size: 22 });
-const B = (t: string) => new TextRun({ text: t, bold: true, size: 22 });
+// Ajustes do modelo (0041): trechos que o jurídico agregou ao modelo a partir
+// de versões editadas — trocados em todo texto montado aqui. gerarContrato é
+// síncrono, então o estado de módulo vale só durante uma geração.
+export interface AjusteModelo {
+  id: string;
+  de: string;
+  para: string;
+}
+let ajustesAtivos: AjusteModelo[] = [];
+let ajustesAplicados = new Set<string>();
+function aplicarAjustes(t: string): string {
+  let r = t;
+  for (const a of ajustesAtivos) {
+    if (a.de && r.includes(a.de)) {
+      r = r.split(a.de).join(a.para);
+      ajustesAplicados.add(a.id);
+    }
+  }
+  return r;
+}
+
+const R = (t: string) => new TextRun({ text: aplicarAjustes(t), size: 22 });
+const B = (t: string) => new TextRun({ text: aplicarAjustes(t), bold: true, size: 22 });
 const P = (children: TextRun[] | string) =>
   new Paragraph({
     spacing: { after: 120 },
@@ -401,7 +422,7 @@ function lgpdReforcada(): Paragraph[] {
         spacing: { after: 100 },
         alignment: AlignmentType.JUSTIFIED,
         indent: { left: 360 },
-        children: [new TextRun({ text: a + " ", bold: true, size: 22 }), R(t)],
+        children: [new TextRun({ text: aplicarAjustes(a + " "), bold: true, size: 22 }), R(t)],
       }),
     );
   }
@@ -568,7 +589,22 @@ function blocoAssinaturas(D: DadosContrato): (Paragraph | Table)[] {
 }
 
 // ---------- montagem principal ----------
-export function gerarContrato(D: DadosContrato): Document {
+export function gerarContrato(D: DadosContrato, ajustes: AjusteModelo[] = []): Document {
+  ajustesAtivos = ajustes;
+  ajustesAplicados = new Set();
+  try {
+    return montarDocumento(D);
+  } finally {
+    ajustesAtivos = [];
+  }
+}
+
+/** Ids dos ajustes que a última geração de fato aplicou (o trecho original estava no texto). */
+export function ajustesAplicadosNaUltimaGeracao(): string[] {
+  return [...ajustesAplicados];
+}
+
+function montarDocumento(D: DadosContrato): Document {
   const isClube = D.perfil === "clube";
   const k: (Paragraph | Table)[] = [];
 
@@ -1047,6 +1083,6 @@ export function gerarContrato(D: DadosContrato): Document {
   });
 }
 
-export async function gerarContratoBuffer(D: DadosContrato): Promise<Buffer> {
-  return Packer.toBuffer(gerarContrato(D));
+export async function gerarContratoBuffer(D: DadosContrato, ajustes: AjusteModelo[] = []): Promise<Buffer> {
+  return Packer.toBuffer(gerarContrato(D, ajustes));
 }

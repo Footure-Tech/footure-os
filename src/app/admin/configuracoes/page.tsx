@@ -1,4 +1,4 @@
-import { MdCheckCircle, MdDraw, MdError } from "react-icons/md";
+import { MdCheckCircle, MdDraw, MdError, MdTune } from "react-icons/md";
 import { createClient } from "@/lib/supabase/server";
 import { buscarConfiguracaoComissionamento } from "@/lib/comissao/configuracoes";
 import { buscarStatusBling } from "@/lib/integracoes/bling";
@@ -8,6 +8,9 @@ import { CardModulo, LinhaChaveValor } from "@/components/negocio/card-modulo";
 import { BlocoComissionamento } from "@/components/configuracoes/bloco-comissionamento";
 import { BlocoBling } from "@/components/configuracoes/bloco-bling";
 import { cn } from "@/lib/utils";
+import { EstadoVazio } from "@/components/ds/estado-vazio";
+import { DesativarAjusteButton } from "@/components/configuracoes/desativar-ajuste-button";
+import { formatarDataCurta } from "@/lib/formatacao";
 
 const MENSAGEM_BLING: Record<string, { titulo: string; erro: boolean }> = {
   conectado: { titulo: "Bling conectado com sucesso.", erro: false },
@@ -18,9 +21,10 @@ const MENSAGEM_BLING: Record<string, { titulo: string; erro: boolean }> = {
 export default async function ConfiguracoesPage({ searchParams }: PageProps<"/admin/configuracoes">) {
   const { bling } = await searchParams;
   const supabase = await createClient();
-  const [comissionamento, statusBling] = await Promise.all([
+  const [comissionamento, statusBling, { data: ajustes }] = await Promise.all([
     buscarConfiguracaoComissionamento(supabase),
     buscarStatusBling(supabase),
+    supabase.from("modelo_contrato_ajustes").select("id, perfil, trecho_original, trecho_novo, criado_em, profiles!modelo_contrato_ajustes_criado_por_fkey(nome)").eq("ativo", true).order("criado_em", { ascending: false }),
   ]);
 
   const mensagemBling = typeof bling === "string" ? MENSAGEM_BLING[bling] : undefined;
@@ -68,6 +72,43 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps<"/ad
           <p className="text-xs text-gray3">A conexão é definida pelas variáveis de ambiente do servidor (CLICKSIGN_API_URL, CLICKSIGN_ACCESS_TOKEN e CLICKSIGN_WEBHOOK_SECRET).</p>
         </CardModulo>
       </div>
+
+      <CardModulo
+        icone={MdTune}
+        cor="bg-iconGray"
+        titulo="Ajustes do modelo de contrato"
+        extra={<span className="text-sm font-semibold text-gray3">{ajustes?.length ?? 0} ativos</span>}
+      >
+        <p className="-mt-1 text-sm text-gray">
+          Trechos que o jurídico agregou ao modelo a partir de versões editadas. São aplicados automaticamente nas próximas gerações do mesmo modelo;
+          desative para voltar ao texto original.
+        </p>
+        {!ajustes?.length ? (
+          <EstadoVazio compacto icone={MdTune} titulo="Nenhum ajuste ativo" descricao="O modelo está com o texto padrão." />
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {ajustes.map((a) => (
+              <li key={a.id} className="flex flex-col gap-2 rounded-lg border border-gray5 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs text-gray3">
+                    Modelo Footlink {a.perfil === "clube" ? "Clube" : "Agente"} · agregado em {formatarDataCurta(a.criado_em)}
+                    {(a.profiles as unknown as { nome: string } | null)?.nome ? ` por ${(a.profiles as unknown as { nome: string }).nome}` : ""}
+                  </span>
+                  <DesativarAjusteButton ajusteId={a.id} />
+                </div>
+                <p className="rounded-lg bg-dangerBg/60 px-3 py-2 text-[13px] text-darkPurple1">
+                  <span className="mb-0.5 block text-[10px] font-bold tracking-[0.06em] text-gray3 uppercase">Texto original</span>
+                  {a.trecho_original}
+                </p>
+                <p className="rounded-lg bg-green5/60 px-3 py-2 text-[13px] text-darkPurple1">
+                  <span className="mb-0.5 block text-[10px] font-bold tracking-[0.06em] text-gray3 uppercase">Novo texto</span>
+                  {a.trecho_novo}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardModulo>
     </div>
   );
 }

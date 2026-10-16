@@ -30,6 +30,8 @@ import { CancelarPedidoDialog } from "@/components/pedido/cancelar-pedido-dialog
 import { TimelineTransicoes, type EventoTimeline } from "@/components/pedido/timeline-transicoes";
 import { ROTULO_STATUS } from "@/components/rotulo-status";
 import { ReenviarBlingButton } from "@/components/pedido/reenviar-bling-button";
+import { AnaliseVersaoContrato } from "@/components/contratos/analise-versao";
+import { carregarAnaliseVersao } from "@/lib/contratos/consultasAnalise";
 import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 
 const VOLTAR_POR_PAPEL = { vendedor: "/vendedor", admin: "/admin", juridico: "/juridico" } as const;
@@ -117,6 +119,8 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
     }),
   );
   const contratoAtual = contratosComUrl[0] ?? null;
+  // Mudanças da versão enviada pelo jurídico (0041) — só jurídico/diretoria veem.
+  const analiseVersao = contratoAtual && sessao.papel !== "vendedor" ? await carregarAnaliseVersao(supabase, contratoAtual.id) : null;
   // Prazo expirou / documento finalizado com signatários pendentes (0028).
   const assinaturaIncompleta = !!contratoAtual?.assinatura_incompleta;
 
@@ -326,6 +330,10 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
                     <p className="text-xs text-gray3">Enviado antes do acompanhamento individual — o status por pessoa não está disponível para este envio.</p>
                   )}
                 </div>
+
+                {analiseVersao && (
+                  <AnaliseVersaoContrato analise={analiseVersao} versao={contratoAtual.versao} editavel={pedido.status === "em_revisao_juridica"} />
+                )}
 
                 <div className="flex flex-col gap-2">
                   <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">

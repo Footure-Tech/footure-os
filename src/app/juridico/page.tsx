@@ -22,6 +22,8 @@ import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { LogoCliente } from "@/components/clientes/logo-cliente";
 import { ListaSignatarios } from "@/components/negocio/lista-signatarios";
 import { ChecklistValidacao } from "@/components/contratos/checklist-validacao";
+import { AnaliseVersaoContrato } from "@/components/contratos/analise-versao";
+import { carregarAnaliseVersao } from "@/lib/contratos/consultasAnalise";
 import { AcoesPedido } from "@/components/pedido/acoes-pedido";
 import { cn } from "@/lib/utils";
 
@@ -96,6 +98,7 @@ export default async function ContratosJuridicoPage({ searchParams }: PageProps<
         }
         return {
           nomeCliente: cliente?.nome_fantasia || cliente?.razao_social || "Cliente",
+          analise: contratoAtual ? await carregarAnaliseVersao(supabase, contratoAtual.id) : null,
           assinaturas,
           marcados: (marcacoes ?? []).map((m) => ({
             item: m.item,
@@ -190,8 +193,9 @@ export default async function ContratosJuridicoPage({ searchParams }: PageProps<
                 </div>
                 <h2 className="text-xl font-bold text-darkPurple1">{painel.nomeCliente}</h2>
                 <span className="text-sm text-gray">Modelo {MODELO_CONTRATO[detalhe.pedido.perfil]}</span>
-                {/* Nº do pedido virá do Bling (envio ainda é stub). */}
-                <span className="text-sm text-gray">Pedido — · Valor {formatarMoeda(detalhe.pedido.valor_total)}</span>
+                <span className="text-sm text-gray">
+                  Pedido Bling {detalhe.pedido.bling_pedido_numero ? `nº ${detalhe.pedido.bling_pedido_numero}` : "—"} · Valor {formatarMoeda(detalhe.pedido.valor_total)}
+                </span>
               </div>
 
               {!contratoAtual ? (
@@ -218,6 +222,10 @@ export default async function ContratosJuridicoPage({ searchParams }: PageProps<
                       editavel={detalhe.pedido.status === "em_revisao_juridica"}
                     />
                   </Secao>
+
+                  {painel.analise && (
+                    <AnaliseVersaoContrato analise={painel.analise} versao={contratoAtual.versao} editavel={detalhe.pedido.status === "em_revisao_juridica"} />
+                  )}
 
                   <Secao
                     titulo="Assinaturas · Clicksign"

@@ -441,6 +441,58 @@ export interface Database {
           situacao_detalhada: number | null;
         }>
       >;
+      // supabase/migrations/0041_analise_versoes_contrato.sql
+      contrato_analises: TableDef<
+        { id: string; contrato_id: string; base_contrato_id: string | null; status: "pendente" | "concluida" | "erro"; resumo: string | null; resumo_ia: boolean; erro: string | null; criado_em: string },
+        { id?: string; contrato_id: string; base_contrato_id?: string | null; status?: "pendente" | "concluida" | "erro"; resumo?: string | null; resumo_ia?: boolean; erro?: string | null },
+        Partial<{ base_contrato_id: string | null; status: "pendente" | "concluida" | "erro"; resumo: string | null; resumo_ia: boolean; erro: string | null }>
+      >;
+      contrato_mudancas: TableDef<
+        {
+          id: string;
+          analise_id: string;
+          ordem: number;
+          clausula: string | null;
+          tipo: "alterado" | "incluido" | "removido";
+          trecho_original: string;
+          trecho_novo: string;
+          resumo: string | null;
+          sugestao: "modelo" | "especifico" | null;
+          motivo_sugestao: string | null;
+          decisao: "pendente" | "agregar" | "manter";
+          decidido_por: string | null;
+          decidido_em: string | null;
+        },
+        {
+          id?: string;
+          analise_id: string;
+          ordem: number;
+          clausula?: string | null;
+          tipo: "alterado" | "incluido" | "removido";
+          trecho_original?: string;
+          trecho_novo?: string;
+          resumo?: string | null;
+          sugestao?: "modelo" | "especifico" | null;
+          motivo_sugestao?: string | null;
+        },
+        Partial<{ resumo: string | null; sugestao: "modelo" | "especifico" | null; motivo_sugestao: string | null; decisao: "pendente" | "agregar" | "manter"; decidido_por: string | null; decidido_em: string | null }>
+      >;
+      modelo_contrato_ajustes: TableDef<
+        {
+          id: string;
+          perfil: "clube" | "agente";
+          trecho_original: string;
+          trecho_novo: string;
+          mudanca_id: string | null;
+          ativo: boolean;
+          criado_por: string | null;
+          criado_em: string;
+          desativado_por: string | null;
+          desativado_em: string | null;
+        },
+        { id?: string; perfil: "clube" | "agente"; trecho_original: string; trecho_novo: string; mudanca_id?: string | null; criado_por?: string | null },
+        Partial<{ ativo: boolean; desativado_por: string | null; desativado_em: string | null }>
+      >;
       // supabase/migrations/0036_contrato_licencas_bling.sql
       contrato_licencas_bling: TableDef<
         {

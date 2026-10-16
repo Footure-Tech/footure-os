@@ -11,7 +11,7 @@ function comNomeDoSistema(remetente: string) {
   return `${NOME_DO_SISTEMA} <${endereco}>`;
 }
 
-async function enviarEmail(para: string, assunto: string, conteudo: Parameters<typeof montarEmail>[0]) {
+async function enviarEmail(para: string | string[], assunto: string, conteudo: Parameters<typeof montarEmail>[0]) {
   const apiKey = process.env.RESEND_API_KEY;
   const remetente = process.env.RESEND_FROM_EMAIL;
   if (!apiKey || !remetente) throw new Error("RESEND_API_KEY / RESEND_FROM_EMAIL não configurados.");
@@ -69,5 +69,29 @@ export async function enviarEmailRedefinicaoSenha(destinatario: string, nome: st
     blocos: [{ paragrafo: "Recebemos um pedido para redefinir a senha da sua conta no Footure OS. Clique no botão para criar uma nova senha:" }],
     botao: { rotulo: "Criar nova senha", url: link },
     observacao: "O link vale por tempo limitado e só pode ser usado uma vez. Se você não pediu a redefinição, ignore este e-mail — sua senha atual continua valendo.",
+  });
+}
+
+/** Aviso ao jurídico: contrato gerado e aguardando validação. */
+export async function enviarEmailContratoParaValidacao(
+  destinatarios: string[],
+  dados: { cliente: string; plano: string; valorTotal: string; versao: number; motivo: string; link: string },
+) {
+  await enviarEmail(destinatarios, `Contrato para validação · ${dados.cliente}`, {
+    preheader: `Contrato v${dados.versao} de ${dados.cliente} aguardando validação do jurídico.`,
+    titulo: "Há um contrato aguardando sua validação",
+    blocos: [
+      { paragrafo: `${dados.motivo} Revise o contrato e libere para assinatura quando estiver pronto.` },
+      {
+        dados: [
+          { rotulo: "Cliente", valor: dados.cliente },
+          { rotulo: "Plano", valor: dados.plano },
+          { rotulo: "Valor total", valor: dados.valorTotal },
+          { rotulo: "Versão", valor: `v${dados.versao}` },
+        ],
+      },
+    ],
+    botao: { rotulo: "Validar contrato", url: dados.link },
+    observacao: "Você recebe este aviso por ter o perfil Jurídico no Footure OS.",
   });
 }
