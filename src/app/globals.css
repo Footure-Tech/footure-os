@@ -352,3 +352,14 @@
 @media (prefers-reduced-motion: reduce) {
   .analise-varredura, .analise-destaque, .analise-flutuar, .analise-brilho, .analise-progresso { animation: none; }
 }
+
+/* Item de mudança decidido no modal de análise: confirma e sai da lista. */
+@keyframes mudanca-concluida {
+  0% { opacity: 1; transform: none; }
+  55% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateX(24px); }
+}
+.mudanca-concluida { animation: mudanca-concluida 900ms var(--ease-standard) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .mudanca-concluida { animation-duration: 1ms; }
+}

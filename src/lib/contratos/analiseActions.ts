@@ -106,3 +106,21 @@ export async function reanalisarVersaoAction(contratoId: string): Promise<{ erro
   revalidatePath(`/pedidos/${contrato.pedido_id}`);
   return {};
 }
+
+/** "Manter todos só neste contrato" — decide em lote as mudanças pendentes informadas. */
+export async function manterMudancasEmLoteAction(mudancaIds: string[]): Promise<{ erro?: string; decididas?: number }> {
+  const sessao = await exigirPapel("juridico", "admin");
+  if (!mudancaIds.length) return { decididas: 0 };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("contrato_mudancas")
+    .update({ decisao: "manter", decidido_por: sessao.id, decidido_em: new Date().toISOString() })
+    .in("id", mudancaIds)
+    .eq("decisao", "pendente")
+    .select("id, contrato_analises(contratos!contrato_analises_contrato_id_fkey(pedido_id))");
+  if (error) return { erro: `Não foi possível salvar as decisões: ${error.message}` };
+  const pedidoId = (data?.[0]?.contrato_analises as unknown as { contratos: { pedido_id: string } | null } | null)?.contratos?.pedido_id;
+  revalidatePath("/juridico");
+  if (pedidoId) revalidatePath(`/pedidos/${pedidoId}`);
+  return { decididas: data?.length ?? 0 };
+}
