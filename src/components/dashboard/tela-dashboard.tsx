@@ -1,9 +1,8 @@
 import Link from "next/link";
 import type { IconType } from "react-icons";
-import { MdChevronRight, MdError, MdFactCheck, MdGavel, MdHistoryEdu, MdSync, MdWarning } from "react-icons/md";
+import { MdChevronRight, MdError, MdEventAvailable, MdFactCheck, MdGavel, MdHistoryEdu, MdSync, MdWarning } from "react-icons/md";
 import type { carregarDashboard, Periodo, PontoAtencao } from "@/lib/dashboard/indicadores";
-import { statusPedidoVisual } from "@/lib/status/visual";
-import { formatarMoeda, formatarMoedaCompacta } from "@/lib/formatacao";
+import { formatarDataCurta, formatarMoeda, formatarMoedaCompacta } from "@/lib/formatacao";
 import { PageHeader } from "@/components/shell/page-header";
 import { GradeKpis, KpiCard } from "@/components/ds/kpi-card";
 import { SegmentedToggle } from "@/components/ds/alternadores";
@@ -191,10 +190,6 @@ export function TelaDashboard({
 
 function VisaoGeral({ dados, urlLogo, rotuloPeriodo }: { dados: Dados; urlLogo: (p: string | null) => string | null; rotuloPeriodo: string }) {
   const baseFunil = dados.funil[0]?.quantidade ?? 0;
-  // Em validação: SEMPRE todos visíveis (decisão de produto); os demais, até completar 6.
-  const emValidacao = dados.contratosEmAndamento.filter((c) => c.status === "em_revisao_juridica" || c.status === "pronto_para_assinatura");
-  const outros = dados.contratosEmAndamento.filter((c) => !emValidacao.includes(c));
-  const contratosVisiveis = [...emValidacao, ...outros.slice(0, Math.max(0, 6 - emValidacao.length))];
 
   return (
     <>
@@ -249,29 +244,28 @@ function VisaoGeral({ dados, urlLogo, rotuloPeriodo }: { dados: Dados; urlLogo: 
           </ul>
         </Card>
 
-        <Card titulo="Contratos em andamento" acao={<LinkCard href="/juridico">Ver todos</LinkCard>}>
-          {contratosVisiveis.length === 0 ? (
-            <EstadoVazio compacto icone={MdGavel} titulo="Nenhum contrato em andamento" />
+        <Card titulo="Contratos próximos do vencimento" acao={<LinkCard href="/financeiro?filtro=vencem_3_meses">Ver todos</LinkCard>}>
+          {dados.proximosDoVencimento.length === 0 ? (
+            <EstadoVazio compacto icone={MdEventAvailable} titulo="Nenhum contrato ativo" descricao="Os contratos do Bling com vigência em curso aparecem aqui." />
           ) : (
             <ul className="flex flex-col">
-              {contratosVisiveis.map((c) => {
-                const s = statusPedidoVisual(c.status, c.geracaoContratoErro);
-                return (
-                  <li key={c.id} className="border-b border-gray5 last:border-0">
-                    <Link href={`/juridico?sel=${c.id}`} className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-surface-hover">
-                      <LogoCliente url={urlLogo(c.logoPath)} nome={c.cliente} />
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate text-sm font-bold text-darkPurple1">{c.cliente}</span>
-                        <span className="text-xs text-gray3">
-                          {c.versao ? `v${c.versao} · ` : ""}
-                          {formatarMoeda(c.valor)}
-                        </span>
+              {dados.proximosDoVencimento.map((c) => (
+                <li key={c.id} className="border-b border-gray5 last:border-0">
+                  <Link href={`/financeiro/contratos/${c.id}`} className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-surface-hover">
+                    <LogoCliente url={urlLogo(c.logoPath)} nome={c.cliente} />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate text-sm font-bold text-darkPurple1">{c.cliente}</span>
+                      <span className="text-xs text-gray3">
+                        Vence em {formatarDataCurta(c.fim)}
+                        {!c.vigenciaDefinida && " (estimada)"} · {formatarMoeda(c.valor)}
                       </span>
-                      <StatusPill tom={s.tom}>{s.rotulo}</StatusPill>
-                    </Link>
-                  </li>
-                );
-              })}
+                    </span>
+                    <StatusPill tom={c.diasParaVencer <= 30 ? "inactive" : c.diasParaVencer <= 90 ? "pending" : "not_started"}>
+                      {c.diasParaVencer === 0 ? "Hoje" : `${c.diasParaVencer} ${c.diasParaVencer === 1 ? "dia" : "dias"}`}
+                    </StatusPill>
+                  </Link>
+                </li>
+              ))}
             </ul>
           )}
         </Card>

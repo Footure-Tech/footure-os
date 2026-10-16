@@ -146,11 +146,23 @@ export async function carregarDashboard(supabase: Supa, periodo: Periodo) {
   const coorte = pedidos.filter((p) => naJanela(p.criado_em, janela));
   const funil = ETAPAS_FUNIL.map((rotulo, etapa) => ({ rotulo, quantidade: coorte.filter((p) => p.etapaMaxima >= etapa).length }));
 
-  // Contratos em andamento — os em validação primeiro (precisam de ação imediata).
-  const ordemAndamento: Partial<Record<StatusPedido, number>> = { em_revisao_juridica: 0, pronto_para_assinatura: 1, aprovado: 2, enviado_para_assinatura: 3 };
-  const contratosEmAndamento = pedidos
-    .filter((p) => p.status in ordemAndamento)
-    .sort((a, b) => ordemAndamento[a.status]! - ordemAndamento[b.status]!);
+  // Contratos próximos do vencimento — os 5 contratos do Bling ativos (vigência
+  // definida ou estimada em curso, mesma regra de Financeiro · Contratos) que
+  // terminam primeiro.
+  const proximosDoVencimento = contratosBling
+    .filter((c) => c.ativo && !!c.fim && c.fim >= hoje)
+    .sort((a, b) => a.fim!.localeCompare(b.fim!))
+    .slice(0, 5)
+    .map((c) => ({
+      id: c.pedidoId,
+      cliente: c.cliente,
+      logoPath: c.logoPath,
+      numeroPedido: c.numeroPedido,
+      valor: c.valorTotal,
+      fim: c.fim!,
+      diasParaVencer: Math.round((Date.parse(`${c.fim}T00:00:00Z`) - Date.parse(`${hoje}T00:00:00Z`)) / 86_400_000),
+      vigenciaDefinida: c.vigenciaDefinida,
+    }));
 
   // Fluxo (layout B)
   const somaValor = (lista: typeof pedidos) => lista.reduce((s, p) => s + Number(p.valor_total), 0);
@@ -251,15 +263,7 @@ export async function carregarDashboard(supabase: Supa, periodo: Periodo) {
     },
     receitaMensal,
     funil,
-    contratosEmAndamento: contratosEmAndamento.map((p) => ({
-      id: p.id,
-      cliente: p.cliente,
-      logoPath: p.logoPath,
-      versao: p.contratoAtual?.versao ?? null,
-      valor: Number(p.valor_total),
-      status: p.status,
-      geracaoContratoErro: p.geracao_contrato_erro,
-    })),
+    proximosDoVencimento,
     faixas: inadimplencia.faixas,
     fluxo,
     vendedores,
