@@ -30,7 +30,7 @@ export async function notificarJuridicoContratoParaValidacao(pedidoId: string, m
       valorTotal: formatarMoeda(pedido.valor_total),
       versao: contrato?.versao ?? 1,
       motivo,
-      link: `${urlDoSistema()}/juridico?aba=validacao&sel=${pedidoId}`,
+      link: `${urlDoSistema()}/pedidos/${pedidoId}`,
     });
   } catch (erro) {
     console.error("[juridico] aviso de contrato para validação não enviado:", erro instanceof Error ? erro.message : erro);

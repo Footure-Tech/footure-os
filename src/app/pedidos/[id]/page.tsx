@@ -31,6 +31,8 @@ import { TimelineTransicoes, type EventoTimeline } from "@/components/pedido/tim
 import { ROTULO_STATUS } from "@/components/rotulo-status";
 import { ReenviarBlingButton } from "@/components/pedido/reenviar-bling-button";
 import { AnaliseVersaoContrato } from "@/components/contratos/analise-versao";
+import { ChecklistValidacao } from "@/components/contratos/checklist-validacao";
+import { ITENS_VALIDACAO } from "@/lib/contratos/validacao";
 import { carregarAnaliseVersao } from "@/lib/contratos/consultasAnalise";
 import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 
@@ -121,6 +123,18 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
   const contratoAtual = contratosComUrl[0] ?? null;
   // Mudanças da versão enviada pelo jurídico (0041) — só jurídico/diretoria veem.
   const analiseVersao = contratoAtual && sessao.papel !== "vendedor" ? await carregarAnaliseVersao(supabase, contratoAtual.id) : null;
+
+  // Checklist de validação jurídica (0029) da versão atual — jurídico/diretoria.
+  const checklist =
+    contratoAtual && sessao.papel !== "vendedor"
+      ? await (async () => {
+          const { data: marcacoes } = await supabase.from("contrato_validacao").select("item, marcado_em, marcado_por").eq("contrato_id", contratoAtual.id);
+          const ids = [...new Set((marcacoes ?? []).map((m) => m.marcado_por).filter((x): x is string => !!x))];
+          const { data: autores } = ids.length ? await supabase.from("profiles").select("user_id, nome").in("user_id", ids) : { data: [] };
+          const nome = new Map((autores ?? []).map((a) => [a.user_id, a.nome]));
+          return (marcacoes ?? []).map((m) => ({ item: m.item, marcadoEm: m.marcado_em, marcadoPor: m.marcado_por ? (nome.get(m.marcado_por) ?? null) : null }));
+        })()
+      : null;
   // Prazo expirou / documento finalizado com signatários pendentes (0028).
   const assinaturaIncompleta = !!contratoAtual?.assinatura_incompleta;
 
@@ -330,6 +344,23 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
                     <p className="text-xs text-gray3">Enviado antes do acompanhamento individual — o status por pessoa não está disponível para este envio.</p>
                   )}
                 </div>
+
+                {checklist && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Validação jurídica</span>
+                      <span className="text-xs font-semibold text-gray2">
+                        {checklist.length} de {ITENS_VALIDACAO.length}
+                      </span>
+                    </div>
+                    <ChecklistValidacao
+                      pedidoId={pedido.id}
+                      contratoId={contratoAtual.id}
+                      marcados={checklist}
+                      editavel={pedido.status === "em_revisao_juridica" && (sessao.papel === "juridico" || sessao.papel === "admin")}
+                    />
+                  </div>
+                )}
 
                 {analiseVersao && (
                   <AnaliseVersaoContrato analise={analiseVersao} versao={contratoAtual.versao} editavel={pedido.status === "em_revisao_juridica"} />

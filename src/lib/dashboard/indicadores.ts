@@ -194,7 +194,7 @@ export async function carregarDashboard(supabase: Supa, periodo: Periodo) {
         p.status === "pronto_para_assinatura"
           ? "Validado pelo jurídico — falta disparar a assinatura."
           : `Aguardando validação jurídica${p.emValidacaoDesde ? ` desde ${p.emValidacaoDesde.slice(8, 10)}/${p.emValidacaoDesde.slice(5, 7)}` : ""}.`,
-      href: `/juridico?aba=validacao&sel=${p.id}`,
+      href: `/pedidos/${p.id}`,
     });
   }
   for (const p of pedidos.filter((x) => x.bling_erro && !x.bling_pedido_id && x.status !== "cancelado")) {

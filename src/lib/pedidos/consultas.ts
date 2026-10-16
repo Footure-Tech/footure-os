@@ -35,9 +35,11 @@ export async function listarContratosJuridico(supabase: Supa) {
   const { data, error } = await supabase
     .from("pedidos")
     .select(
-      "id, status, perfil, plano, valor_total, geracao_contrato_erro, criado_em, clientes(razao_social, nome_fantasia, logo_path), contratos(id, versao, gerado_em, assinatura_incompleta)",
+      "id, status, perfil, plano, valor_total, geracao_contrato_erro, criado_em, bling_pedido_numero, clientes(razao_social, nome_fantasia, logo_path), profiles!pedidos_vendedor_id_profiles_fkey(nome), contratos(id, versao, gerado_em, assinatura_incompleta)",
     )
     .in("status", ["aprovado", "em_revisao_juridica", "pronto_para_assinatura", "enviado_para_assinatura", "assinado", "concluido"])
+    // Pedido sem contrato (0040) não passa pelo jurídico.
+    .eq("gera_contrato", true)
     .order("atualizado_em", { ascending: false });
   logSeErro("listarContratosJuridico", error);
   return data ?? [];
