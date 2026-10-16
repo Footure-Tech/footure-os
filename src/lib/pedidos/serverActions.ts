@@ -46,7 +46,7 @@ const PedidoPayloadSchema = z.object({
   licencasPagas: z.number().int().min(0),
   licencasGratuitas: z.number().int().min(0),
   formaPagamento: z.enum(["avista", "parcelado"]),
-  meioPagamento: z.enum(["boleto", "pix", "transferencia_bancaria", "cartao_credito", "cartao_debito"]).default("boleto"),
+  meioPagamento: z.enum(["boleto", "pix", "transferencia_bancaria", "cartao_credito"]).default("boleto"), // sem cartão de débito (sem forma no Bling)
   numeroParcelas: z.number().int().min(1).optional(),
   valorMensal: z.number().nonnegative(),
   valorTotal: z.number().nonnegative(),
@@ -75,6 +75,9 @@ const PedidoPayloadSchema = z.object({
   closerId: z.string().uuid(),
   // 0039 — opcionais (vazio = não informado)
   tipoVenda: z.enum(["novo", "renovacao", "reativacao"]).nullable().optional(),
+  // 0040 — sem contrato: aprovação envia ao Bling e conclui (sem jurídico/assinatura)
+  geraContrato: z.boolean().default(true),
+  emailsFinanceiro: z.array(z.string().trim().email("E-mail financeiro inválido")).max(10).default([]),
   origem: z.enum(["carteira", "inbound", "outbound"]).nullable().optional(),
 });
 
@@ -198,6 +201,8 @@ export async function salvarPedido(_prev: SalvarPedidoState, formData: FormData)
     closer_id: payload.closerId,
     tipo_venda: payload.tipoVenda ?? null,
     origem: payload.origem ?? null,
+    gera_contrato: payload.geraContrato,
+    emails_financeiro: [...new Set(payload.emailsFinanceiro.map((e) => e.toLowerCase()))],
   };
 
   let pedidoId = payload.pedidoId;
@@ -318,6 +323,21 @@ export async function aprovarPedidoAction(pedidoId: string) {
   await acoes.aprovarPedido(supabase, pedidoId, sessao.id);
   revalidatePath("/admin");
   revalidatePath(`/pedidos/${pedidoId}`);
+}
+
+/** "Reenviar ao Bling" — admin; não duplica o pedido no Bling (ver blingPedido.ts). */
+export async function reenviarAoBlingAction(pedidoId: string): Promise<{ erro?: string; numero?: string | null; aviso?: string }> {
+  await exigirPapel("admin");
+  const supabase = await createClient();
+  try {
+    const envio = await acoes.reenviarPedidoAoBling(supabase, pedidoId);
+    revalidatePath(`/pedidos/${pedidoId}`);
+    revalidatePath("/admin");
+    return envio.ok ? { numero: envio.numero, aviso: envio.aviso } : {};
+  } catch (erro) {
+    revalidatePath(`/pedidos/${pedidoId}`);
+    return { erro: erro instanceof Error ? erro.message : String(erro) };
+  }
 }
 
 export async function reprovarPedidoAction(pedidoId: string, comentario: string) {

@@ -29,6 +29,7 @@ import { AcoesPedido } from "@/components/pedido/acoes-pedido";
 import { CancelarPedidoDialog } from "@/components/pedido/cancelar-pedido-dialog";
 import { TimelineTransicoes, type EventoTimeline } from "@/components/pedido/timeline-transicoes";
 import { ROTULO_STATUS } from "@/components/rotulo-status";
+import { ReenviarBlingButton } from "@/components/pedido/reenviar-bling-button";
 import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 
 const VOLTAR_POR_PAPEL = { vendedor: "/vendedor", admin: "/admin", juridico: "/juridico" } as const;
@@ -79,7 +80,14 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
     pedido.status !== "concluido" &&
     pedido.status !== "cancelado" &&
     (sessao.papel === "admin" || sessao.papel === "juridico" || (sessao.papel === "vendedor" && donoDoRascunho));
-  const proxima = acaoPendente(pedido.status, sessao.papel, donoDoRascunho);
+  const semContrato = !pedido.gera_contrato;
+  // Sem contrato, "aprovado" só fica parado se o envio ao Bling falhou.
+  const proxima =
+    semContrato && pedido.status === "aprovado"
+      ? sessao.papel === "admin"
+        ? { titulo: "Envio ao Bling pendente", descricao: "O pedido foi aprovado, mas ainda não chegou ao Bling — veja o motivo no card do pedido e reenvie." }
+        : null
+      : acaoPendente(pedido.status, sessao.papel, donoDoRascunho);
 
   const alertas = gerarAlertas({
     valorMensal: pedido.valor_mensal,
@@ -126,6 +134,8 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
     versaoContrato: contratoAtual?.versao ?? null,
     geracaoContratoErro: pedido.geracao_contrato_erro,
     assinaturas: temStatusPorSignatario ? { assinados, total: signatariosExibidos.length, encerrada: assinaturaIncompleta } : null,
+    semContrato,
+    bling: { numero: pedido.bling_pedido_numero, erro: pedido.bling_erro },
   });
 
   // "criado" não vira uma linha em `transicoes` (o pedido nasce em rascunho sem RPC) — sintetiza
@@ -204,8 +214,25 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
         <div className="flex min-w-0 flex-col gap-5">
           <CardModulo icone={MdReceipt} cor="bg-iconGreen" titulo="Pedido de venda" extra={<StatusPill tom={status.tom}>{status.rotulo}</StatusPill>}>
             <div className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
-              {/* Nº do pedido vem do Bling (decisão de produto); o envio ao Bling ainda é stub. */}
-              <LinhaChaveValor rotulo="Número" valor={<span title="Atribuído pelo Bling quando o pedido for enviado">—</span>} />
+              {/* Nº do pedido vem do Bling (decisão de produto) — atribuído no envio, na aprovação. */}
+              <LinhaChaveValor
+                rotulo="Número (Bling)"
+                valor={
+                  pedido.bling_pedido_numero ? (
+                    sessao.papel === "admin" && pedido.bling_pedido_id ? (
+                      <Link href={`/financeiro/contratos/${pedido.bling_pedido_id}`} className="text-purple-text hover:underline">
+                        {pedido.bling_pedido_numero}
+                      </Link>
+                    ) : (
+                      pedido.bling_pedido_numero
+                    )
+                  ) : (
+                    <span className="text-gray3" title="Atribuído pelo Bling quando o pedido é aprovado">
+                      {pedido.bling_pedido_id ? "enviado" : "—"}
+                    </span>
+                  )
+                }
+              />
               <LinhaChaveValor rotulo="Emissão" valor={formatarDataCurta(pedido.criado_em)} />
               <LinhaChaveValor rotulo="Plano" valor={`${produtoLabel} · ${planoLabel}`} />
               <LinhaChaveValor
@@ -225,8 +252,22 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
               <LinhaChaveValor rotulo="Vigência" valor={`${formatarDataCurta(pedido.vigencia_inicio)} a ${formatarDataCurta(pedido.vigencia_fim)}`} />
               <LinhaChaveValor rotulo="Tipo de venda" valor={pedido.tipo_venda ? ROTULO_TIPO_VENDA[pedido.tipo_venda] : <span className="text-gray3">não informado</span>} />
               <LinhaChaveValor rotulo="Origem" valor={pedido.origem ? ROTULO_ORIGEM_VENDA[pedido.origem] : <span className="text-gray3">não informada</span>} />
+              <LinhaChaveValor
+                rotulo="E-mails financeiro"
+                valor={pedido.emails_financeiro.length ? pedido.emails_financeiro.join(", ") : <span className="text-gray3">não informados</span>}
+                longo
+                className="md:col-span-2"
+              />
               {pedido.condicao_especial && <LinhaChaveValor rotulo="Condição especial" valor={pedido.condicao_especial} longo className="md:col-span-2" />}
             </div>
+            {pedido.bling_erro && (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red/30 bg-dangerBg px-4 py-3 text-sm text-red">
+                <span className="min-w-0 flex-1">
+                  <strong className="font-bold">{pedido.bling_pedido_id ? "Ressalva no envio ao Bling:" : "Falha no envio ao Bling:"}</strong> {pedido.bling_erro}
+                </span>
+                {sessao.papel === "admin" && <ReenviarBlingButton pedidoId={pedido.id} />}
+              </div>
+            )}
           </CardModulo>
 
           <CardModulo
@@ -235,7 +276,14 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
             titulo="Contrato"
             extra={contratoAtual ? <span className="text-sm font-semibold text-gray3">v{contratoAtual.versao}</span> : undefined}
           >
-            {!contratoAtual ? (
+            {semContrato ? (
+              <EstadoVazio
+                compacto
+                icone={MdGavel}
+                titulo="Pedido sem contrato"
+                descricao="O vendedor marcou este pedido para seguir sem contrato: na aprovação ele vai direto para o Bling, sem jurídico nem assinatura."
+              />
+            ) : !contratoAtual ? (
               <EstadoVazio
                 compacto
                 icone={MdGavel}
@@ -312,16 +360,32 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
             )}
 
             {/* Ações do jurídico sobre o contrato (liberar, regenerar, nova versão, Clicksign) ficam no contexto do contrato. */}
-            <div className="border-t border-gray5 pt-4 empty:hidden">
-              <AcoesPedido pedidoId={pedido.id} status={pedido.status} papel={sessao.papel} donoDoRascunho={donoDoRascunho} escopo="contrato" />
-            </div>
+            {!semContrato && (
+              <div className="border-t border-gray5 pt-4 empty:hidden">
+                <AcoesPedido pedidoId={pedido.id} status={pedido.status} papel={sessao.papel} donoDoRascunho={donoDoRascunho} escopo="contrato" />
+              </div>
+            )}
           </CardModulo>
 
           <CardModulo icone={MdAttachMoney} cor="bg-iconYellow" titulo="Parcelas">
             {/* Ainda não há integração pedido → Bling (bling_pedido_id nunca é
                 preenchido). Pedidos já assinados tiveram as cobranças criadas
                 direto no Bling, fora do sistema. */}
-            {assinado ? (
+            {pedido.bling_pedido_id ? (
+              <EstadoVazio
+                compacto
+                icone={MdAttachMoney}
+                titulo={`Parcelas lançadas no Bling${pedido.bling_pedido_numero ? ` · pedido nº ${pedido.bling_pedido_numero}` : ""}`}
+                descricao="As contas a receber foram criadas no Bling junto com o pedido. A situação de cada parcela aparece no Financeiro após a sincronização."
+                acao={
+                  sessao.papel === "admin" ? (
+                    <Button variant="white" size="sm" nativeButton={false} render={<Link href={`/financeiro/contratos/${pedido.bling_pedido_id}`} />}>
+                      Ver parcelas
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ) : assinado ? (
               <EstadoVazio
                 compacto
                 icone={MdAttachMoney}
@@ -333,7 +397,7 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
                 compacto
                 icone={MdAttachMoney}
                 titulo="Parcelas não geradas"
-                descricao="As cobranças serão criadas no Bling após a assinatura do contrato."
+                descricao="As cobranças são criadas no Bling quando a diretoria aprova o pedido."
               />
             )}
           </CardModulo>

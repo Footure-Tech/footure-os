@@ -10,3 +10,8 @@ export const ROTULO_MEIO_PAGAMENTO: Record<MeioPagamento, string> = {
   cartao_credito: "Cartão de crédito",
   cartao_debito: "Cartão de débito",
 };
+
+/** Opções do formulário de pedido — cartão de débito saiu (decisão de produto,
+ * out/2026: sem forma de pagamento no Bling). O rótulo acima fica só para exibir
+ * algum pedido antigo. */
+export const MEIOS_PAGAMENTO_DISPONIVEIS: Exclude<MeioPagamento, "cartao_debito">[] = ["boleto", "pix", "transferencia_bancaria", "cartao_credito"];

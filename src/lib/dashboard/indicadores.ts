@@ -53,7 +53,7 @@ export async function carregarDashboard(supabase: Supa, periodo: Periodo) {
     supabase
       .from("pedidos")
       .select(
-        "id, status, valor_total, vigencia_inicio, vigencia_fim, criado_em, geracao_contrato_erro, clientes(razao_social, nome_fantasia, logo_path), profiles!pedidos_vendedor_id_profiles_fkey(nome), contratos(versao, assinatura_incompleta)",
+        "id, status, valor_total, vigencia_inicio, vigencia_fim, criado_em, geracao_contrato_erro, bling_erro, bling_pedido_id, clientes(razao_social, nome_fantasia, logo_path), profiles!pedidos_vendedor_id_profiles_fkey(nome), contratos(versao, assinatura_incompleta)",
       ),
     supabase.from("transicoes").select("pedido_id, para, criado_em").order("criado_em"),
     carregarBaseParcelas(supabase),
@@ -196,6 +196,9 @@ export async function carregarDashboard(supabase: Supa, periodo: Periodo) {
           : `Aguardando validação jurídica${p.emValidacaoDesde ? ` desde ${p.emValidacaoDesde.slice(8, 10)}/${p.emValidacaoDesde.slice(5, 7)}` : ""}.`,
       href: `/juridico?aba=validacao&sel=${p.id}`,
     });
+  }
+  for (const p of pedidos.filter((x) => x.bling_erro && !x.bling_pedido_id && x.status !== "cancelado")) {
+    pontos.push({ tipo: "falha", titulo: `Falha no envio ao Bling · ${p.cliente}`, descricao: p.bling_erro ?? "", href: `/pedidos/${p.id}` });
   }
   for (const p of pedidos.filter((x) => x.status === "aprovado" && x.geracao_contrato_erro)) {
     pontos.push({ tipo: "falha", titulo: `Falha ao gerar contrato · ${p.cliente}`, descricao: p.geracao_contrato_erro ?? "", href: `/pedidos/${p.id}` });

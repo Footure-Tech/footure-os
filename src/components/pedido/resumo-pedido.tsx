@@ -35,6 +35,7 @@ export function ResumoPedido({
   vigenciaInicio,
   vigenciaFim,
   qtdAlertas,
+  geraContrato = true,
   pendente,
   intencao,
   aoEscolherIntencao,
@@ -51,6 +52,7 @@ export function ResumoPedido({
   vigenciaInicio: string;
   vigenciaFim: string;
   qtdAlertas: number;
+  geraContrato?: boolean;
   pendente: boolean;
   intencao: IntencaoEnvio;
   aoEscolherIntencao: (intencao: IntencaoEnvio) => void;
@@ -78,8 +80,14 @@ export function ResumoPedido({
       <div className="flex flex-col gap-2">
         <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Próximas etapas</span>
         <span className="text-[13px] text-gray2">1. Diretoria aprova o pedido</span>
-        <span className="text-[13px] text-gray2">2. Contrato gerado do modelo {MODELO_CONTRATO[perfil]} e validado pelo jurídico</span>
-        <span className="text-[13px] text-gray2">3. Envio para assinatura via Clicksign</span>
+        {geraContrato ? (
+          <>
+            <span className="text-[13px] text-gray2">2. Pedido lançado no Bling e contrato gerado do modelo {MODELO_CONTRATO[perfil]} para o jurídico validar</span>
+            <span className="text-[13px] text-gray2">3. Envio para assinatura via Clicksign</span>
+          </>
+        ) : (
+          <span className="text-[13px] text-gray2">2. Pedido lançado no Bling e concluído — sem contrato</span>
+        )}
       </div>
 
       {qtdAlertas > 0 && (

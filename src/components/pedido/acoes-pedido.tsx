@@ -126,7 +126,7 @@ export function AcoesPedido({
   if (status === "em_aprovacao" && papel === "admin") {
     return (
       <div className="flex flex-wrap gap-2">
-        <Button disabled={pendente} onClick={() => rodar(() => aprovarPedidoAction(pedidoId), "Pedido aprovado · contrato em geração")}>
+        <Button disabled={pendente} onClick={() => rodar(() => aprovarPedidoAction(pedidoId), "Pedido aprovado · enviado ao Bling")}>
           Aprovar
         </Button>
         <ComComentario

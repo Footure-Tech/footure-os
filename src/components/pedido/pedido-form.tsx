@@ -19,7 +19,7 @@ import { salvarPedido, type SalvarPedidoState } from "@/lib/pedidos/serverAction
 import { gerarAlertas, FORO_DEFAULT } from "@/lib/validacoes/pedido";
 import { normalizePlan, listarPlanosCanonicos } from "@/lib/plans/normalize";
 import { textoMultaDefault } from "@/lib/contratos/multa";
-import { ROTULO_MEIO_PAGAMENTO } from "@/lib/contratos/meioPagamento";
+import { MEIOS_PAGAMENTO_DISPONIVEIS, ROTULO_MEIO_PAGAMENTO } from "@/lib/contratos/meioPagamento";
 import type { MultaTipo, MeioPagamento, Divulgacao, ApiModelo, OrigemVenda, TipoVenda } from "@/lib/supabase/database.types";
 import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 
@@ -77,6 +77,8 @@ export interface DadosIniciaisPedido {
   closerId: string;
   tipoVenda: TipoVenda | null;
   origem: OrigemVenda | null;
+  geraContrato: boolean;
+  emailsFinanceiro: string[];
 }
 
 interface Props {
@@ -160,6 +162,20 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
   const [closerId, setCloserId] = useState(d?.closerId ?? "");
   const [tipoVenda, setTipoVenda] = useState<string>(d?.tipoVenda ?? NAO_INFORMADO);
   const [origem, setOrigem] = useState<string>(d?.origem ?? NAO_INFORMADO);
+  // 0040 — sem contrato, a aprovação envia ao Bling e conclui (sem jurídico/assinatura).
+  const [geraContrato, setGeraContrato] = useState(d?.geraContrato ?? true);
+  const [emailsFinanceiro, setEmailsFinanceiro] = useState<string[]>(d?.emailsFinanceiro ?? []);
+  const [novoEmail, setNovoEmail] = useState("");
+  const [erroEmail, setErroEmail] = useState<string | null>(null);
+  function adicionarEmail() {
+    const email = novoEmail.trim().toLowerCase();
+    if (!email) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setErroEmail("E-mail inválido.");
+    if (emailsFinanceiro.includes(email)) return setErroEmail("Esse e-mail já está na lista.");
+    setEmailsFinanceiro([...emailsFinanceiro, email]);
+    setNovoEmail("");
+    setErroEmail(null);
+  }
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteId);
   const perfil: "clube" | "agente" = cadastrandoNovo ? novoCliente.tipo : (clienteSelecionado?.tipo ?? "clube");
@@ -233,7 +249,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
         numeroParcelas,
         licencasGratuitas,
         foro,
-        temRepresentanteLegal: representantesLegais.length > 0,
+        temRepresentanteLegal: !geraContrato || representantesLegais.length > 0,
         planoLegadoDetectado: normalizado?.status === "needs_confirmation",
         planoLegadoNomeOriginal: nomePlanoImportado || undefined,
         planoLegadoConfirmado,
@@ -246,6 +262,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
       licencasGratuitas,
       foro,
       representantesLegais,
+      geraContrato,
       normalizado,
       nomePlanoImportado,
       planoLegadoConfirmado,
@@ -297,6 +314,8 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
       testemunhasFooture,
       sdrId,
       closerId,
+      geraContrato,
+      emailsFinanceiro,
       tipoVenda: tipoVenda === NAO_INFORMADO ? null : tipoVenda,
       origem: origem === NAO_INFORMADO ? null : origem,
     };
@@ -530,7 +549,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(ROTULO_MEIO_PAGAMENTO).map(([valor, rotulo]) => (
+                  {MEIOS_PAGAMENTO_DISPONIVEIS.map((valor) => [valor, ROTULO_MEIO_PAGAMENTO[valor]] as const).map(([valor, rotulo]) => (
                     <SelectItem key={valor} value={valor}>
                       {rotulo}
                     </SelectItem>
@@ -663,6 +682,67 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
               </>
             )}
           </div>
+
+          <div className="flex flex-col gap-2">
+            <Label variante="campo" htmlFor="email-financeiro">
+              E-mails do financeiro do cliente
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="email-financeiro"
+                type="email"
+                placeholder="financeiro@cliente.com.br"
+                value={novoEmail}
+                onChange={(e) => {
+                  setNovoEmail(e.target.value);
+                  setErroEmail(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    adicionarEmail();
+                  }
+                }}
+              />
+              <Button type="button" variant="white" onClick={adicionarEmail}>
+                Adicionar
+              </Button>
+            </div>
+            {erroEmail && <p className="text-xs text-destructive">{erroEmail}</p>}
+            {emailsFinanceiro.length > 0 ? (
+              <ul className="flex flex-wrap gap-2">
+                {emailsFinanceiro.map((email) => (
+                  <li key={email} className="flex items-center gap-1.5 rounded-full border border-gray5 bg-page py-1 pr-1.5 pl-3 text-sm text-darkPurple1">
+                    {email}
+                    <button
+                      type="button"
+                      aria-label={`Remover ${email}`}
+                      className="flex size-5 items-center justify-center rounded-full text-gray3 hover:bg-gray5 hover:text-darkPurple1"
+                      onClick={() => setEmailsFinanceiro(emailsFinanceiro.filter((x) => x !== email))}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-gray3">Vai para as observações internas do pedido no Bling, para a cobrança. Pode adicionar mais de um.</p>
+            )}
+          </div>
+        </BlocoFormulario>
+
+        <BlocoFormulario titulo="Contrato" descricao="Se este pedido gera contrato com o cliente.">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <Checkbox id="gera-contrato" checked={geraContrato} onCheckedChange={(v) => setGeraContrato(!!v)} />
+              <Label htmlFor="gera-contrato">Gerar contrato para este pedido</Label>
+            </div>
+            <p className="text-xs text-gray3">
+              {geraContrato
+                ? "Após a aprovação da diretoria, o pedido vai para o Bling e o contrato é gerado para validação do jurídico e assinatura."
+                : "Sem contrato (ex.: alguns agentes): após a aprovação da diretoria, o pedido vai direto para o Bling e é concluído — sem jurídico nem assinatura."}
+            </p>
+          </div>
         </BlocoFormulario>
 
         <BlocoFormulario titulo="Vigência" descricao="Início e fim do contrato.">
@@ -738,6 +818,8 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           </div>
         </BlocoFormulario>
 
+        {geraContrato && (
+          <>
         <BlocoFormulario titulo="Signatários" descricao="Quem assina pelo cliente e pela Footure.">
           <SignatarioListEditor
             titulo="Representantes legais do cliente"
@@ -771,6 +853,8 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
 
           <SignatarioListEditor titulo="Testemunhas da Footure" itens={testemunhasFooture} onChange={setTestemunhasFooture} />
         </BlocoFormulario>
+          </>
+        )}
 
         <BlocoFormulario
           titulo="Dados comerciais"
@@ -856,6 +940,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
         vigenciaInicio={vigenciaInicio}
         vigenciaFim={vigenciaFim}
         qtdAlertas={alertas.length}
+        geraContrato={geraContrato}
         pendente={pendente}
         intencao={intencao}
         aoEscolherIntencao={escolherIntencao}

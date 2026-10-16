@@ -87,6 +87,8 @@ export default async function EditarPedidoPage({ params }: PageProps<"/vendedor/
     closerId: pedido.closer_id ?? "",
     tipoVenda: pedido.tipo_venda,
     origem: pedido.origem,
+    geraContrato: pedido.gera_contrato,
+    emailsFinanceiro: pedido.emails_financeiro,
   };
 
   return (

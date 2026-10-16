@@ -228,6 +228,12 @@ export interface Database {
           // 0039_pedidos_tipo_origem.sql
           tipo_venda: TipoVenda | null;
           origem: OrigemVenda | null;
+          // 0040_pedidos_bling_sem_contrato.sql
+          gera_contrato: boolean;
+          emails_financeiro: string[];
+          bling_pedido_numero: string | null;
+          bling_enviado_em: string | null;
+          bling_erro: string | null;
           criado_em: string;
           atualizado_em: string;
         },
@@ -271,6 +277,11 @@ export interface Database {
           closer_id?: string | null;
           tipo_venda?: TipoVenda | null;
           origem?: OrigemVenda | null;
+          gera_contrato?: boolean;
+          emails_financeiro?: string[];
+          bling_pedido_numero?: string | null;
+          bling_enviado_em?: string | null;
+          bling_erro?: string | null;
         },
         Partial<{
           cliente_id: string;
@@ -311,6 +322,11 @@ export interface Database {
           closer_id: string | null;
           tipo_venda: TipoVenda | null;
           origem: OrigemVenda | null;
+          gera_contrato: boolean;
+          emails_financeiro: string[];
+          bling_pedido_numero: string | null;
+          bling_enviado_em: string | null;
+          bling_erro: string | null;
         }>
       >;
       pedido_signatarios: TableDef<

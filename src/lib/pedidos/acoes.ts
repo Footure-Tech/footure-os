@@ -10,7 +10,7 @@ import { gerarContratoBuffer, type Signatario } from "@/lib/contratos/gerarContr
 type SignatarioClienteRow = Database["public"]["Tables"]["signatarios_cliente"]["Row"];
 import { montarDadosContrato } from "@/lib/contratos/montarDados";
 import { podeLiberarParaAssinatura } from "@/lib/validacoes/pedido";
-import { criarPedidoBling } from "@/lib/integracoes/bling";
+import { enviarPedidoAoBling } from "@/lib/integracoes/blingPedido";
 import { enviarParaAssinatura } from "@/lib/integracoes/clicksign";
 
 type Supa = SupabaseClient<Database>;
@@ -82,24 +82,34 @@ export async function reprovarPedido(supabase: Supa, pedidoId: string, comentari
   await registrarTransicao(supabase, pedidoId, "rascunho", comentario);
 }
 
-/** EM_APROVACAO -> APROVADO, dispara a porta do Bling (Fase 2, stub) e encadeia a geração do contrato. */
+/**
+ * EM_APROVACAO -> APROVADO e, em seguida, as duas frentes da aprovação:
+ * • envia o pedido ao Bling (blingPedido.ts) — nunca trava a aprovação: em
+ *   erro fica pedidos.bling_erro e o botão "Reenviar ao Bling";
+ * • com contrato: gera o contrato e segue para o jurídico (como antes);
+ *   sem contrato (gera_contrato = false): concluído assim que o Bling recebe.
+ */
 export async function aprovarPedido(supabase: Supa, pedidoId: string, adminId: string) {
   await registrarTransicao(supabase, pedidoId, "aprovado");
+  const { data: pedido } = await supabase.from("pedidos").select("gera_contrato").eq("id", pedidoId).single();
+  const envio = await enviarPedidoAoBling(supabase, pedidoId);
 
-  try {
-    const { data: pedido } = await supabase.from("pedidos").select("*").eq("id", pedidoId).single();
-    if (pedido) {
-      const { blingPedidoId } = await criarPedidoBling(pedido);
-      if (blingPedidoId) {
-        await supabase.from("pedidos").update({ bling_pedido_id: blingPedidoId }).eq("id", pedidoId);
-      }
-    }
-  } catch (erro) {
-    // Porta Fase 2 ainda não implementada de verdade — nunca deve travar a aprovação.
-    console.error("[bling stub] falhou, não bloqueia a aprovação:", erro);
+  if (pedido?.gera_contrato === false) {
+    if (envio.ok) await registrarTransicao(supabase, pedidoId, "concluido", "Pedido sem contrato — enviado ao Bling na aprovação.");
+    return;
   }
-
   await tentarGerarContrato(supabase, pedidoId, adminId);
+}
+
+/** "Reenviar ao Bling": refaz o envio (sem duplicar) e, se o pedido é sem contrato e ficou parado em APROVADO, conclui. */
+export async function reenviarPedidoAoBling(supabase: Supa, pedidoId: string) {
+  const envio = await enviarPedidoAoBling(supabase, pedidoId);
+  if (!envio.ok) throw new Error(envio.erro);
+  const { data: pedido } = await supabase.from("pedidos").select("status, gera_contrato").eq("id", pedidoId).single();
+  if (pedido && !pedido.gera_contrato && pedido.status === "aprovado") {
+    await registrarTransicao(supabase, pedidoId, "concluido", "Pedido sem contrato — enviado ao Bling.");
+  }
+  return envio;
 }
 
 /** Jurídico sobe uma edição — nova versão, SEM mudar o estado (permanece em EM_REVISAO_JURIDICA). */

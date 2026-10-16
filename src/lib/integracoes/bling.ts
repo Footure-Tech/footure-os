@@ -8,15 +8,11 @@
 // token dura 6h; refresh_token dura 30 dias — obterAccessTokenValido()
 // renova automaticamente quando necessário.
 //
-// POST /pedidos/vendas (ainda NÃO implementado): montarPayloadBling já
-// esboça o mapeamento de campos, mas criarPedidoBling continua sendo um stub
-// documentado até confirmar o formato exato do payload com a doc/exemplos.
+// POST /pedidos/vendas: ver blingPedido.ts (envio do pedido aprovado).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
-import { buscarPlanoPorKey } from "@/lib/plans/normalize";
 
 type Supa = SupabaseClient<Database>;
-type PedidoRow = Database["public"]["Tables"]["pedidos"]["Row"];
 
 const AUTORIZACAO_URL = "https://bling.com.br/Api/v3/oauth/authorize";
 const TOKEN_URL = "https://api.bling.com.br/Api/v3/oauth/token";
@@ -145,6 +141,33 @@ async function chamarApiBling<T>(token: string, caminho: string, tentativa = 0):
   }
   if (!resposta.ok) throw new Error(`Bling ${caminho} retornou ${resposta.status}: ${JSON.stringify(json)}`);
   return json as T;
+}
+
+/** Escrita na API (POST/PATCH), pela mesma fila de 3 req/s. Devolve o JSON
+ * (ou null em 204); erro HTTP vira Error com a mensagem do Bling. */
+export async function requisicaoBling<T>(token: string, metodo: "POST" | "PATCH" | "PUT", caminho: string, corpo?: unknown, tentativa = 0): Promise<T | null> {
+  await aguardarVezNaFila();
+  const resposta = await fetch(`${API_BASE}${caminho}`, {
+    method: metodo,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: corpo === undefined ? undefined : JSON.stringify(corpo),
+  });
+  const json = await resposta.json().catch(() => null);
+  if (resposta.status === 429 && tentativa < 2) {
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    return requisicaoBling<T>(token, metodo, caminho, corpo, tentativa + 1);
+  }
+  if (!resposta.ok) {
+    const e = (json as { error?: { message?: string; description?: string; fields?: Array<{ msg?: string }> } } | null)?.error;
+    const detalhes = e?.fields?.map((f) => f.msg).filter(Boolean).join("; ");
+    throw new Error(`Bling ${metodo} ${caminho} (${resposta.status}): ${[e?.message, e?.description, detalhes].filter(Boolean).join(" — ") || JSON.stringify(json)}`);
+  }
+  return json as T | null;
+}
+
+/** GET exportado para os módulos de integração (mesma fila). */
+export function consultarBling<T>(token: string, caminho: string): Promise<T> {
+  return chamarApiBling<T>(token, caminho);
 }
 
 export interface ParcelaBling {
@@ -811,42 +834,4 @@ export function classificarSituacaoParcela(situacao: number, vencimento: string)
   if (situacao === 3) return "recebida_parcial";
   const hoje = new Date().toISOString().slice(0, 10);
   return vencimento < hoje ? "atrasada" : "em_aberto";
-}
-
-export interface PedidoVendaBling {
-  numero?: string;
-  data: string;
-  itens: Array<{ descricao: string; quantidade: number; valor: number }>;
-  observacoes?: string;
-}
-
-/**
- * Mapeia um pedido do sistema para o payload de POST /pedidos/vendas do
- * Bling — chamado quando o pedido chega a APROVADO (PROMPT.md 7.1).
- * NÃO chama a API ainda: retorna o payload esboçado e loga a intenção.
- */
-export function montarPayloadBling(pedido: PedidoRow): PedidoVendaBling {
-  return {
-    data: pedido.criado_em.slice(0, 10),
-    itens: [
-      {
-        descricao: `Assinatura Footlink — Plano ${buscarPlanoPorKey(pedido.plano)?.canonical ?? pedido.plano}`,
-        quantidade: pedido.licencas_pagas,
-        valor: pedido.valor_mensal,
-      },
-      ...(pedido.produtos.includes("api") && pedido.valor_mensal_api != null
-        ? [{ descricao: "API Footlink", quantidade: 1, valor: pedido.valor_mensal_api }]
-        : []),
-    ],
-    observacoes: pedido.condicao_especial ?? undefined,
-  };
-}
-
-/** Stub — POST /pedidos/vendas ainda não implementado (falta confirmar o
- * formato exato do payload). OAuth (acima) já é real; usar
- * obterAccessTokenValido(supabase) aqui quando essa parte for implementada. */
-export async function criarPedidoBling(pedido: PedidoRow): Promise<{ blingPedidoId: string | null }> {
-  const payload = montarPayloadBling(pedido);
-  console.info("[stub] criarPedidoBling — POST /pedidos/vendas ainda não implementado. Payload que seria enviado:", payload);
-  return { blingPedidoId: null };
 }
