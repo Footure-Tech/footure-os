@@ -188,7 +188,14 @@ export async function montarPedidoBling(token: string, p: Pedido, contatoId: num
       quantidade: qtd,
       valor: centavos(i.valorUnit),
     })),
-    parcelas: datas.map((dataVencimento) => ({ dataVencimento, valor: valorParcela, formaPagamento: forma })),
+    // Observação da parcela: o Bling a acrescenta ao histórico da conta a receber
+    // ("Ref. ao pedido de venda nº N | Assinatura <produto> | Parcela 1/12").
+    parcelas: datas.map((dataVencimento, i) => ({
+      dataVencimento,
+      valor: valorParcela,
+      formaPagamento: forma,
+      observacoes: `Assinatura ${itens.map((item) => item.descricao).join(" + ")} | Parcela ${i + 1}/${qtd}`,
+    })),
   };
 }
 
