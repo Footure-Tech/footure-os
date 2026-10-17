@@ -35,7 +35,14 @@ export interface MesReceita {
  * paleta (tokens --chart-1/--chart-2 por tema); legenda + tooltip + tabela
  * cobrem o contraste baixo do previsto no tema escuro.
  */
-export function GraficoReceitaMensal({ meses }: { meses: MesReceita[] }) {
+export function GraficoReceitaMensal({
+  meses,
+  series = ["Realizado", "Previsto"],
+}: {
+  meses: MesReceita[];
+  /** Nomes das duas barras (realizado/previsto); o Academy usa Bruto/Líquido. */
+  series?: [string, string];
+}) {
   const topo = topoDoEixo(Math.max(...meses.flatMap((m) => [m.previsto, m.realizado])));
   const ticks = [1, 0.75, 0.5, 0.25, 0].map((f) => topo * f);
 
@@ -63,9 +70,9 @@ export function GraficoReceitaMensal({ meses }: { meses: MesReceita[] }) {
                 <span className="w-full max-w-4 rounded-t bg-chart-2" style={{ height: `${(m.previsto / topo) * 100}%` }} />
                 <Dica>
                   <strong className="block font-bold">{m.rotuloCompleto}</strong>
-                  Realizado {m.futuro ? "—" : formatarMoeda(m.realizado)}
+                  {series[0]} {m.futuro ? "—" : formatarMoeda(m.realizado)}
                   <br />
-                  Previsto {formatarMoeda(m.previsto)}
+                  {series[1]} {formatarMoeda(m.previsto)}
                 </Dica>
               </div>
             ))}
@@ -86,8 +93,8 @@ export function GraficoReceitaMensal({ meses }: { meses: MesReceita[] }) {
           <thead>
             <tr className="text-left text-gray3">
               <th className="py-1 font-semibold">Mês</th>
-              <th className="py-1 text-right font-semibold">Realizado</th>
-              <th className="py-1 text-right font-semibold">Previsto</th>
+              <th className="py-1 text-right font-semibold">{series[0]}</th>
+              <th className="py-1 text-right font-semibold">{series[1]}</th>
             </tr>
           </thead>
           <tbody>

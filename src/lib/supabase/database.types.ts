@@ -455,6 +455,12 @@ export interface Database {
           situacao_detalhada: number | null;
         }>
       >;
+      // supabase/migrations/0046_academy_parcelas.sql
+      academy_parcelas: TableDef<
+        { id: number; bling_pedido_id: number; contato_id: number | null; vencimento: string; valor: number; situacao: number; sincronizado_em: string },
+        { id: number; bling_pedido_id: number; contato_id?: number | null; vencimento: string; valor?: number; situacao: number; sincronizado_em?: string },
+        Partial<{ bling_pedido_id: number; contato_id: number | null; vencimento: string; valor: number; situacao: number; sincronizado_em: string }>
+      >;
       // supabase/migrations/0042_academy_vendas.sql
       academy_vendas: TableDef<
         {

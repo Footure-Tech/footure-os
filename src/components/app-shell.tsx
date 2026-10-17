@@ -15,7 +15,10 @@ import { TransicaoTela } from "@/components/shell/transicao-tela";
 // (obterDadosShell) — atualizam quando uma Server Action revalida a rota.
 export async function AppShell({ sessao, children }: { sessao: SessaoUsuario; children: ReactNode }) {
   const supabase = await createClient();
-  const [{ contadores, integracoes }, contexto] = await Promise.all([obterDadosShell(supabase, sessao.papel, sessao.id), lerContextoDados()]);
+  const [{ contadores, integracoes }, contextoCookie] = await Promise.all([obterDadosShell(supabase, sessao.papel, sessao.id), lerContextoDados()]);
+  // Jurídico só trabalha com o Footlink (contratos): sem seletor de contexto.
+  const comContexto = sessao.papel === "admin" || sessao.papel === "vendedor";
+  const contexto = comContexto ? contextoCookie : "footlink";
 
   const statusIntegracoes: IntegracaoSidebar[] = [
     {
@@ -32,9 +35,9 @@ export async function AppShell({ sessao, children }: { sessao: SessaoUsuario; ch
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <AppBar sessao={sessao} contexto={contexto} />
+      <AppBar sessao={sessao} contexto={comContexto ? contexto : null} />
       <div className="flex flex-1 items-start">
-        <SidebarNav papel={sessao.papel} contadores={contadores} integracoes={statusIntegracoes} />
+        <SidebarNav papel={sessao.papel} contexto={contexto} contadores={contadores} integracoes={statusIntegracoes} />
         <main className="min-w-0 flex-1 p-[30px]">
           <div className="max-w-[1500px]">
             {sessao.senhaTemporaria && (

@@ -273,6 +273,26 @@ export async function sincronizarContatosBling(
     }
   }
 
+  // Vendas do Footlink a pessoa física (agentes) e a clubes estrangeiros: a
+  // varredura acima só pega CNPJ, e a conta tem milhares de contatos pessoa
+  // física (alunos do Academy). Esses pedidos já são identificados pela
+  // sincronização do Academy (produto "Footlink …" fora da loja do Academy,
+  // cache academy_vendas) — daqui vêm os contatos e, deles, só os pedidos do
+  // Footlink (o mesmo contato pode ter comprado curso). "Licença teste" é teste.
+  const { data: vendasFootlinkPf } = await supabase
+    .from("academy_vendas")
+    .select("bling_pedido_id, contato_id, contato_nome, contato_documento")
+    .ilike("produto", "%footlink%")
+    .not("produto", "ilike", "%licença teste%")
+    .not("contato_id", "is", null);
+  const pedidosFootlinkPf = new Set((vendasFootlinkPf ?? []).map((v) => v.bling_pedido_id));
+  const contatosPf = new Set<number>();
+  for (const v of vendasFootlinkPf ?? []) {
+    if (contatosPf.has(v.contato_id!) || candidatosPessoaJuridica.some((c) => c.id === v.contato_id)) continue;
+    contatosPf.add(v.contato_id!);
+    candidatosPessoaJuridica.push({ id: v.contato_id!, nome: v.contato_nome ?? "—", cnpj: v.contato_documento ?? "", telefone: null });
+  }
+
   // Essa conta do Bling é o financeiro inteiro da Footure, não só do
   // Footlink — pessoa jurídica sozinho ainda inclui fornecedor/prestador de
   // serviço (ex.: Google, Amazon, escritórios de advocacia). Só entra quem
@@ -299,7 +319,8 @@ export async function sincronizarContatosBling(
   const parcelasParaCache: Array<{ id: number; contato_id: number; numero_pedido_origem: string | null; vencimento: string; valor: number; situacao: number }> = [];
   const hoje = new Date().toISOString().slice(0, 10);
   for (const candidato of candidatosPessoaJuridica) {
-    const pedidosVenda = await buscarPedidosVenda(token, candidato.id);
+    const pf = contatosPf.has(candidato.id);
+    const pedidosVenda = (await buscarPedidosVenda(token, candidato.id)).filter((p) => !pf || pedidosFootlinkPf.has(p.id));
     const totalPedidosVenda = pedidosVenda.length;
     if (totalPedidosVenda === 0) continue;
     for (const p of pedidosVenda) {
@@ -313,7 +334,10 @@ export async function sincronizarContatosBling(
         situacao_valor: p.situacao?.valor ?? null,
       });
     }
-    const parcelas = await buscarContasReceberBling(token, candidato.id, dataPrimeiroPedido(pedidosVenda));
+    const numerosPf = new Set(pedidosVenda.map((p) => String(p.numero)));
+    const parcelas = (await buscarContasReceberBling(token, candidato.id, dataPrimeiroPedido(pedidosVenda))).filter(
+      (p) => !pf || (p.numeroPedidoOrigem !== null && numerosPf.has(p.numeroPedidoOrigem)),
+    );
     for (const p of parcelas) {
       parcelasParaCache.push({
         id: p.id,
@@ -386,7 +410,7 @@ export async function sincronizarContatosBling(
   const { data: clientesSemVinculo } = await supabase.from("clientes").select("id, cnpj").is("bling_contato_id", null);
   for (const cliente of clientesSemVinculo ?? []) {
     const cnpjLimpo = cliente.cnpj.replace(/\D/g, "");
-    const match = contatosPessoaJuridica.find((c) => c.cnpj === cnpjLimpo);
+    const match = cnpjLimpo ? contatosPessoaJuridica.find((c) => c.cnpj === cnpjLimpo) : undefined;
     if (match) await supabase.from("clientes").update({ bling_contato_id: match.id }).eq("id", cliente.id);
   }
 
@@ -404,7 +428,8 @@ export async function sincronizarContatosBling(
     const detalhe = await buscarDetalheContatoBlingComToken(token, contato.id);
     if (!detalhe) continue;
     const { error } = await supabase.from("clientes").insert({
-      tipo: "clube",
+      // Pessoa física (CPF) é agente; o resto (CNPJ ou clube estrangeiro sem documento) começa como clube.
+      tipo: contatosPf.has(contato.id) && detalhe.cnpj.length === 11 ? "agente" : "clube",
       razao_social: detalhe.nome,
       cnpj: detalhe.cnpj,
       nome_fantasia: detalhe.fantasia,

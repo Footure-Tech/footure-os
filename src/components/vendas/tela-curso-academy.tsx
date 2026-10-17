@@ -1,6 +1,6 @@
 import { MdInfoOutline, MdInsights, MdPayments, MdPeople, MdSchool, MdShowChart, MdStackedLineChart } from "react-icons/md";
 import type { CursoAcademy, VendaAcademy } from "@/lib/academy/vendas";
-import { ALIQUOTA_IMPOSTOS_ACADEMY } from "@/lib/academy/vendas";
+import { ALIQUOTA_IMPOSTOS_ACADEMY, resumirPagamentos } from "@/lib/academy/vendas";
 import { WIDGETS_OCULTOS, type PeriodoCurso, type RelatorioCurso } from "@/lib/academy/relatorio";
 import { dataCurta } from "@/lib/academy/series";
 import { formatarDataCurta, formatarMoeda, formatarMoedaCompacta } from "@/lib/formatacao";
@@ -35,7 +35,7 @@ function linhaComprador(v: VendaAcademy): LinhaComprador {
     valor: v.valorTotal,
     valorPedido: v.valorPedido,
     rateado: v.rateado,
-    formas: v.pagamentos.map((p) => p.rotulo).join(" + "),
+    formas: resumirPagamentos(v.pagamentos),
     situacao: v.situacao,
   };
 }

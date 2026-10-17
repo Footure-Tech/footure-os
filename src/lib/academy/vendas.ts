@@ -144,7 +144,8 @@ type DetalheCache = Awaited<ReturnType<typeof lerDetalhePedido>>;
  * janelas de 366 dias (limite do filtro de data do Bling), atualiza situação e
  * total dos já conhecidos e busca o detalhe (curso e pagamento) dos novos e dos
  * ainda sem pagamento lido. Pedidos que sumiram do Bling saem do cache. Depois,
- * complementa a taxa real das vendas já recebidas (complementarBaixasAcademy).
+ * grava as parcelas (sincronizarParcelasAcademy) e complementa a taxa real das
+ * vendas já recebidas (complementarBaixasAcademy).
  */
 export async function sincronizarVendasAcademy(supabase: Supa, token: string): Promise<{ novas: number; pendentes: number; baixas: number }> {
   const inicio = new Date().toISOString();
@@ -215,7 +216,8 @@ export async function sincronizarVendasAcademy(supabase: Supa, token: string): P
   await supabase.from("academy_vendas").delete().lt("sincronizado_em", inicio);
 
   const novasLidas = paraDetalhar.slice(0, LIMITE_DETALHES_POR_SINCRONIZACAO).filter((p) => !conhecidos.has(p.id) && detalhados.has(p.id)).length;
-  const baixas = await complementarBaixasAcademy(supabase, token);
+  const contasPorPedido = await sincronizarParcelasAcademy(supabase, token);
+  const baixas = await complementarBaixasAcademy(supabase, token, contasPorPedido);
   return { novas: novasLidas, pendentes: Math.max(0, paraDetalhar.length - LIMITE_DETALHES_POR_SINCRONIZACAO), baixas };
 }
 
@@ -224,14 +226,63 @@ const LIMITE_BAIXAS_POR_SINCRONIZACAO = 150;
 /** Pedido consultado sem baixa completa volta a ser consultado enquanto for recente. */
 const DIAS_RECONSULTA_BAIXA = 60;
 
+type ContaReceberListada = { id: number; situacao: number; vencimento: string; valor: number; idOrigem?: number; origem?: { id?: number }; contato?: { id?: number } };
+
 /**
- * Taxa real e valor recebido das vendas (0044): lista as contas a receber da
- * conta inteira por data de emissão (janelas de 366 dias, desde a venda
- * pendente mais antiga), separa as dos pedidos do Academy e, quando todas as
- * contas de um pedido estão recebidas, soma tarifa e valor pago dos borderôs.
- * Pendente = nunca consultado, ou recente e ainda sem baixa completa.
+ * Contas a receber dos pedidos do Academy (0046): lista as da conta inteira
+ * por data de emissão (janelas de 366 dias desde ACADEMY_DESDE — ~30 chamadas),
+ * grava as dos pedidos de venda do Academy em academy_parcelas e devolve-as
+ * por pedido (usadas também para a taxa real). As que sumiram do Bling saem.
  */
-async function complementarBaixasAcademy(supabase: Supa, token: string): Promise<number> {
+async function sincronizarParcelasAcademy(supabase: Supa, token: string): Promise<Map<number, ContaReceberListada[]>> {
+  const inicio = new Date().toISOString();
+  const ids = new Set<number>();
+  for (let pagina = 0; ; pagina++) {
+    const { data, error } = await supabase.from("academy_vendas").select("bling_pedido_id").in("categoria", CATEGORIAS_VENDA).range(pagina * 1000, pagina * 1000 + 999);
+    if (error) throw new Error(`Falha ao ler o cache de vendas do Academy: ${error.message}`);
+    for (const v of data ?? []) ids.add(v.bling_pedido_id);
+    if (!data || data.length < 1000) break;
+  }
+  const contasPorPedido = new Map<number, ContaReceberListada[]>();
+  const hoje = hojeLocal();
+  for (let de = ACADEMY_DESDE; de <= hoje; de = somarDias(de, 366)) {
+    const ate = somarDias(de, 365) < hoje ? somarDias(de, 365) : hoje;
+    for (let pagina = 1; pagina <= 100; pagina++) {
+      const resp = await consultarBling<{ data: ContaReceberListada[] }>(token, `/contas/receber?tipoFiltroData=E&dataInicial=${de}&dataFinal=${ate}&limite=100&pagina=${pagina}`);
+      const lista = resp.data ?? [];
+      for (const c of lista) {
+        const pedido = c.origem?.id ?? c.idOrigem;
+        if (pedido && ids.has(pedido)) contasPorPedido.set(pedido, [...(contasPorPedido.get(pedido) ?? []), c]);
+      }
+      if (lista.length < 100) break;
+    }
+  }
+  const agora = new Date().toISOString();
+  const linhas = [...contasPorPedido].flatMap(([pedido, contas]) =>
+    contas.map((c) => ({
+      id: c.id,
+      bling_pedido_id: pedido,
+      contato_id: c.contato?.id ?? null,
+      vencimento: c.vencimento,
+      valor: Number(c.valor ?? 0),
+      situacao: c.situacao,
+      sincronizado_em: agora,
+    })),
+  );
+  for (let i = 0; i < linhas.length; i += 500) {
+    const { error } = await supabase.from("academy_parcelas").upsert(linhas.slice(i, i + 500));
+    if (error) throw new Error(`Falha ao salvar as parcelas do Academy: ${error.message}`);
+  }
+  await supabase.from("academy_parcelas").delete().lt("sincronizado_em", inicio);
+  return contasPorPedido;
+}
+
+/**
+ * Taxa real e valor recebido das vendas (0044): quando todas as contas de um
+ * pedido estão recebidas, soma tarifa e valor pago dos borderôs. Pendente =
+ * nunca consultado, ou recente e ainda sem baixa completa.
+ */
+async function complementarBaixasAcademy(supabase: Supa, token: string, contasPorPedido: Map<number, ContaReceberListada[]>): Promise<number> {
   const limiteRecente = somarDias(hojeLocal(), -DIAS_RECONSULTA_BAIXA);
   const { data: pendentes, error } = await supabase
     .from("academy_vendas")
@@ -247,23 +298,6 @@ async function complementarBaixasAcademy(supabase: Supa, token: string): Promise
   }
   if (!pendentes?.length) return 0;
   const ids = new Set(pendentes.map((p) => p.bling_pedido_id));
-  const desde = pendentes.reduce((min, p) => (p.data! < min ? p.data! : min), pendentes[0].data!);
-
-  type ContaListada = { id: number; situacao: number; idOrigem?: number; origem?: { id?: number } };
-  const contasPorPedido = new Map<number, ContaListada[]>();
-  const hoje = hojeLocal();
-  for (let de = desde; de <= hoje; de = somarDias(de, 366)) {
-    const ate = somarDias(de, 365) < hoje ? somarDias(de, 365) : hoje;
-    for (let pagina = 1; pagina <= 100; pagina++) {
-      const resp = await consultarBling<{ data: ContaListada[] }>(token, `/contas/receber?tipoFiltroData=E&dataInicial=${de}&dataFinal=${ate}&limite=100&pagina=${pagina}`);
-      const lista = resp.data ?? [];
-      for (const c of lista) {
-        const pedido = c.origem?.id ?? c.idOrigem;
-        if (pedido && ids.has(pedido)) contasPorPedido.set(pedido, [...(contasPorPedido.get(pedido) ?? []), c]);
-      }
-      if (lista.length < 100) break;
-    }
-  }
 
   let detalhadas = 0;
   let gravadas = 0;
@@ -332,6 +366,8 @@ export interface PagamentoVenda {
 export interface VendaAcademy {
   blingPedidoId: number;
   numeroPedido: string;
+  /** Contato do comprador no Bling (identifica o cliente do Academy). */
+  contatoId: number | null;
   cliente: string;
   /** CPF/CNPJ mascarado — o completo só por ação explícita (revelarDocumentoAction). */
   documentoMascarado: string | null;
@@ -357,6 +393,13 @@ export interface VendaAcademy {
   liquido: number;
   sdr: string | null;
   closer: string | null;
+}
+
+/** Formas de pagamento da venda para exibição, com as repetidas agrupadas: "Pix + 10× Cartão 1x". */
+export function resumirPagamentos(pagamentos: PagamentoVenda[]) {
+  const contagem = new Map<string, number>();
+  for (const p of pagamentos) contagem.set(p.rotulo, (contagem.get(p.rotulo) ?? 0) + 1);
+  return [...contagem].map(([rotulo, n]) => (n > 1 ? `${n}× ${rotulo}` : rotulo)).join(" + ");
 }
 
 /** CPF/CNPJ com o meio visível: ***.214.798-** / **.345.678/0001-** */
@@ -541,6 +584,7 @@ export async function carregarVendasAcademy(supabase: Supa) {
       return {
         blingPedidoId: p.bling_pedido_id,
         numeroPedido: p.numero,
+        contatoId: p.contato_id,
         cliente: p.contato_nome ?? "—",
         documentoMascarado: mascararDocumento(p.contato_documento),
         curso,
@@ -586,5 +630,16 @@ export async function carregarVendasAcademy(supabase: Supa) {
       .sort((a, b) => a.nome.split(" · ")[0].localeCompare(b.nome.split(" · ")[0], "pt-BR") || a.primeiraVenda.localeCompare(b.primeiraVenda))
       .map((c) => ({ slug: c.slug, nome: c.nome }));
   const sincronizadoEm = (data ?? []).reduce<string | null>((max, v) => (!max || v.sincronizado_em > max ? v.sincronizado_em : max), null);
-  return { doPeriodo, cursosDoPeriodo, curso, listaCursos, sincronizadoEm, temCache: (data ?? []).length > 0 };
+  return {
+    /** Vendas válidas (sem canceladas e sem duplicadas), da mais recente para a mais antiga. */
+    vendas,
+    /** Inclui as canceladas (marcadas). */
+    todas,
+    doPeriodo,
+    cursosDoPeriodo,
+    curso,
+    listaCursos,
+    sincronizadoEm,
+    temCache: (data ?? []).length > 0,
+  };
 }

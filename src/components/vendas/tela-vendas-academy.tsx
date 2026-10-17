@@ -44,7 +44,7 @@ function ValorEQuantidade({ valor, vendas }: { valor: number; vendas: number }) 
 }
 
 /** Quanto o período representa do total vendido no curso (por valor). */
-export function BarraParticipacao({ parte, total }: { parte: number; total: number }) {
+export function BarraParticipacao({ parte, total, rotulo }: { parte: number; total: number; /** Texto ao lado da barra no lugar do %. */ rotulo?: string }) {
   const pct = total > 0 ? Math.min(100, (parte / total) * 100) : 0;
   return (
     <div className="flex items-center gap-3">
@@ -58,7 +58,7 @@ export function BarraParticipacao({ parte, total }: { parte: number; total: numb
       >
         <div className="h-full rounded-full bg-darkPurple1" style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-11 shrink-0 text-right text-sm font-semibold text-darkPurple1 tabular-nums">{pct.toFixed(0)}%</span>
+      <span className={`${rotulo ? "" : "w-11 "}shrink-0 text-right text-sm font-semibold whitespace-nowrap text-darkPurple1 tabular-nums`}>{rotulo ?? `${pct.toFixed(0)}%`}</span>
     </div>
   );
 }

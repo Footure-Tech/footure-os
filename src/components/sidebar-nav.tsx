@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { SincronizarBlingButton } from "@/components/clientes/sincronizar-bling-button";
 import type { PapelUsuario } from "@/lib/supabase/database.types";
 import type { ChaveContador } from "@/lib/shell/dadosShell";
+import type { ContextoDados } from "@/lib/contexto/contexto";
 
 interface SidebarLink {
   href: string;
@@ -113,21 +114,37 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
   ],
 };
 
+/** Contexto Academy: sem as telas que só existem para o Footlink (pedido → contrato → assinatura → parcelas). */
+const SO_FOOTLINK = new Set([PEDIDOS_VENDEDOR.href, PEDIDOS_ADMIN.href, CONTRATOS.href, HISTORICO_MODELO.href, CONTRATOS_FINANCEIRO.href, PAGAMENTOS.href]);
+
+function gruposDoContexto(grupos: SidebarGroup[], contexto: ContextoDados): SidebarGroup[] {
+  if (contexto === "footlink") return grupos;
+  return grupos
+    .map((g) => ({
+      ...g,
+      // O contador de inadimplentes é do Footlink.
+      links: g.links.filter((l) => !SO_FOOTLINK.has(l.href)).map((l) => (l.contador === "inadimplentes" ? { ...l, contador: undefined } : l)),
+    }))
+    .filter((g) => g.links.length > 0);
+}
+
 // Sidebar do handoff (248px, superfície clara, ícone em caixa colorida).
 // Abaixo de 1024px vira um trilho de 72px só com ícones (rótulo no title) —
 // o handoff não define o comportamento estreito, e 248px fixos espremeriam
 // o conteúdo em ~900px.
 export function SidebarNav({
   papel,
+  contexto,
   contadores,
   integracoes,
 }: {
   papel: PapelUsuario;
+  contexto: ContextoDados;
   contadores: Partial<Record<ChaveContador, number>>;
   integracoes: IntegracaoSidebar[];
 }) {
   const pathname = usePathname();
-  const groups = GRUPOS_POR_PAPEL[papel];
+  const groups = gruposDoContexto(GRUPOS_POR_PAPEL[papel], contexto);
   // Mesmos papéis da action de sincronização (sincronizarContatosBlingAction).
   const podeSincronizar = papel === "vendedor" || papel === "admin";
 

@@ -1,8 +1,10 @@
 /** Dados antigos às vezes já vêm só com dígitos, às vezes já pontuados (ou
  * incompletos) — reformata a partir dos dígitos e devolve o valor original
  * sem alteração quando não dá pra montar um CNPJ válido de 14 dígitos. */
+/** CNPJ formatado; CPF (cliente pessoa física do Footlink, ex.: agente) também. */
 export function formatarCnpj(cnpj: string): string {
   const digitos = cnpj.replace(/\D/g, "");
+  if (digitos.length === 11) return digitos.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
   if (digitos.length !== 14) return cnpj;
   return digitos.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
 }
