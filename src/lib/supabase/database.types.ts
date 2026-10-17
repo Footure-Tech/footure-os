@@ -6,6 +6,8 @@
 
 export type PapelUsuario = "vendedor" | "juridico" | "admin";
 export type TipoCliente = "clube" | "agente";
+/** 0042: classificação dos produtos do Footure Academy. */
+export type CategoriaAcademy = "especializacao" | "livre" | "assinatura" | "mensalidade";
 /** 0038: tipo de venda e origem de uma venda do Bling. */
 export type TipoVenda = "novo" | "renovacao" | "reativacao";
 export type OrigemVenda = "carteira" | "inbound" | "outbound";
@@ -440,6 +442,38 @@ export interface Database {
           valor_pago: number | null;
           situacao_detalhada: number | null;
         }>
+      >;
+      // supabase/migrations/0042_academy_vendas.sql
+      academy_vendas: TableDef<
+        {
+          bling_pedido_id: number;
+          numero: string;
+          data: string | null;
+          total: number;
+          situacao_id: number | null;
+          situacao_valor: number | null;
+          contato_id: number | null;
+          contato_nome: string | null;
+          contato_documento: string | null;
+          produto: string | null;
+          categoria: CategoriaAcademy;
+          sincronizado_em: string;
+        },
+        {
+          bling_pedido_id: number;
+          numero: string;
+          data?: string | null;
+          total?: number;
+          situacao_id?: number | null;
+          situacao_valor?: number | null;
+          contato_id?: number | null;
+          contato_nome?: string | null;
+          contato_documento?: string | null;
+          produto?: string | null;
+          categoria: CategoriaAcademy;
+          sincronizado_em?: string;
+        },
+        Partial<{ numero: string; data: string | null; total: number; situacao_id: number | null; situacao_valor: number | null; contato_nome: string | null; produto: string | null; categoria: CategoriaAcademy; sincronizado_em: string }>
       >;
       // supabase/migrations/0041_analise_versoes_contrato.sql
       contrato_analises: TableDef<

@@ -72,6 +72,17 @@ export function DivisaoPerfil({
     { rotulo: "Agentes", valor: valores.agente },
     ...(valores.semPerfil > 0 ? [{ rotulo: "Sem cadastro", valor: valores.semPerfil }] : []),
   ];
+  return <DivisaoValores partes={partes} formatar={formatar} />;
+}
+
+/** Rodapé de KPI com a divisão do valor em partes rotuladas (uma por linha). */
+export function DivisaoValores({
+  partes,
+  formatar = formatarMoedaCompacta,
+}: {
+  partes: { rotulo: string; valor: number }[];
+  formatar?: (valor: number) => string;
+}) {
   return (
     <span className="flex flex-col gap-0.5">
       {partes.map((p) => (

@@ -4,6 +4,7 @@ import { MdLock } from "react-icons/md";
 import type { SessaoUsuario } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { obterDadosShell } from "@/lib/shell/dadosShell";
+import { lerContextoDados } from "@/lib/contexto/contexto";
 import { tempoDecorrido } from "@/lib/formatacao";
 import { AppBar } from "@/components/shell/app-bar";
 import { SidebarNav, type IntegracaoSidebar } from "@/components/sidebar-nav";
@@ -14,7 +15,7 @@ import { TransicaoTela } from "@/components/shell/transicao-tela";
 // (obterDadosShell) — atualizam quando uma Server Action revalida a rota.
 export async function AppShell({ sessao, children }: { sessao: SessaoUsuario; children: ReactNode }) {
   const supabase = await createClient();
-  const { contadores, integracoes } = await obterDadosShell(supabase, sessao.papel, sessao.id);
+  const [{ contadores, integracoes }, contexto] = await Promise.all([obterDadosShell(supabase, sessao.papel, sessao.id), lerContextoDados()]);
 
   const statusIntegracoes: IntegracaoSidebar[] = [
     {
@@ -31,7 +32,7 @@ export async function AppShell({ sessao, children }: { sessao: SessaoUsuario; ch
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <AppBar sessao={sessao} />
+      <AppBar sessao={sessao} contexto={contexto} />
       <div className="flex flex-1 items-start">
         <SidebarNav papel={sessao.papel} contadores={contadores} integracoes={statusIntegracoes} />
         <main className="min-w-0 flex-1 p-[30px]">

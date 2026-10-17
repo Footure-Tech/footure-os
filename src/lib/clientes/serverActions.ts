@@ -6,7 +6,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { exigirPapel } from "@/lib/auth/session";
-import { sincronizarContatosBling } from "@/lib/integracoes/bling";
+import { obterAccessTokenValido, sincronizarContatosBling } from "@/lib/integracoes/bling";
+import { sincronizarVendasAcademy } from "@/lib/academy/vendas";
 
 const ClientePayloadSchema = z.object({
   clienteId: z.string().uuid().optional(), // presente = edição
@@ -109,10 +110,17 @@ export async function sincronizarContatosBlingAction(): Promise<Partial<Awaited<
     await exigirPapel("vendedor", "admin");
     const supabase = await createClient();
     resultado = await sincronizarContatosBling(supabase);
+    // Vendas do Footure Academy (0042) — falha aqui não derruba a sincronização do Footlink.
+    try {
+      await sincronizarVendasAcademy(supabase, await obterAccessTokenValido(supabase));
+    } catch (erro) {
+      console.error("[academy] sincronização das vendas:", erro instanceof Error ? erro.message : erro);
+    }
     revalidatePath("/clientes");
     revalidatePath("/financeiro");
     revalidatePath("/financeiro/pagamentos");
     revalidatePath("/inadimplencia");
+    revalidatePath("/vendas");
   });
   return r.erro || !resultado ? r : resultado;
 }
