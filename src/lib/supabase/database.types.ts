@@ -6,8 +6,8 @@
 
 export type PapelUsuario = "vendedor" | "juridico" | "admin";
 export type TipoCliente = "clube" | "agente";
-/** 0042: classificação dos produtos do Footure Academy. */
-export type CategoriaAcademy = "especializacao" | "livre" | "assinatura" | "mensalidade";
+/** 0042/0043: classificação dos produtos do Footure Academy. */
+export type CategoriaAcademy = "especializacao" | "livre" | "assinatura" | "mensalidade" | "outro";
 /** 0038: tipo de venda e origem de uma venda do Bling. */
 export type TipoVenda = "novo" | "renovacao" | "reativacao";
 export type OrigemVenda = "carteira" | "inbound" | "outbound";

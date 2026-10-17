@@ -141,7 +141,7 @@ export function TelaVendasAcademy({
             </Table>
           )}
           <p className="text-xs text-gray3">
-            Data da venda = data do pedido no Bling; pedidos cancelados não entram. Especialização inclui a Certificação Executivo de Futebol; assinaturas (Silver/Gold, Footure Insights) e mensalidades de cursos já vendidos não contam como venda.
+            Data da venda = data do pedido no Bling; pedidos cancelados não entram. Especialização inclui a Certificação Executivo de Futebol; assinaturas (Silver/Gold, Footure Insights) mensalidades de cursos já vendidos e produtos que não são curso não contam como venda.
           </p>
         </>
       )}

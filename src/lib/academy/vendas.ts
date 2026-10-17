@@ -6,7 +6,8 @@
 // Vendas = cursos de especialização + cursos livres, fora os cancelados
 // (atendidos e em aberto). Assinaturas (Silver/Gold, Footure Insights) e as
 // cobranças recorrentes de curso já vendido ("Assinatura - <curso> (Nome)")
-// ficam no cache, mas não contam como venda.
+// ficam no cache, mas não contam como venda — nem produtos que não são curso
+// (camiseta, licença de teste do Footlink).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CategoriaAcademy, Database } from "@/lib/supabase/database.types";
 import { consultarBling, pedidoBlingCancelado } from "@/lib/integracoes/bling";
@@ -34,6 +35,8 @@ export function classificarProdutoAcademy(produto: string): CategoriaAcademy {
   // Cobrança recorrente de um curso já vendido: "Assinatura - Certificação … (Ana Carla)".
   if (/^assinatura\s*-.*\([^)]+\)\s*$/i.test(nome)) return "mensalidade";
   if (/\b(silver|gold)\b|footure insights/i.test(nome)) return "assinatura";
+  // Produto que não é curso (0043): camiseta, licença de teste do Footlink.
+  if (/camiseta|licen[çc]a teste/i.test(nome)) return "outro";
   if (/^(assinatura\s*-\s*)?especializa[çc][ãa]o\b/i.test(nome) || /certifica[çc][ãa]o executivo de futebol/i.test(nome)) return "especializacao";
   return "livre";
 }
