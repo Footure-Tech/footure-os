@@ -2,14 +2,14 @@ import { formatarMoeda, formatarMoedaCompacta } from "@/lib/formatacao";
 import { cn } from "@/lib/utils";
 
 /** Topo "redondo" do eixo Y (1, 2, 2,5 ou 5 × 10^n) acima do maior valor. */
-function topoDoEixo(maximo: number) {
+export function topoDoEixo(maximo: number) {
   if (maximo <= 0) return 1;
   const ordem = 10 ** Math.floor(Math.log10(maximo));
   return [1, 2, 2.5, 5, 10].map((m) => m * ordem).find((v) => v >= maximo) ?? maximo;
 }
 
 // Tooltip por marca (hover/foco): CSS puro, sem JS.
-function Dica({ children }: { children: React.ReactNode }) {
+export function Dica({ children }: { children: React.ReactNode }) {
   return (
     <span
       role="tooltip"

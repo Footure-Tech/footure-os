@@ -11,16 +11,18 @@ const PERIODOS: PeriodoVendas[] = ["mes", "tri", "12m"];
 // Comercial · Vendas — pedidos de venda do Bling (cache da sincronização), mais
 // recentes primeiro: do Footlink ou, no contexto Academy, da loja do Academy.
 export default async function VendasPage({ searchParams }: PageProps<"/vendas">) {
-  const { periodo: p } = await searchParams;
+  const { periodo: p, visao: vi } = await searchParams;
   const periodo = PERIODOS.includes(p as PeriodoVendas) ? (p as PeriodoVendas) : "mes";
   const supabase = await createClient();
 
   if ((await lerContextoDados()) === "academy") {
-    const { doPeriodo, sincronizadoEm, temCache } = await carregarVendasAcademy(supabase);
+    const { doPeriodo, cursosDoPeriodo, sincronizadoEm, temCache } = await carregarVendasAcademy(supabase);
     return (
       <TelaVendasAcademy
         vendas={doPeriodo(periodo)}
+        cursos={cursosDoPeriodo(periodo)}
         periodo={periodo}
+        visao={vi === "vendas" ? "vendas" : "cursos"}
         contagens={{ mes: doPeriodo("mes").length, tri: doPeriodo("tri").length, "12m": doPeriodo("12m").length }}
         sincronizadoEm={sincronizadoEm}
         temCache={temCache}

@@ -6,8 +6,20 @@
 
 export type PapelUsuario = "vendedor" | "juridico" | "admin";
 export type TipoCliente = "clube" | "agente";
-/** 0042/0043: classificação dos produtos do Footure Academy. */
-export type CategoriaAcademy = "especializacao" | "livre" | "assinatura" | "mensalidade" | "outro";
+/** 0042/0043/0045: classificação dos produtos do Footure Academy. */
+export type CategoriaAcademy = "especializacao" | "livre" | "hotmart" | "assinatura" | "mensalidade" | "outro";
+/** 0044: uma parcela do pedido de venda do Academy, com a forma de pagamento e a taxa cadastrada nela. */
+export interface PagamentoAcademy {
+  formaId: number;
+  descricao: string;
+  meio: "cartao" | "pix" | "boleto" | "outro";
+  /** Parcelas do cartão (da descrição da forma, ex.: "12x"); 1 sem indicação; null fora do cartão. */
+  parcelasCartao: number | null;
+  valor: number;
+  /** Taxa da forma de pagamento: alíquota (%) e valor fixo (R$). */
+  aliquota: number;
+  taxaFixa: number;
+}
 /** 0038: tipo de venda e origem de uma venda do Bling. */
 export type TipoVenda = "novo" | "renovacao" | "reativacao";
 export type OrigemVenda = "carteira" | "inbound" | "outbound";
@@ -458,6 +470,17 @@ export interface Database {
           produto: string | null;
           categoria: CategoriaAcademy;
           sincronizado_em: string;
+          // 0044
+          total_produtos: number | null;
+          desconto: number | null;
+          cupom: string | null;
+          numero_loja: string | null;
+          pagamentos: PagamentoAcademy[] | null;
+          detalhado_em: string | null;
+          taxa_real: number | null;
+          valor_recebido: number | null;
+          baixa_em: string | null;
+          baixa_consultada_em: string | null;
         },
         {
           bling_pedido_id: number;
@@ -472,8 +495,38 @@ export interface Database {
           produto?: string | null;
           categoria: CategoriaAcademy;
           sincronizado_em?: string;
+          total_produtos?: number | null;
+          desconto?: number | null;
+          cupom?: string | null;
+          numero_loja?: string | null;
+          pagamentos?: PagamentoAcademy[] | null;
+          detalhado_em?: string | null;
+          taxa_real?: number | null;
+          valor_recebido?: number | null;
+          baixa_em?: string | null;
+          baixa_consultada_em?: string | null;
         },
-        Partial<{ numero: string; data: string | null; total: number; situacao_id: number | null; situacao_valor: number | null; contato_nome: string | null; produto: string | null; categoria: CategoriaAcademy; sincronizado_em: string }>
+        Partial<{
+          numero: string;
+          data: string | null;
+          total: number;
+          situacao_id: number | null;
+          situacao_valor: number | null;
+          contato_nome: string | null;
+          produto: string | null;
+          categoria: CategoriaAcademy;
+          sincronizado_em: string;
+          total_produtos: number | null;
+          desconto: number | null;
+          cupom: string | null;
+          numero_loja: string | null;
+          pagamentos: PagamentoAcademy[] | null;
+          detalhado_em: string | null;
+          taxa_real: number | null;
+          valor_recebido: number | null;
+          baixa_em: string | null;
+          baixa_consultada_em: string | null;
+        }>
       >;
       // supabase/migrations/0041_analise_versoes_contrato.sql
       contrato_analises: TableDef<
