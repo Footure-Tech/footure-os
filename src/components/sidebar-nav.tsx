@@ -48,6 +48,7 @@ const PEDIDOS_ADMIN: SidebarLink = {
   href: "/admin",
   contador: "aprovacao",
 };
+const DASHBOARD: SidebarLink = { href: "/dashboard", label: "Dashboard", icon: MdDashboard, cor: "bg-iconPurple", exact: true };
 const CLIENTES: SidebarLink = { href: "/clientes", label: "Clientes", icon: MdBusiness, cor: "bg-iconBlue" };
 const VENDAS: SidebarLink = { href: "/vendas", label: "Vendas", icon: MdTrendingUp, cor: "bg-iconPurple", exact: true };
 const CONTRATOS: SidebarLink = {
@@ -89,12 +90,13 @@ const INADIMPLENCIA: SidebarLink = {
 // e o AppShell só passa o papel.
 const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
   vendedor: [
-    { label: "Comercial", links: [PEDIDOS_VENDEDOR, CLIENTES] },
-    { label: "Financeiro", links: [INADIMPLENCIA] },
+    { label: "Gestão", links: [DASHBOARD] },
+    { label: "Comercial", links: [PEDIDOS_VENDEDOR, VENDAS, CLIENTES] },
+    { label: "Financeiro", links: [CONTRATOS_FINANCEIRO, PAGAMENTOS, INADIMPLENCIA] },
   ],
   juridico: [{ label: "Jurídico", links: [{ ...CONTRATOS, ativoEm: ["/pedidos/"] }, HISTORICO_MODELO] }],
   admin: [
-    { label: "Gestão", links: [{ href: "/dashboard", label: "Dashboard", icon: MdDashboard, cor: "bg-iconPurple", exact: true }] },
+    { label: "Gestão", links: [DASHBOARD] },
     {
       label: "Comercial",
       links: [PEDIDOS_ADMIN, VENDAS, CLIENTES],

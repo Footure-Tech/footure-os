@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { MdAttachMoney, MdBusiness, MdEdit, MdDescription, MdDownload, MdGavel, MdHistory, MdInfo, MdOpenInNew, MdReceipt } from "react-icons/md";
 import { createClient } from "@/lib/supabase/server";
+import { exigirPapel } from "@/lib/auth/session";
 import { carregarContrato, type ParcelaCarteira } from "@/lib/financeiro/carteira";
 import { buscarDetalheContatoBling, buscarPedidoVendaBling } from "@/lib/integracoes/bling";
 import { buscarPedidoDetalhe, listarUsuariosParaAtribuicaoVenda } from "@/lib/pedidos/consultas";
@@ -81,6 +82,9 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
   const blingPedidoId = Number(id);
   if (!Number.isSafeInteger(blingPedidoId)) notFound();
 
+  // Vendedor consulta; editar dados e anexar arquivos é só da Diretoria.
+  const sessao = await exigirPapel("admin", "vendedor");
+  const ehAdmin = sessao.papel === "admin";
   const supabase = await createClient();
   const dados = await carregarContrato(supabase, blingPedidoId);
   if (!dados) notFound();
@@ -222,7 +226,7 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <IndicadorBling sincronizadoEm={dados.sincronizadoEm} />
-          {!pedidoLocal && (
+          {ehAdmin && !pedidoLocal && (
             <Button variant="white" nativeButton={false} render={<Link href={`/financeiro/contratos/${blingPedidoId}/editar`} />}>
               <MdEdit className="size-4" />
               Editar dados do contrato
@@ -331,10 +335,12 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
                     Falta informar {faltando.join(", ").replace(/, ([^,]*)$/, " e $1")} — dados que o Bling não tem.
                     {!contrato.vigenciaDefinida && " Sem a vigência, a situação segue as parcelas (contrato pago à vista aparece como concluído)."}
                   </span>
-                  <Button variant="secondary" size="sm" nativeButton={false} render={<Link href={`/financeiro/contratos/${blingPedidoId}/editar`} />}>
-                    <MdEdit className="size-4" />
-                    Completar dados
-                  </Button>
+                  {ehAdmin && (
+                    <Button variant="secondary" size="sm" nativeButton={false} render={<Link href={`/financeiro/contratos/${blingPedidoId}/editar`} />}>
+                      <MdEdit className="size-4" />
+                      Completar dados
+                    </Button>
+                  )}
                 </div>
               )}
               {detalheBling && detalheBling.itens.length > 0 && (
@@ -378,7 +384,7 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
             extra={
               pedidoLocal ? (
                 versoes[0] ? <span className="text-sm font-semibold text-gray3">v{versoes[0].versao}</span> : undefined
-              ) : anexos.length > 0 ? (
+              ) : ehAdmin && anexos.length > 0 ? (
                 <AnexarContratoBling blingPedidoId={blingPedidoId} rotulo="Anexar outro arquivo" />
               ) : undefined
             }
@@ -411,8 +417,12 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
                 compacto
                 icone={MdDescription}
                 titulo="Contrato gerado fora da plataforma"
-                descricao="Anexe o contrato deste pedido (PDF assinado ou .docx, até 20 MB) para deixá-lo junto dos dados financeiros."
-                acao={<AnexarContratoBling blingPedidoId={blingPedidoId} />}
+                descricao={
+                  ehAdmin
+                    ? "Anexe o contrato deste pedido (PDF assinado ou .docx, até 20 MB) para deixá-lo junto dos dados financeiros."
+                    : "O arquivo do contrato fica disponível para a Diretoria."
+                }
+                acao={ehAdmin ? <AnexarContratoBling blingPedidoId={blingPedidoId} /> : undefined}
               />
             ) : (
               <div className="flex flex-col gap-2">

@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { exigirPapel } from "@/lib/auth/session";
 import { carregarContrato } from "@/lib/financeiro/carteira";
 import { listarUsuariosParaAtribuicaoVenda } from "@/lib/pedidos/consultas";
 import { urlLogoCliente } from "@/lib/clientes/consultas";
@@ -8,6 +9,8 @@ import { FormDadosContrato } from "@/components/financeiro/form-dados-contrato";
 
 // Editar dados do contrato (venda que veio do Bling): vigência, SDR/Closer e licenças.
 export default async function EditarDadosContratoPage({ params }: PageProps<"/financeiro/contratos/[id]/editar">) {
+  // Edição dos dados do contrato é só da Diretoria (o vendedor só consulta).
+  await exigirPapel("admin");
   const { id } = await params;
   const blingPedidoId = Number(id);
   if (!Number.isSafeInteger(blingPedidoId)) notFound();
