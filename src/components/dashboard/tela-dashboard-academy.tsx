@@ -96,7 +96,7 @@ export function TelaDashboardAcademy({ dados, periodo }: { dados: Dados; periodo
               valor={dados.temParcelas ? `${(kpis.taxaInadimplencia * 100).toFixed(1).replace(".", ",")}%` : "—"}
               destaque={dados.temParcelas ? formatarMoedaCompacta(kpis.vencido) : undefined}
               tomDestaque="negativo"
-              apoio={dados.temParcelas ? "vencido do valor em aberto" : "sincronize o Bling"}
+              apoio={dados.temParcelas ? `das parcelas que venceram ${rotulo.curto}` : "sincronize o Bling"}
               rodape={
                 dados.temParcelas ? (
                   <Link href="/inadimplencia" className="font-semibold text-purple-text hover:underline">

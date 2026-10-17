@@ -85,7 +85,8 @@ export async function carregarDashboardAcademy(supabase: Supa, periodo: Periodo)
     };
   });
 
-  const inadimplencia = inadimplenciaAcademy(carteira);
+  // Inadimplência do período: só as parcelas previstas para vencer nele (até hoje).
+  const inadimplencia = inadimplenciaAcademy(carteira, inicio);
   return {
     temCache: carteira.temCache,
     temParcelas: carteira.temParcelas,

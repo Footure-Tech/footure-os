@@ -70,7 +70,11 @@ export function TelaInadimplenciaAcademy({
                 corValor="text-red"
                 apoio={`${resumo.parcelasVencidas} ${resumo.parcelasVencidas === 1 ? "parcela" : "parcelas"}`}
               />
-              <KpiCard rotulo="Taxa de inadimplência" valor={`${(resumo.taxa * 100).toFixed(1).replace(".", ",")}%`} apoio="do valor em aberto · sem meta definida" />
+              <KpiCard
+                rotulo="Taxa de inadimplência"
+                valor={`${(resumo.taxa * 100).toFixed(1).replace(".", ",")}%`}
+                apoio={`do valor vendido já vencido (${formatarMoeda(resumo.totalJaVencido)})`}
+              />
               <KpiCard rotulo="Compradores inadimplentes" valor={resumo.clientes} apoio={`de ${resumo.clientesComAberto} com parcelas em aberto`} />
               <KpiCard rotulo="A vencer" valor={formatarMoeda(resumo.totalAVencer)} apoio="parcelas em aberto ainda no prazo" />
             </div>

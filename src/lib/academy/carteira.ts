@@ -1,8 +1,8 @@
 // Footure Academy · clientes e inadimplência: compradores dos cursos (vendas do
 // cache academy_vendas) e as parcelas dos pedidos (academy_parcelas, 0046).
-// Mesmas regras da Inadimplência do Footlink: parcela vencida = em aberto com
-// vencimento passado (classificarSituacaoParcela); taxa = vencido ÷ tudo em
-// aberto; faixas pelo atraso de cada parcela. Parcelas de pedido cancelado ou
+// Parcela vencida = em aberto com vencimento passado (classificarSituacaoParcela),
+// como no Footlink; taxa = vencido ÷ tudo o que já venceu (pago ou não); faixas
+// pelo atraso de cada parcela. Parcelas de pedido cancelado ou
 // duplicado (contado uma vez só) ficam de fora.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
@@ -118,9 +118,15 @@ export function compradoresAcademy({ vendas, parcelas }: Pick<Carteira, "vendas"
     .sort((a, b) => b.ultimaCompra.localeCompare(a.ultimaCompra));
 }
 
-/** Inadimplência do Academy: compradores com parcela vencida, faixas de atraso e resumo. */
-export function inadimplenciaAcademy({ vendas, parcelas }: Pick<Carteira, "vendas" | "parcelas">) {
+/**
+ * Inadimplência do Academy: compradores com parcela vencida, faixas de atraso e
+ * resumo. `desde` (aaaa-mm-dd): só parcelas com vencimento a partir dessa data
+ * (Dashboard: as previstas para vencer no período). Taxa = vencido e não pago
+ * ÷ tudo o que já venceu (pago ou não) — decisão de produto, out/2026.
+ */
+export function inadimplenciaAcademy({ vendas, parcelas: todasParcelas }: Pick<Carteira, "vendas" | "parcelas">, desde?: string) {
   const hoje = hojeLocal();
+  const parcelas = desde ? todasParcelas.filter((p) => p.vencimento >= desde) : todasParcelas;
   const vendasPorPedido = new Map<number, VendaAcademy[]>();
   for (const v of vendas) vendasPorPedido.set(v.blingPedidoId, [...(vendasPorPedido.get(v.blingPedidoId) ?? []), v]);
   const vencidas = parcelas.filter((p) => p.situacao === "atrasada");
@@ -159,6 +165,8 @@ export function inadimplenciaAcademy({ vendas, parcelas }: Pick<Carteira, "venda
 
   const totalVencido = vencidas.reduce((s, p) => s + p.valor, 0);
   const totalAVencer = aVencer.reduce((s, p) => s + p.valor, 0);
+  // Base da taxa: valor de todas as parcelas que já venceram (até hoje), pagas ou não.
+  const totalJaVencido = parcelas.filter((p) => p.vencimento < hoje).reduce((s, p) => s + p.valor, 0);
   return {
     clientes,
     faixas,
@@ -166,8 +174,8 @@ export function inadimplenciaAcademy({ vendas, parcelas }: Pick<Carteira, "venda
       totalVencido,
       parcelasVencidas: vencidas.length,
       totalAVencer,
-      // Taxa = vencido ÷ tudo que está em aberto (vencido + a vencer), como no Footlink.
-      taxa: totalVencido + totalAVencer > 0 ? totalVencido / (totalVencido + totalAVencer) : 0,
+      totalJaVencido,
+      taxa: totalJaVencido > 0 ? totalVencido / totalJaVencido : 0,
       clientes: clientes.length,
       clientesComAberto: new Set([...vencidas, ...aVencer].map((p) => p.contatoId)).size,
     },
