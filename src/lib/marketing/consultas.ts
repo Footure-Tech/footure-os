@@ -272,6 +272,13 @@ export async function carregarDesempenho(supabase: Supa, filtro: FiltroMarketing
   };
 }
 
+/** Leads (CRM e Meta) e gasto de um anúncio por dia da janela (mesmo índice de `serie.dias`). */
+export interface SerieAnuncio {
+  crm: number[];
+  meta: number[];
+  gasto: number[];
+}
+
 export interface LinhaCriativo {
   adId: string;
   nome: string;
@@ -324,9 +331,19 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
   }
   const unico = new Map([...idsPorNome].filter(([, ids]) => ids.size === 1).map(([n, ids]) => [n, [...ids][0]]));
 
+  // Série diária por anúncio (gráfico de leads acumulados): índice do dia na janela.
+  const dias: string[] = [];
+  for (let d = de; d <= ate; d = somarDias(d, 1)) dias.push(d);
+  const indiceDia = new Map(dias.map((d, i) => [d, i]));
+  const serie: Record<string, SerieAnuncio> = {};
+  const serieDe = (adId: string) => (serie[adId] ??= { crm: dias.map(() => 0), meta: dias.map(() => 0), gasto: dias.map(() => 0) });
+
   const meta = new Map<string, Acumulado & { nome: string; conjunto: string | null }>();
   for (const r of base.anuncios) {
     if (r.campaign_id !== campaignId || r.dia < de || r.dia > ate) continue;
+    const i = indiceDia.get(r.dia)!;
+    serieDe(r.ad_id).meta[i] += Number(r.leads);
+    serieDe(r.ad_id).gasto[i] += Number(r.spend);
     const a = meta.get(r.ad_id) ?? { ...novoAcumulado(), nome: r.ad_name ?? r.ad_id, conjunto: r.adset_name };
     acumular(a, { spend: Number(r.spend), impressions: Number(r.impressions), frequency: Number(r.frequency), leads: Number(r.leads), dia: r.dia }, meio);
     meta.set(r.ad_id, a);
@@ -358,6 +375,7 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
     }
     if (recuperado) c.recuperados++;
     crm.set(adId, c);
+    serieDe(adId).crm[indiceDia.get(l.dia!)!]++;
   }
 
   const criativos: LinhaCriativo[] = [...new Set([...meta.keys(), ...crm.keys()])].map((adId) => {
@@ -446,6 +464,7 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
     medianaDias: base.mat.mediana,
     sincronizadoEm: base.sincronizadoEm,
     criativos,
+    serie: { dias, anuncios: serie },
     recomendacoes,
     totais: {
       gasto: criativos.reduce((s, c) => s + c.gasto, 0),

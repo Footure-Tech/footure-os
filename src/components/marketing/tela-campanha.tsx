@@ -1,12 +1,9 @@
 import {
   MdRule,
   MdCampaign,
-  MdErrorOutline,
-  MdPauseCircleOutline,
-  MdPlayCircleOutline,
-  MdTimerOff,
   MdInfoOutline,
   MdLightbulbOutline,
+  MdShowChart,
 } from "react-icons/md";
 import {
   ROTULO_BU,
@@ -24,6 +21,8 @@ import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { CardModulo } from "@/components/negocio/card-modulo";
 import { TOM_BU } from "@/components/marketing/links";
 import { cn } from "@/lib/utils";
+import { situacaoAnuncio } from "@/components/marketing/situacao-anuncio";
+import { GraficoLeadsAcumulados } from "@/components/marketing/grafico-leads-acumulados";
 import { ImagemCriativo } from "@/components/marketing/imagem-criativo";
 import { SugestoesIa } from "@/components/marketing/sugestoes-ia";
 import { InstrucoesRastreio } from "@/components/marketing/instrucoes-rastreio";
@@ -103,6 +102,27 @@ export function TelaCampanha({
       />
 
       <KpisCampanha criativos={dados.criativos} />
+
+      <CardModulo
+        icone={MdShowChart}
+        cor="bg-iconBlue"
+        titulo="Leads acumulados no período"
+        className="min-w-0"
+      >
+        <GraficoLeadsAcumulados
+          dias={dados.serie.dias}
+          series={dados.serie.anuncios}
+          criativos={dados.criativos.map((c) => ({
+            adId: c.adId,
+            nome: c.nome,
+            imagemUrl: c.imagemUrl,
+            statusAnuncio: c.statusAnuncio,
+            gasto: c.gasto,
+            leads: c.leads,
+            leadsMeta: c.leadsMeta,
+          }))}
+        />
+      </CardModulo>
 
       <BlocoRastreio dados={dados} verificacoes={verificacoes}>
         <InstrucoesRastreio
@@ -289,57 +309,6 @@ function Metrica({
       </dd>
     </div>
   );
-}
-
-/**
- * Situação de veiculação do anúncio (effective_status da Meta; EXPIRED é
- * gravado pela sincronização quando o conjunto ou a campanha já terminou).
- */
-function situacaoAnuncio(status: string | null) {
-  if (!status) return null;
-  if (status === "ACTIVE")
-    return {
-      rotulo: "Rodando",
-      tom: "active",
-      icone: MdPlayCircleOutline,
-      parado: false,
-    } as const;
-  if (status === "EXPIRED")
-    return {
-      rotulo: "Expirado",
-      tom: "pending",
-      icone: MdTimerOff,
-      parado: true,
-    } as const;
-  if (
-    status.includes("PAUSED") ||
-    status === "ARCHIVED" ||
-    status === "DELETED"
-  )
-    return {
-      rotulo:
-        status === "CAMPAIGN_PAUSED"
-          ? "Pausado (campanha)"
-          : status === "ADSET_PAUSED"
-            ? "Pausado (conjunto)"
-            : "Pausado",
-      tom: "not_started",
-      icone: MdPauseCircleOutline,
-      parado: true,
-    } as const;
-  const rotulo: Record<string, string> = {
-    DISAPPROVED: "Reprovado",
-    WITH_ISSUES: "Com problemas",
-    PENDING_REVIEW: "Em análise",
-    IN_PROCESS: "Em processamento",
-    PENDING_BILLING_INFO: "Pagamento pendente",
-  };
-  return {
-    rotulo: rotulo[status] ?? status.toLowerCase(),
-    tom: "inactive",
-    icone: MdErrorOutline,
-    parado: false,
-  } as const;
 }
 
 /**
