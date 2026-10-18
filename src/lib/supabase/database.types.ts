@@ -6,6 +6,76 @@
 
 export type PapelUsuario = "vendedor" | "juridico" | "admin";
 export type TipoCliente = "clube" | "agente";
+/** 0047 · Marketing */
+export type BuMarketing = "academy" | "footlink";
+export type BuFunil = BuMarketing | "fora";
+export interface KommoCampos {
+  utm_ad_id: number;
+  utm_content: number;
+  utm_campaign_id: number;
+  valor_total: number;
+  ftp_utm_campaign: number | null;
+}
+export interface LimiaresMarketing {
+  roas_escalar: number;
+  roas_piso: number;
+  min_leads: number;
+  min_vendas_confia: number;
+  freq_alerta: number;
+  cpl_piora: number;
+  concentracao: number;
+  maturidade_min: number;
+  cobertura_baixa: number;
+}
+export type LeadKommoRow = {
+  lead_id: number;
+  pipeline_id: number | null;
+  status_id: number | null;
+  ad_id: string | null;
+  ad_name_raw: string | null;
+  campaign_id: string | null;
+  ftp_campaign_id: string | null;
+  is_mql: boolean;
+  is_won: boolean;
+  is_lost: boolean;
+  revenue: number;
+  criado_em: string | null;
+  fechado_em: string | null;
+  atualizado_em: string | null;
+  dias_ate_venda: number | null;
+  sincronizado_em: string;
+};
+type MetaDiaBase = {
+  account_id: string;
+  dia: string;
+  campaign_id: string | null;
+  campaign_name: string | null;
+  spend: number;
+  impressions: number;
+  frequency: number;
+  leads: number;
+  purchases: number;
+  actions_raw: unknown;
+  sincronizado_em: string;
+};
+export type MetaCampanhaDiaRow = MetaDiaBase & { campaign_id: string };
+export type MetaAnuncioDiaRow = MetaDiaBase & { ad_id: string; adset_id: string | null; adset_name: string | null; ad_name: string | null };
+export type SyncExecucaoRow = {
+  id: string;
+  fonte: "meta" | "kommo";
+  conta: string | null;
+  tipo: "backfill" | "incremental" | "manual";
+  janela_de: string | null;
+  janela_ate: string | null;
+  status: "rodando" | "ok" | "erro" | "parcial";
+  linhas_gravadas: number;
+  erro: string | null;
+  cursor: Record<string, unknown> | null;
+  iniciado_em: string;
+  terminado_em: string | null;
+  disparado_por: string | null;
+};
+
 /** 0042/0043/0045: classificação dos produtos do Footure Academy. */
 export type CategoriaAcademy = "especializacao" | "livre" | "hotmart" | "assinatura" | "mensalidade" | "outro";
 /** 0044: uma parcela do pedido de venda do Academy, com a forma de pagamento e a taxa cadastrada nela. */
@@ -454,6 +524,35 @@ export interface Database {
           valor_pago: number | null;
           situacao_detalhada: number | null;
         }>
+      >;
+      // supabase/migrations/0047_marketing_base.sql
+      mkt_contas: TableDef<
+        { account_id: string; bu: BuMarketing; nome: string; ativa: boolean },
+        { account_id: string; bu: BuMarketing; nome: string; ativa?: boolean },
+        Partial<{ bu: BuMarketing; nome: string; ativa: boolean }>
+      >;
+      mkt_configuracao: TableDef<
+        { id: boolean; kommo_campos: KommoCampos; limiares: LimiaresMarketing; janela_anuncio_dias: number; backfill_desde: string; atualizado_em: string },
+        { id?: boolean; kommo_campos: KommoCampos; limiares: LimiaresMarketing; janela_anuncio_dias?: number; backfill_desde?: string; atualizado_em?: string },
+        Partial<{ kommo_campos: KommoCampos; limiares: LimiaresMarketing; janela_anuncio_dias: number; backfill_desde: string; atualizado_em: string }>
+      >;
+      mkt_kommo_funis: TableDef<
+        { pipeline_id: number; nome: string; bu: BuFunil; bu_manual: boolean; sincronizado_em: string },
+        { pipeline_id: number; nome: string; bu: BuFunil; bu_manual?: boolean; sincronizado_em?: string },
+        Partial<{ nome: string; bu: BuFunil; bu_manual: boolean; sincronizado_em: string }>
+      >;
+      mkt_kommo_etapas: TableDef<
+        { pipeline_id: number; status_id: number; nome: string; sort: number; eh_mql: boolean },
+        { pipeline_id: number; status_id: number; nome: string; sort?: number; eh_mql?: boolean },
+        Partial<{ nome: string; sort: number; eh_mql: boolean }>
+      >;
+      mkt_kommo_leads: TableDef<LeadKommoRow, Omit<LeadKommoRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<LeadKommoRow>>;
+      mkt_meta_campanha_dia: TableDef<MetaCampanhaDiaRow, Omit<MetaCampanhaDiaRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MetaCampanhaDiaRow>>;
+      mkt_meta_anuncio_dia: TableDef<MetaAnuncioDiaRow, Omit<MetaAnuncioDiaRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MetaAnuncioDiaRow>>;
+      mkt_sync_execucoes: TableDef<
+        SyncExecucaoRow,
+        Partial<SyncExecucaoRow> & { fonte: SyncExecucaoRow["fonte"]; tipo: SyncExecucaoRow["tipo"] },
+        Partial<SyncExecucaoRow>
       >;
       // supabase/migrations/0046_academy_parcelas.sql
       academy_parcelas: TableDef<

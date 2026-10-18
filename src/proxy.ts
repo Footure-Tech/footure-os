@@ -11,10 +11,10 @@ export default async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Roda em tudo, exceto assets estáticos e a própria rota de webhook do
-     * Clicksign (Fase 3) — webhooks não têm sessão de usuário para refrescar
-     * e não devem ser redirecionados para /login.
+     * Roda em tudo, exceto assets estáticos, webhooks (Clicksign) e crons da
+     * Vercel (api/cron, autenticados pelo CRON_SECRET) — não têm sessão de
+     * usuário para refrescar e não devem ser redirecionados para /login.
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

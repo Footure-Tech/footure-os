@@ -11,6 +11,11 @@ import { cn } from "@/lib/utils";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { DesativarAjusteButton } from "@/components/configuracoes/desativar-ajuste-button";
 import { formatarDataCurta } from "@/lib/formatacao";
+import { carregarStatusMarketing } from "@/lib/marketing/status";
+import { BlocoMarketing } from "@/components/configuracoes/bloco-marketing";
+
+// A sincronização manual do Marketing (Server Action desta página) pode levar minutos.
+export const maxDuration = 300;
 
 const MENSAGEM_BLING: Record<string, { titulo: string; erro: boolean }> = {
   conectado: { titulo: "Bling conectado com sucesso.", erro: false },
@@ -21,10 +26,11 @@ const MENSAGEM_BLING: Record<string, { titulo: string; erro: boolean }> = {
 export default async function ConfiguracoesPage({ searchParams }: PageProps<"/admin/configuracoes">) {
   const { bling } = await searchParams;
   const supabase = await createClient();
-  const [comissionamento, statusBling, { data: ajustes }] = await Promise.all([
+  const [comissionamento, statusBling, { data: ajustes }, statusMarketing] = await Promise.all([
     buscarConfiguracaoComissionamento(supabase),
     buscarStatusBling(supabase),
     supabase.from("modelo_contrato_ajustes").select("id, perfil, trecho_original, trecho_novo, criado_em, profiles!modelo_contrato_ajustes_criado_por_fkey(nome)").eq("ativo", true).order("criado_em", { ascending: false }),
+    carregarStatusMarketing(supabase),
   ]);
 
   const mensagemBling = typeof bling === "string" ? MENSAGEM_BLING[bling] : undefined;
@@ -72,6 +78,8 @@ export default async function ConfiguracoesPage({ searchParams }: PageProps<"/ad
           <p className="text-xs text-gray3">A conexão é definida pelas variáveis de ambiente do servidor (CLICKSIGN_API_URL, CLICKSIGN_ACCESS_TOKEN e CLICKSIGN_WEBHOOK_SECRET).</p>
         </CardModulo>
       </div>
+
+      <BlocoMarketing status={statusMarketing} />
 
       <CardModulo
         icone={MdTune}
