@@ -1,24 +1,12 @@
-import {
-  MdCampaign,
-  MdImageNotSupported,
-  MdInfoOutline,
-  MdLightbulbOutline,
-} from "react-icons/md";
+import { MdCampaign, MdInfoOutline, MdLightbulbOutline } from "react-icons/md";
 import {
   ROTULO_BU,
   type carregarCriativos,
   type PeriodoMarketing,
 } from "@/lib/marketing/consultas";
 import type { Acao } from "@/lib/marketing/motor";
-import { formatarMoeda } from "@/lib/formatacao";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { formatarMoeda, formatarMoedaCompacta } from "@/lib/formatacao";
+import { GradeKpis, KpiCard } from "@/components/ds/kpi-card";
 import { PageHeader } from "@/components/shell/page-header";
 import { SegmentedToggle } from "@/components/ds/alternadores";
 import { BadgeTom } from "@/components/ds/badge-tom";
@@ -26,8 +14,10 @@ import { StatusPill } from "@/components/ds/status-pill";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { CardModulo } from "@/components/negocio/card-modulo";
 import { TOM_BU } from "@/components/marketing/links";
+import { ImagemCriativo } from "@/components/marketing/imagem-criativo";
 
 type Dados = NonNullable<Awaited<ReturnType<typeof carregarCriativos>>>;
+type Criativo = Dados["criativos"][number];
 
 const TOM_ACAO: Record<
   Acao,
@@ -88,6 +78,8 @@ export function TelaCampanha({
         }
       />
 
+      <KpisCampanha criativos={dados.criativos} />
+
       <CardModulo
         icone={MdLightbulbOutline}
         cor="bg-iconYellow"
@@ -119,116 +111,13 @@ export function TelaCampanha({
           />
         </div>
       ) : (
-        <Table minWidth={1500}>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Ação</TableHead>
-              <TableHead>Criativo</TableHead>
-              <TableHead>Gasto</TableHead>
-              <TableHead>Leads (maduros)</TableHead>
-              <TableHead>MQL</TableHead>
-              <TableHead>Vendas</TableHead>
-              <TableHead>Receita</TableHead>
-              <TableHead>CAC</TableHead>
-              <TableHead>ROAS</TableHead>
-              <TableHead>Freq.</TableHead>
-              <TableHead>CPL 1ª → 2ª metade</TableHead>
-              <TableHead>Por quê</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {dados.criativos.map((c) => (
-              <TableRow key={c.adId}>
-                <TableCell>
-                  <StatusPill tom={TOM_ACAO[c.acao]}>{c.acao}</StatusPill>
-                </TableCell>
-                <TableCell className="max-w-[380px] whitespace-normal">
-                  <div className="flex items-start gap-3">
-                    {c.imagemUrl ? (
-                      <a
-                        href={c.imagemUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Abrir a miniatura do criativo"
-                        className="shrink-0 rounded-lg focus-visible:shadow-focus focus-visible:outline-none"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element -- link assinado temporário do Storage */}
-                        <img
-                          src={c.imagemUrl}
-                          alt={`Criativo ${c.nome}`}
-                          width={64}
-                          height={64}
-                          className="size-16 rounded-lg border border-gray5 object-cover"
-                        />
-                      </a>
-                    ) : (
-                      <span
-                        className="flex size-16 shrink-0 items-center justify-center rounded-lg border border-dashed border-gray5 text-gray3"
-                        title="Sem miniatura na Meta"
-                      >
-                        <MdImageNotSupported className="size-6" />
-                      </span>
-                    )}
-                    <div className="flex min-w-0 flex-col items-start gap-1">
-                      <span className="font-bold text-darkPurple1">
-                        {c.nome}
-                      </span>
-                      {c.conjunto && (
-                        <span className="text-xs text-gray3">
-                          Conjunto: {c.conjunto}
-                        </span>
-                      )}
-                      <span className="flex flex-wrap gap-1">
-                        {c.saturando && (
-                          <span title={c.motivoSaturacao}>
-                            <StatusPill tom="pending">Saturando</StatusPill>
-                          </span>
-                        )}
-                        {c.recuperados > 0 && (
-                          <span
-                            title={`${c.recuperados} ${c.recuperados === 1 ? "lead atribuído" : "leads atribuídos"} pelo nome do criativo (sem ID do anúncio)`}
-                          >
-                            <StatusPill tom="not_started">
-                              Recuperado por nome
-                            </StatusPill>
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="font-bold text-darkPurple1">
-                  {formatarMoeda(c.gasto)}
-                </TableCell>
-                <TableCell className="text-gray2">
-                  {c.leads}{" "}
-                  <span className="text-xs text-gray3">({c.leadsMaduros})</span>
-                  <span className="block text-xs text-gray3">
-                    Meta: {Math.round(c.leadsMeta)}
-                  </span>
-                </TableCell>
-                <TableCell className="text-gray2">{c.mql}</TableCell>
-                <TableCell className="text-gray2">{c.vendas}</TableCell>
-                <TableCell className="font-semibold text-darkPurple1">
-                  {c.receita ? formatarMoeda(c.receita) : "—"}
-                </TableCell>
-                <TableCell className="text-gray2">{moeda(c.cac)}</TableCell>
-                <TableCell className="font-bold text-darkPurple1">
-                  {decimal(c.roas)}
-                </TableCell>
-                <TableCell className="text-gray2">
-                  {decimal(c.frequencia)}
-                </TableCell>
-                <TableCell className="text-gray2">
-                  {moeda(c.cplIni)} → {moeda(c.cplFim)}
-                </TableCell>
-                <TableCell className="max-w-[360px] text-[13px] whitespace-normal text-gray2">
-                  {c.motivo}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <ul className="flex flex-col gap-4">
+          {dados.criativos.map((c) => (
+            <li key={c.adId}>
+              <CartaoCriativo c={c} />
+            </li>
+          ))}
+        </ul>
       )}
 
       <div className="flex gap-2 rounded-xl border border-gray5 bg-surface p-4 text-xs text-gray3">
@@ -250,5 +139,181 @@ export function TelaCampanha({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Totais da campanha no período (soma dos criativos; frequência ponderada pelas impressões). */
+function KpisCampanha({ criativos }: { criativos: Criativo[] }) {
+  const soma = (f: (c: Criativo) => number) =>
+    criativos.reduce((s, c) => s + f(c), 0);
+  const gasto = soma((c) => c.gasto);
+  const impressoes = soma((c) => c.impressoes);
+  const freq = impressoes
+    ? soma((c) => (c.frequencia ?? 0) * c.impressoes) / impressoes
+    : null;
+  const leadsMeta = soma((c) => c.leadsMeta);
+  const leadsCrm = soma((c) => c.leads);
+  const mql = soma((c) => c.mql);
+  const vendas = soma((c) => c.vendas);
+  const receita = soma((c) => c.receita);
+  const ativos = criativos.filter((c) => c.gasto > 0).length;
+  const div = (a: number, b: number) => (b ? a / b : null);
+  const roas = leadsCrm ? div(receita, gasto) : null;
+  return (
+    <GradeKpis>
+      <KpiCard
+        rotulo="Investimento"
+        valor={formatarMoedaCompacta(gasto)}
+        apoio={`${ativos} ${ativos === 1 ? "criativo ativo" : "criativos ativos"} · freq. média ${decimal(freq)}`}
+      />
+      <KpiCard
+        rotulo="Leads (Meta)"
+        valor={Math.round(leadsMeta).toLocaleString("pt-BR")}
+        apoio={`CPL Meta ${moeda(div(gasto, leadsMeta))}`}
+        rodape={
+          <>
+            No CRM{" "}
+            <strong className="font-bold text-darkPurple1">{leadsCrm}</strong>
+            <span className="text-gray3">
+              {" "}
+              · CPL {moeda(div(gasto, leadsCrm))}
+            </span>
+          </>
+        }
+      />
+      <KpiCard
+        rotulo="Vendas atribuídas"
+        valor={String(vendas)}
+        apoio={`CAC ${moeda(div(gasto, vendas))}`}
+        rodape={
+          <>
+            MQL <strong className="font-bold text-darkPurple1">{mql}</strong>
+            <span className="text-gray3">
+              {" "}
+              · custo por MQL {moeda(div(gasto, mql))}
+            </span>
+          </>
+        }
+      />
+      <KpiCard
+        rotulo="Receita atribuída"
+        valor={receita ? formatarMoedaCompacta(receita) : "—"}
+        destaque={roas === null ? undefined : `ROAS ${decimal(roas)}`}
+        tomDestaque={
+          roas === null ? "marca" : roas >= 1 ? "positivo" : "negativo"
+        }
+        apoio="vendas do Kommo ligadas aos criativos"
+      />
+    </GradeKpis>
+  );
+}
+
+/** Um número do cartão do criativo. */
+function Metrica({
+  rotulo,
+  valor,
+  destaque = false,
+  className,
+}: {
+  rotulo: string;
+  valor: React.ReactNode;
+  destaque?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <dt className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">
+        {rotulo}
+      </dt>
+      <dd
+        className={
+          destaque
+            ? "text-base font-bold text-darkPurple1"
+            : "text-sm font-semibold text-darkPurple1"
+        }
+      >
+        {valor}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * Cartão do criativo: miniatura, ação sugerida com o porquê e os números.
+ * Números sem dado ainda ficam de fora (receita, ROAS e CAC só com venda;
+ * tendência de CPL só com leads nas duas metades do período).
+ */
+function CartaoCriativo({ c }: { c: Criativo }) {
+  return (
+    <article className="flex flex-col gap-5 rounded-xl border border-gray5 bg-surface p-5 shadow-card lg:flex-row">
+      <div className="flex min-w-0 flex-1 gap-4">
+        <ImagemCriativo url={c.imagemUrl} nome={c.nome} />
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusPill tom={TOM_ACAO[c.acao]}>{c.acao}</StatusPill>
+            {c.saturando && (
+              <span title={c.motivoSaturacao}>
+                <StatusPill tom="pending">Saturando</StatusPill>
+              </span>
+            )}
+            {c.jovem && <StatusPill tom="not_started">Jovem</StatusPill>}
+            {c.recuperados > 0 && (
+              <span
+                title={`${c.recuperados} ${c.recuperados === 1 ? "lead atribuído" : "leads atribuídos"} pelo nome do criativo (sem ID do anúncio)`}
+              >
+                <StatusPill tom="not_started">Recuperado por nome</StatusPill>
+              </span>
+            )}
+          </div>
+          <h3 className="text-[15px] leading-snug font-bold text-darkPurple1">
+            {c.nome}
+          </h3>
+          {c.conjunto && (
+            <span className="text-xs text-gray3">Conjunto: {c.conjunto}</span>
+          )}
+          <p className="mt-1 text-[13px] leading-relaxed text-gray2">
+            <strong className="font-semibold text-darkPurple1">
+              Por quê:{" "}
+            </strong>
+            {c.motivo}
+          </p>
+        </div>
+      </div>
+      <dl className="grid shrink-0 grid-cols-2 gap-x-6 gap-y-3 border-t border-gray5 pt-4 sm:grid-cols-4 lg:w-[440px] lg:grid-cols-3 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+        <Metrica rotulo="Gasto" valor={formatarMoeda(c.gasto)} destaque />
+        <Metrica
+          rotulo="Leads CRM"
+          valor={
+            <>
+              {c.leads}{" "}
+              <span className="text-xs font-normal text-gray3">
+                ({c.leadsMaduros} maduros)
+              </span>
+            </>
+          }
+        />
+        <Metrica
+          rotulo="Leads Meta"
+          valor={Math.round(c.leadsMeta).toLocaleString("pt-BR")}
+        />
+        <Metrica rotulo="MQL" valor={c.mql} />
+        <Metrica rotulo="Vendas" valor={c.vendas} />
+        {c.vendas > 0 && (
+          <Metrica rotulo="Receita" valor={formatarMoeda(c.receita)} />
+        )}
+        {c.vendas > 0 && (
+          <Metrica rotulo="ROAS" valor={decimal(c.roas)} destaque />
+        )}
+        {c.vendas > 0 && <Metrica rotulo="CAC" valor={moeda(c.cac)} />}
+        <Metrica rotulo="Frequência" valor={decimal(c.frequencia)} />
+        {c.cplIni !== null && c.cplFim !== null && (
+          <Metrica
+            rotulo="CPL 1ª → 2ª metade"
+            valor={`${moeda(c.cplIni)} → ${moeda(c.cplFim)}`}
+            className="col-span-2"
+          />
+        )}
+      </dl>
+    </article>
   );
 }

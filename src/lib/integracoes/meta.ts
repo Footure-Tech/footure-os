@@ -151,16 +151,22 @@ export async function buscarInsightsMeta(accountId: string, de: string, ate: str
 }
 
 /**
- * Miniatura do criativo de cada anúncio (vídeo também tem). O link da Meta
- * expira em poucos dias — quem chama baixa a imagem e guarda no Storage.
- * Lista os anúncios da conta filtrando pelos ids, em lotes de 50 (a v26 não
- * aceita mais o parâmetro `ids`).
+ * Imagem de cada anúncio para ilustrar o ranking: a ORIGINAL do criativo
+ * (biblioteca de imagens da conta, pelo hash — ex.: 1080×1080) quando existe;
+ * senão a miniatura (vídeos: o token não tem permissão para a capa grande).
+ * Os links da Meta expiram em poucos dias — quem chama baixa e guarda no
+ * Storage. Lista os anúncios da conta filtrando pelos ids, em lotes de 50 (a
+ * v26 não aceita mais o parâmetro `ids`).
  */
-export async function buscarMiniaturasMeta(accountId: string, adIds: string[]): Promise<Array<{ adId: string; creativeId: string | null; url: string | null }>> {
-  const saida: Array<{ adId: string; creativeId: string | null; url: string | null }> = [];
+export async function buscarImagensCriativosMeta(
+  accountId: string,
+  adIds: string[],
+): Promise<Array<{ adId: string; creativeId: string | null; url: string | null; original: boolean }>> {
+  type Criativo = { id?: string; thumbnail_url?: string; image_hash?: string; asset_feed_spec?: { images?: Array<{ hash?: string }> } };
+  const anuncios: Array<{ id: string; creative?: Criativo }> = [];
   for (let i = 0; i < adIds.length; i += 50) {
     const params = new URLSearchParams({
-      fields: "id,creative{id,thumbnail_url}",
+      fields: "id,creative{id,thumbnail_url,image_hash,asset_feed_spec{images}}",
       filtering: JSON.stringify([{ field: "id", operator: "IN", value: adIds.slice(i, i + 50) }]),
       thumbnail_width: "320",
       thumbnail_height: "320",
@@ -169,10 +175,24 @@ export async function buscarMiniaturasMeta(accountId: string, adIds: string[]): 
     });
     let url: string | undefined = `${API_BASE}/${versao()}/${accountId}/ads?${params}`;
     while (url) {
-      const pagina: { data?: Array<{ id: string; creative?: { id?: string; thumbnail_url?: string } }>; paging?: { next?: string } } = await getMeta(url);
-      for (const ad of pagina.data ?? []) saida.push({ adId: ad.id, creativeId: ad.creative?.id ?? null, url: ad.creative?.thumbnail_url ?? null });
+      const pagina: { data?: Array<{ id: string; creative?: Criativo }>; paging?: { next?: string } } = await getMeta(url);
+      anuncios.push(...(pagina.data ?? []));
       url = pagina.paging?.next;
     }
   }
-  return saida;
+
+  // Original pelo hash da imagem (criativo simples ou o primeiro do criativo dinâmico).
+  const hashDe = (c?: Criativo) => c?.image_hash ?? c?.asset_feed_spec?.images?.find((im) => im.hash)?.hash ?? null;
+  const hashes = [...new Set(anuncios.map((a) => hashDe(a.creative)).filter((h): h is string => !!h))];
+  const urlDoHash = new Map<string, string>();
+  for (let i = 0; i < hashes.length; i += 50) {
+    const params = new URLSearchParams({ hashes: JSON.stringify(hashes.slice(i, i + 50)), fields: "hash,url", access_token: tokenMeta() });
+    const resp: { data?: Array<{ hash?: string; url?: string }> } = await getMeta(`${API_BASE}/${versao()}/${accountId}/adimages?${params}`);
+    for (const im of resp.data ?? []) if (im.hash && im.url) urlDoHash.set(im.hash, im.url);
+  }
+
+  return anuncios.map((a) => {
+    const original = urlDoHash.get(hashDe(a.creative) ?? "") ?? null;
+    return { adId: a.id, creativeId: a.creative?.id ?? null, url: original ?? a.creative?.thumbnail_url ?? null, original: !!original };
+  });
 }

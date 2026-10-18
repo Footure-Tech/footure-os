@@ -14,7 +14,7 @@
 //   auditoria (status ok · parcial · erro).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BuFunil, Database, KommoCampos, SyncExecucaoRow } from "@/lib/supabase/database.types";
-import { buscarInsightsMeta, buscarMiniaturasMeta, type LinhaMeta, type NivelMeta } from "@/lib/integracoes/meta";
+import { buscarInsightsMeta, buscarImagensCriativosMeta, type LinhaMeta, type NivelMeta } from "@/lib/integracoes/meta";
 import { buscarCamposLeadKommo, buscarFunisKommo, buscarPaginaLeadsKommo, normalizarLead } from "@/lib/integracoes/kommo";
 
 type Supa = SupabaseClient<Database>;
@@ -200,35 +200,40 @@ export const BUCKET_CRIATIVOS = "marketing-criativos";
 /** Miniaturas baixadas por execução (cada uma ~0,5 s) — o resto fica para a próxima. */
 const LIMITE_MINIATURAS = 150;
 
+/** Sem imagem original, tenta de novo depois de alguns dias (o criativo pode ter mudado). */
+const DIAS_NOVA_TENTATIVA_ORIGINAL = 7;
+
 /**
- * Miniaturas dos criativos (0048): para os anúncios com dados na janela recente
- * que ainda não têm imagem guardada, busca o link na Meta, baixa e guarda no
- * Storage. Falha aqui não afeta os números — só a ilustração.
+ * Imagens dos criativos (0048): para os anúncios com dados na janela recente
+ * sem imagem guardada (ou só com a miniatura há mais de 7 dias), busca na Meta
+ * a imagem original (ou a miniatura), baixa e guarda no Storage — a original
+ * em "<conta>/<anúncio>-original.<ext>". Falha aqui não afeta os números.
  */
 async function sincronizarMiniaturas(ctx: Contexto, conta: string) {
   const [{ data: anuncios }, { data: guardados }] = await Promise.all([
     ctx.supabase.from("mkt_meta_anuncio_dia").select("ad_id").eq("account_id", conta),
-    ctx.supabase.from("mkt_meta_criativos").select("ad_id").eq("account_id", conta),
+    ctx.supabase.from("mkt_meta_criativos").select("ad_id, imagem_path, atualizado_em").eq("account_id", conta),
   ]);
-  const jaTem = new Set((guardados ?? []).map((g) => g.ad_id));
-  const pendentes = [...new Set((anuncios ?? []).map((a) => a.ad_id))].filter((id) => !jaTem.has(id)).slice(0, LIMITE_MINIATURAS);
+  const limite = new Date(Date.now() - DIAS_NOVA_TENTATIVA_ORIGINAL * 86_400_000).toISOString();
+  const resolvido = new Set((guardados ?? []).filter((g) => g.imagem_path?.includes("-original") || g.atualizado_em > limite).map((g) => g.ad_id));
+  const pendentes = [...new Set((anuncios ?? []).map((a) => a.ad_id))].filter((id) => !resolvido.has(id)).slice(0, LIMITE_MINIATURAS);
   if (!pendentes.length) return 0;
   let gravadas = 0;
-  for (const m of await buscarMiniaturasMeta(conta, pendentes)) {
+  for (const m of await buscarImagensCriativosMeta(conta, pendentes)) {
     if (!temTempo(ctx)) break;
     let caminho: string | null = null;
     if (m.url) {
       try {
         const resposta = await fetch(m.url);
         if (resposta.ok) {
-          caminho = `${conta}/${m.adId}.jpg`;
-          const { error } = await ctx.supabase.storage
-            .from(BUCKET_CRIATIVOS)
-            .upload(caminho, await resposta.arrayBuffer(), { contentType: resposta.headers.get("content-type") ?? "image/jpeg", upsert: true });
+          const tipo = resposta.headers.get("content-type") ?? "image/jpeg";
+          const ext = tipo.includes("png") ? "png" : "jpg";
+          caminho = `${conta}/${m.adId}${m.original ? "-original" : ""}.${ext}`;
+          const { error } = await ctx.supabase.storage.from(BUCKET_CRIATIVOS).upload(caminho, await resposta.arrayBuffer(), { contentType: tipo, upsert: true });
           if (error) throw new Error(error.message);
         }
       } catch (e) {
-        console.error(`[marketing] miniatura do anúncio ${m.adId}:`, mensagem(e));
+        console.error(`[marketing] imagem do anúncio ${m.adId}:`, mensagem(e));
         continue; // tenta de novo na próxima execução
       }
     }
