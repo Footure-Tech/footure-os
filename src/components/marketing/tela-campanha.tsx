@@ -61,7 +61,7 @@ const dataCurta = (iso: string) =>
   iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : "—";
 
 // Marketing · detalhe da campanha: recomendações de portfólio e ranking por
-// criativo (ação sugerida + por quê), na janela do nível anúncio (90 dias).
+// criativo (ação sugerida + por quê), no período escolhido.
 export function TelaCampanha({
   dados,
   periodo,
@@ -182,7 +182,7 @@ export function TelaCampanha({
           <EstadoVazio
             icone={MdCampaign}
             titulo="Nenhum criativo com gasto no período"
-            descricao="O ranking por criativo cobre só a janela recente do nível anúncio (90 dias)."
+            descricao="Sem dados por criativo neste período — confira a sincronização do Marketing."
           />
         </div>
       ) : (
@@ -212,8 +212,7 @@ export function TelaCampanha({
           </span>
           <span>
             Dados por criativo disponíveis desde{" "}
-            {dataCurta(dados.inicioJanelaAnuncio)} (janela de 90 dias do nível
-            anúncio).
+            {dataCurta(dados.inicioJanelaAnuncio)}.
           </span>
         </div>
       </div>
@@ -221,7 +220,7 @@ export function TelaCampanha({
   );
 }
 
-/** Totais da campanha no período (nível campanha: cobre também o que veio antes da janela do nível anúncio). */
+/** Totais da campanha no período (nível campanha, a mesma base da lista de campanhas). */
 function KpisCampanha({
   totais,
   ativos,

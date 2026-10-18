@@ -162,7 +162,7 @@ export function GraficoLeadsAcumulados({
 }: {
   dias: string[];
   series: Record<string, SerieAnuncio>;
-  /** Nível campanha: cobre também os dias antes da janela do nível anúncio. */
+  /** Nível campanha (a mesma base dos KPIs). */
   serieCampanha: SerieAnuncio;
   inicioJanelaAnuncio: string;
   criativos: Criativo[];
@@ -181,7 +181,7 @@ export function GraficoLeadsAcumulados({
   const diaGasto = escolhida?.gasto ?? vazio;
   const meta = acumular(diaMeta);
   const crm = acumular(diaCrm);
-  // Criativo num período que começa antes da janela do nível anúncio (90 dias).
+  // Criativo num período que começa antes do primeiro dado por anúncio.
   const antesDaJanela =
     selecionado !== TODOS && !!dias[0] && dias[0] < inicioJanelaAnuncio;
   const usaMeta = soma(diaMeta) > 0;
@@ -349,8 +349,8 @@ export function GraficoLeadsAcumulados({
 
       {antesDaJanela && (
         <p className="text-xs text-gray3">
-          Dados por criativo só desde {dataCurta(inicioJanelaAnuncio)} (janela
-          de 90 dias do nível anúncio); antes disso, só a campanha inteira.
+          Dados por criativo só desde {dataCurta(inicioJanelaAnuncio)}; antes
+          disso, só o total da campanha.
         </p>
       )}
 

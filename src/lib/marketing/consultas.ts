@@ -311,7 +311,7 @@ export interface LinhaCriativo {
 }
 
 /**
- * Detalhe da campanha (ranking por criativo, janela do nível anúncio): métricas
+ * Detalhe da campanha (ranking por criativo no período): métricas
  * por criativo com os leads do Kommo resolvidos por ad_id (forte) ou nome único
  * (recuperado), ação recomendada e recomendações de portfólio da campanha.
  */
@@ -355,7 +355,7 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
     acumular(a, { spend: Number(r.spend), impressions: Number(r.impressions), frequency: Number(r.frequency), leads: Number(r.leads), dia: r.dia }, meio);
     meta.set(r.ad_id, a);
   }
-  // Nível campanha (histórico completo, não só a janela do nível anúncio): KPIs e
+  // Nível campanha (a mesma base da lista de campanhas): KPIs e
   // a série "Campanha inteira" do gráfico; leads do Kommo atribuídos à campanha
   // pelo ID da campanha ou do anúncio (mesma regra da Visão A).
   const totaisCampanha = { gasto: 0, impressoes: 0, freqW: 0, leadsMeta: 0, leadsCrm: 0, mql: 0, vendas: 0, receita: 0 };
