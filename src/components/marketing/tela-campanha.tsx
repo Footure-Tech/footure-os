@@ -51,6 +51,7 @@ const TOM_ACAO: Record<
 const PERIODOS: { valor: PeriodoMarketing; rotulo: string }[] = [
   { valor: "30d", rotulo: "30 dias" },
   { valor: "90d", rotulo: "90 dias" },
+  { valor: "tudo", rotulo: "Campanha inteira" },
 ];
 
 const moeda = (v: number | null) => (v === null ? "—" : formatarMoeda(v));
@@ -83,7 +84,7 @@ export function TelaCampanha({
       <PageHeader
         modulo="Marketing · Campanha"
         titulo={campanha.nome}
-        descricao={`Gasto ${formatarMoeda(dados.totais.gasto)} · ${dados.totais.ativos} ${dados.totais.ativos === 1 ? "criativo ativo" : "criativos ativos"} · de ${dataCurta(dados.de)} a ${dataCurta(dados.ate)}`}
+        descricao={`Gasto ${formatarMoeda(dados.totais.gasto)} · ${dados.totais.ativos} ${dados.totais.ativos === 1 ? "criativo com gasto" : "criativos com gasto"} · de ${dataCurta(dados.de)} a ${dataCurta(dados.ate)}`}
         voltarHref={voltar}
         acoes={
           <>
@@ -91,7 +92,7 @@ export function TelaCampanha({
               {ROTULO_BU[campanha.bu]}
             </BadgeTom>
             <SegmentedToggle
-              valor={periodo === "30d" ? "30d" : "90d"}
+              valor={periodo}
               opcoes={PERIODOS.map((p) => ({
                 ...p,
                 href: hrefPeriodo(p.valor),
@@ -101,7 +102,10 @@ export function TelaCampanha({
         }
       />
 
-      <KpisCampanha criativos={dados.criativos} />
+      <KpisCampanha
+        totais={dados.totaisCampanha}
+        ativos={dados.totais.ativos}
+      />
 
       <CardModulo
         icone={MdShowChart}
@@ -112,6 +116,8 @@ export function TelaCampanha({
         <GraficoLeadsAcumulados
           dias={dados.serie.dias}
           series={dados.serie.anuncios}
+          serieCampanha={dados.serie.campanha}
+          inicioJanelaAnuncio={dados.inicioJanelaAnuncio}
           criativos={dados.criativos.map((c) => ({
             adId: c.adId,
             nome: c.nome,
@@ -215,21 +221,16 @@ export function TelaCampanha({
   );
 }
 
-/** Totais da campanha no período (soma dos criativos; frequência ponderada pelas impressões). */
-function KpisCampanha({ criativos }: { criativos: Criativo[] }) {
-  const soma = (f: (c: Criativo) => number) =>
-    criativos.reduce((s, c) => s + f(c), 0);
-  const gasto = soma((c) => c.gasto);
-  const impressoes = soma((c) => c.impressoes);
-  const freq = impressoes
-    ? soma((c) => (c.frequencia ?? 0) * c.impressoes) / impressoes
-    : null;
-  const leadsMeta = soma((c) => c.leadsMeta);
-  const leadsCrm = soma((c) => c.leads);
-  const mql = soma((c) => c.mql);
-  const vendas = soma((c) => c.vendas);
-  const receita = soma((c) => c.receita);
-  const ativos = criativos.filter((c) => c.gasto > 0).length;
+/** Totais da campanha no período (nível campanha: cobre também o que veio antes da janela do nível anúncio). */
+function KpisCampanha({
+  totais,
+  ativos,
+}: {
+  totais: Dados["totaisCampanha"];
+  ativos: number;
+}) {
+  const { gasto, leadsMeta, leadsCrm, mql, vendas, receita } = totais;
+  const freq = totais.frequencia;
   const div = (a: number, b: number) => (b ? a / b : null);
   const roas = leadsCrm ? div(receita, gasto) : null;
   return (
@@ -237,7 +238,7 @@ function KpisCampanha({ criativos }: { criativos: Criativo[] }) {
       <KpiCard
         rotulo="Investimento"
         valor={formatarMoedaCompacta(gasto)}
-        apoio={`${ativos} ${ativos === 1 ? "criativo ativo" : "criativos ativos"} · freq. média ${decimal(freq)}`}
+        apoio={`${ativos} ${ativos === 1 ? "criativo com gasto" : "criativos com gasto"} · freq. média ${decimal(freq)}`}
       />
       <KpiCard
         rotulo="Leads (Meta)"
@@ -275,7 +276,7 @@ function KpisCampanha({ criativos }: { criativos: Criativo[] }) {
         tomDestaque={
           roas === null ? "marca" : roas >= 1 ? "positivo" : "negativo"
         }
-        apoio="vendas do Kommo ligadas aos criativos"
+        apoio="vendas do Kommo ligadas à campanha"
       />
     </GradeKpis>
   );

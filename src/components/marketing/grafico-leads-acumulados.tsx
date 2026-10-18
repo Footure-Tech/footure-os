@@ -33,6 +33,7 @@ type Criativo = Pick<
 
 const TODOS = "todos";
 const JANELA = 7;
+const VOLUME_MINIMO = 10;
 
 const dataCurta = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const inteiro = (v: number) => Math.round(v).toLocaleString("pt-BR");
@@ -44,6 +45,7 @@ const acumular = (v: number[]) =>
  * Ritmo dos últimos 7 dias contra os 7 anteriores: tração (leads por dia
  * subindo sem o custo subir) ou sinais de saturação (CPL subindo, ou leads
  * caindo sem o gasto cair). Leads da Meta como base; sem eles, os do CRM.
+ * Abaixo de VOLUME_MINIMO leads nas duas semanas, não classifica.
  */
 function ritmo(leads: number[], gasto: number[]) {
   const n = leads.length;
@@ -69,6 +71,9 @@ function ritmo(leads: number[], gasto: number[]) {
   let situacao: { rotulo: string; tom: "active" | "pending" | "not_started" };
   if (recente.gasto === 0)
     situacao = { rotulo: "Sem veiculação", tom: "not_started" };
+  // Poucos leads nas duas semanas: a variação é ruído, não sinal.
+  else if (recente.leads + anterior.leads < VOLUME_MINIMO)
+    situacao = { rotulo: "Pouco volume", tom: "not_started" };
   else if (
     (vCpl !== null && vCpl >= 0.25) ||
     (vLeads !== null && vLeads <= -0.25 && (vGasto ?? 0) > -0.25)
@@ -151,24 +156,34 @@ function OpcaoCriativo({ c }: { c: Criativo }) {
 export function GraficoLeadsAcumulados({
   dias,
   series,
+  serieCampanha,
+  inicioJanelaAnuncio,
   criativos,
 }: {
   dias: string[];
   series: Record<string, SerieAnuncio>;
+  /** Nível campanha: cobre também os dias antes da janela do nível anúncio. */
+  serieCampanha: SerieAnuncio;
+  inicioJanelaAnuncio: string;
   criativos: Criativo[];
 }) {
   const [selecionado, setSelecionado] = useState(TODOS);
-  const ordenados = [...criativos].sort((a, b) => b.gasto - a.gasto);
-  const ids = selecionado === TODOS ? Object.keys(series) : [selecionado];
-  const somaDias = (campo: keyof SerieAnuncio) =>
-    dias.map((_, i) =>
-      ids.reduce((s, id) => s + (series[id]?.[campo][i] ?? 0), 0),
-    );
-  const diaMeta = somaDias("meta");
-  const diaCrm = somaDias("crm");
-  const diaGasto = somaDias("gasto");
+  // Ativos primeiro; dentro de cada grupo, do maior gasto para o menor.
+  const ordenados = [...criativos].sort(
+    (a, b) =>
+      Number(b.statusAnuncio === "ACTIVE") -
+        Number(a.statusAnuncio === "ACTIVE") || b.gasto - a.gasto,
+  );
+  const escolhida = selecionado === TODOS ? serieCampanha : series[selecionado];
+  const vazio = dias.map(() => 0);
+  const diaMeta = escolhida?.meta ?? vazio;
+  const diaCrm = escolhida?.crm ?? vazio;
+  const diaGasto = escolhida?.gasto ?? vazio;
   const meta = acumular(diaMeta);
   const crm = acumular(diaCrm);
+  // Criativo num período que começa antes da janela do nível anúncio (90 dias).
+  const antesDaJanela =
+    selecionado !== TODOS && !!dias[0] && dias[0] < inicioJanelaAnuncio;
   const usaMeta = soma(diaMeta) > 0;
   const r = ritmo(usaMeta ? diaMeta : diaCrm, diaGasto);
 
@@ -209,7 +224,7 @@ export function GraficoLeadsAcumulados({
                       <MdCampaign className="size-4" />
                     </span>
                     <span className="font-semibold text-darkPurple1">
-                      Campanha inteira
+                      Todos os criativos
                     </span>
                   </span>
                 );
@@ -227,12 +242,12 @@ export function GraficoLeadsAcumulados({
                 </span>
                 <span className="flex flex-col gap-0.5">
                   <span className="text-[13px] font-semibold text-darkPurple1">
-                    Campanha inteira
+                    Todos os criativos
                   </span>
                   <span className="text-[11px] text-gray3">
                     {criativos.length}{" "}
                     {criativos.length === 1 ? "criativo" : "criativos"} ·{" "}
-                    {formatarMoeda(soma(criativos.map((c) => c.gasto)))}
+                    {formatarMoeda(soma(serieCampanha.gasto))}
                   </span>
                 </span>
               </span>
@@ -331,6 +346,13 @@ export function GraficoLeadsAcumulados({
           </div>
         </div>
       </div>
+
+      {antesDaJanela && (
+        <p className="text-xs text-gray3">
+          Dados por criativo só desde {dataCurta(inicioJanelaAnuncio)} (janela
+          de 90 dias do nível anúncio); antes disso, só a campanha inteira.
+        </p>
+      )}
 
       {r && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-gray5 pt-3 text-[13px] text-gray2">

@@ -320,7 +320,14 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
   const [accountId, campaignId] = chaveCampanha.split(":");
   const ctx = base.campanha.get(campaignId);
   if (!ctx || ctx.accountId !== accountId) return null;
-  const { de, ate } = intervaloMarketing(periodo, base.backfillDesde);
+  // "Campanha inteira": do primeiro ao último dia com gasto (até hoje, se ainda roda).
+  const diasComGasto = base.campanhas.filter((r) => r.campaign_id === campaignId && Number(r.spend) > 0).map((r) => r.dia).sort();
+  const intervalo = intervaloMarketing(periodo, base.backfillDesde);
+  const ultimoGasto = diasComGasto.at(-1);
+  const { de, ate } =
+    periodo === "tudo" && diasComGasto.length
+      ? { de: diasComGasto[0], ate: ultimoGasto! >= somarDias(intervalo.ate, -1) ? intervalo.ate : ultimoGasto! }
+      : intervalo;
   const meio = somarDias(de, Math.floor((Date.parse(ate) - Date.parse(de)) / 86_400_000 / 2));
 
   // Nome → anúncio, só quando o nome corresponde a exatamente um anúncio (chave fraca).
@@ -348,6 +355,32 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
     acumular(a, { spend: Number(r.spend), impressions: Number(r.impressions), frequency: Number(r.frequency), leads: Number(r.leads), dia: r.dia }, meio);
     meta.set(r.ad_id, a);
   }
+  // Nível campanha (histórico completo, não só a janela do nível anúncio): KPIs e
+  // a série "Campanha inteira" do gráfico; leads do Kommo atribuídos à campanha
+  // pelo ID da campanha ou do anúncio (mesma regra da Visão A).
+  const totaisCampanha = { gasto: 0, impressoes: 0, freqW: 0, leadsMeta: 0, leadsCrm: 0, mql: 0, vendas: 0, receita: 0 };
+  const serieCampanha: SerieAnuncio = { crm: dias.map(() => 0), meta: dias.map(() => 0), gasto: dias.map(() => 0) };
+  for (const r of base.campanhas) {
+    if (r.campaign_id !== campaignId || r.dia < de || r.dia > ate) continue;
+    const i = indiceDia.get(r.dia)!;
+    serieCampanha.meta[i] += Number(r.leads);
+    serieCampanha.gasto[i] += Number(r.spend);
+    totaisCampanha.gasto += Number(r.spend);
+    totaisCampanha.leadsMeta += Number(r.leads);
+    totaisCampanha.impressoes += Number(r.impressions);
+    totaisCampanha.freqW += Number(r.frequency) * Number(r.impressions);
+  }
+  for (const l of base.leads) {
+    if (l.dia! < de || l.dia! > ate || base.ctxLead(l).ultimo?.campaignId !== campaignId) continue;
+    serieCampanha.crm[indiceDia.get(l.dia!)!]++;
+    totaisCampanha.leadsCrm++;
+    if (l.is_mql) totaisCampanha.mql++;
+    if (l.is_won) {
+      totaisCampanha.vendas++;
+      totaisCampanha.receita += l.revenue;
+    }
+  }
+
   const anunciosDaCampanha = new Set(base.anuncios.filter((a) => a.campaign_id === campaignId).map((a) => a.ad_id));
 
   type Crm = { leads: number; maduros: number; mql: number; vendas: number; receita: number; recuperados: number };
@@ -436,6 +469,8 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
     c.urlTags = cm.url_tags;
     c.rastreio = avaliarTagsAnuncio(cm.url_tags);
   }
+  // Ativos primeiro (a ordem por ação recomendada vale dentro de cada grupo).
+  criativos.sort((a, b) => Number(b.statusAnuncio === "ACTIVE") - Number(a.statusAnuncio === "ACTIVE"));
   const imagens = (criativosMeta ?? []).filter((c) => c.imagem_path);
   // Páginas de destino da campanha, da que recebeu mais gasto para a que recebeu menos.
   const gastoPorDestino = new Map<string, number>();
@@ -464,10 +499,20 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
     medianaDias: base.mat.mediana,
     sincronizadoEm: base.sincronizadoEm,
     criativos,
-    serie: { dias, anuncios: serie },
+    serie: { dias, anuncios: serie, campanha: serieCampanha },
+    totaisCampanha: {
+      gasto: totaisCampanha.gasto,
+      impressoes: totaisCampanha.impressoes,
+      frequencia: totaisCampanha.impressoes ? totaisCampanha.freqW / totaisCampanha.impressoes : null,
+      leadsMeta: totaisCampanha.leadsMeta,
+      leadsCrm: totaisCampanha.leadsCrm,
+      mql: totaisCampanha.mql,
+      vendas: totaisCampanha.vendas,
+      receita: totaisCampanha.receita,
+    },
     recomendacoes,
     totais: {
-      gasto: criativos.reduce((s, c) => s + c.gasto, 0),
+      gasto: totaisCampanha.gasto,
       ativos: criativos.filter((c) => c.gasto > 0).length,
     },
   };
