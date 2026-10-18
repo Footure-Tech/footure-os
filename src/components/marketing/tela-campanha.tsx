@@ -1,6 +1,10 @@
 import {
   MdRule,
   MdCampaign,
+  MdErrorOutline,
+  MdPauseCircleOutline,
+  MdPlayCircleOutline,
+  MdTimerOff,
   MdInfoOutline,
   MdLightbulbOutline,
 } from "react-icons/md";
@@ -19,10 +23,14 @@ import { StatusPill } from "@/components/ds/status-pill";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { CardModulo } from "@/components/negocio/card-modulo";
 import { TOM_BU } from "@/components/marketing/links";
+import { cn } from "@/lib/utils";
 import { ImagemCriativo } from "@/components/marketing/imagem-criativo";
 import { SugestoesIa } from "@/components/marketing/sugestoes-ia";
 import { InstrucoesRastreio } from "@/components/marketing/instrucoes-rastreio";
-import { RastreioAnuncio } from "@/components/marketing/rastreio-anuncio";
+import {
+  BotaoRelerParametros,
+  RastreioAnuncio,
+} from "@/components/marketing/rastreio-anuncio";
 import { VerificacaoPontaAPonta } from "@/components/marketing/verificacao-ponta-a-ponta";
 import { VISUAL_VERIFICACAO } from "@/lib/marketing/rastreio";
 import type { VerificacaoRastreio } from "@/lib/marketing/verificacaoRastreio";
@@ -155,7 +163,11 @@ export function TelaCampanha({
         <ul className="flex flex-col gap-4">
           {dados.criativos.map((c) => (
             <li key={c.adId}>
-              <CartaoCriativo c={c} accountId={campanha.accountId} />
+              <CartaoCriativo
+                c={c}
+                accountId={campanha.accountId}
+                chave={campanha.chave}
+              />
             </li>
           ))}
         </ul>
@@ -280,17 +292,103 @@ function Metrica({
 }
 
 /**
+ * Situação de veiculação do anúncio (effective_status da Meta; EXPIRED é
+ * gravado pela sincronização quando o conjunto ou a campanha já terminou).
+ */
+function situacaoAnuncio(status: string | null) {
+  if (!status) return null;
+  if (status === "ACTIVE")
+    return {
+      rotulo: "Rodando",
+      tom: "active",
+      icone: MdPlayCircleOutline,
+      parado: false,
+    } as const;
+  if (status === "EXPIRED")
+    return {
+      rotulo: "Expirado",
+      tom: "pending",
+      icone: MdTimerOff,
+      parado: true,
+    } as const;
+  if (
+    status.includes("PAUSED") ||
+    status === "ARCHIVED" ||
+    status === "DELETED"
+  )
+    return {
+      rotulo:
+        status === "CAMPAIGN_PAUSED"
+          ? "Pausado (campanha)"
+          : status === "ADSET_PAUSED"
+            ? "Pausado (conjunto)"
+            : "Pausado",
+      tom: "not_started",
+      icone: MdPauseCircleOutline,
+      parado: true,
+    } as const;
+  const rotulo: Record<string, string> = {
+    DISAPPROVED: "Reprovado",
+    WITH_ISSUES: "Com problemas",
+    PENDING_REVIEW: "Em análise",
+    IN_PROCESS: "Em processamento",
+    PENDING_BILLING_INFO: "Pagamento pendente",
+  };
+  return {
+    rotulo: rotulo[status] ?? status.toLowerCase(),
+    tom: "inactive",
+    icone: MdErrorOutline,
+    parado: false,
+  } as const;
+}
+
+/**
  * Cartão do criativo: miniatura, ação sugerida com o porquê e os números.
  * Números sem dado ainda ficam de fora (receita, ROAS e CAC só com venda;
  * tendência de CPL só com leads nas duas metades do período).
  */
-function CartaoCriativo({ c, accountId }: { c: Criativo; accountId: string }) {
+function CartaoCriativo({
+  c,
+  accountId,
+  chave,
+}: {
+  c: Criativo;
+  accountId: string;
+  chave: string;
+}) {
+  const situacao = situacaoAnuncio(c.statusAnuncio);
+  const Icone = situacao?.icone;
   return (
-    <article className="flex flex-col gap-5 rounded-xl border border-gray5 bg-surface p-5 shadow-card lg:flex-row">
+    <article
+      className={cn(
+        "flex flex-col gap-5 rounded-xl border p-5 lg:flex-row",
+        situacao?.parado
+          ? "border-dashed border-gray6 bg-transparent"
+          : "border-gray5 bg-surface shadow-card",
+      )}
+    >
       <div className="flex min-w-0 flex-1 gap-4">
-        <ImagemCriativo url={c.imagemUrl} nome={c.nome} />
+        <div
+          className={cn(
+            "shrink-0 self-start",
+            situacao?.parado && "opacity-60 grayscale",
+          )}
+        >
+          <ImagemCriativo url={c.imagemUrl} nome={c.nome} />
+        </div>
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-1.5">
+            {situacao && Icone && (
+              <span title={`Situação do anúncio na Meta: ${situacao.rotulo}`}>
+                <StatusPill
+                  tom={situacao.tom}
+                  className={cn("gap-1 pl-2", situacao.parado && "bg-gray5")}
+                >
+                  <Icone className="size-3.5" aria-hidden />
+                  {situacao.rotulo}
+                </StatusPill>
+              </span>
+            )}
             <StatusPill tom={TOM_ACAO[c.acao]}>{c.acao}</StatusPill>
             {c.saturando && (
               <span title={c.motivoSaturacao}>
@@ -313,17 +411,16 @@ function CartaoCriativo({ c, accountId }: { c: Criativo; accountId: string }) {
                 adId={c.adId}
                 accountId={accountId}
                 nome={c.nome}
+                chave={chave}
               />
             )}
-            {c.statusAnuncio && c.statusAnuncio !== "ACTIVE" && (
-              <StatusPill tom="not_started">
-                {c.statusAnuncio.includes("PAUSED")
-                  ? "Pausado"
-                  : c.statusAnuncio.toLowerCase()}
-              </StatusPill>
-            )}
           </div>
-          <h3 className="text-[15px] leading-snug font-bold text-darkPurple1">
+          <h3
+            className={cn(
+              "text-[15px] leading-snug font-bold",
+              situacao?.parado ? "text-gray2" : "text-darkPurple1",
+            )}
+          >
             {c.nome}
           </h3>
           {c.conjunto && (
@@ -438,6 +535,9 @@ function BlocoRastreio({
                   : "Alguns sem o conjunto ou a origem."}
             </span>
           )}
+          <span className="mt-1 self-start">
+            <BotaoRelerParametros chave={dados.campanha.chave} />
+          </span>
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">

@@ -171,11 +171,12 @@ export async function buscarImagensCriativosMeta(
     object_story_spec?: { link_data?: { link?: string }; video_data?: { call_to_action?: { value?: { link?: string } } } };
     asset_feed_spec?: { images?: Array<{ hash?: string }>; link_urls?: Array<{ website_url?: string; url_tags?: string }> };
   };
-  const anuncios: Array<{ id: string; effective_status?: string; creative?: Criativo }> = [];
+  type Anuncio = { id: string; effective_status?: string; adset?: { end_time?: string }; campaign?: { stop_time?: string }; creative?: Criativo };
+  const anuncios: Anuncio[] = [];
   for (let i = 0; i < adIds.length; i += 50) {
     const params = new URLSearchParams({
       fields:
-        "id,effective_status,creative{id,thumbnail_url,image_hash,link_url,url_tags,object_story_spec{link_data{link},video_data{call_to_action{value{link}}}},asset_feed_spec{images,link_urls{website_url,url_tags}}}",
+        "id,effective_status,adset{end_time},campaign{stop_time},creative{id,thumbnail_url,image_hash,link_url,url_tags,object_story_spec{link_data{link},video_data{call_to_action{value{link}}}},asset_feed_spec{images,link_urls{website_url,url_tags}}}",
       filtering: JSON.stringify([{ field: "id", operator: "IN", value: adIds.slice(i, i + 50) }]),
       thumbnail_width: "320",
       thumbnail_height: "320",
@@ -184,7 +185,7 @@ export async function buscarImagensCriativosMeta(
     });
     let url: string | undefined = `${API_BASE}/${versao()}/${accountId}/ads?${params}`;
     while (url) {
-      const pagina: { data?: Array<{ id: string; effective_status?: string; creative?: Criativo }>; paging?: { next?: string } } = await getMeta(url);
+      const pagina: { data?: Anuncio[]; paging?: { next?: string } } = await getMeta(url);
       anuncios.push(...(pagina.data ?? []));
       url = pagina.paging?.next;
     }
@@ -199,6 +200,15 @@ export async function buscarImagensCriativosMeta(
     const resp: { data?: Array<{ hash?: string; url?: string }> } = await getMeta(`${API_BASE}/${versao()}/${accountId}/adimages?${params}`);
     for (const im of resp.data ?? []) if (im.hash && im.url) urlDoHash.set(im.hash, im.url);
   }
+
+  // A Meta mantém ACTIVE no anúncio cujo conjunto/campanha já terminou (o
+  // Gerenciador mostra "Concluído"): nesse caso grava EXPIRED (valor nosso).
+  const agora = Date.now();
+  const statusAnuncio = (a: Anuncio) => {
+    const fim = [a.adset?.end_time, a.campaign?.stop_time].map((d) => (d ? Date.parse(d) : NaN)).filter((t) => !Number.isNaN(t));
+    if (a.effective_status === "ACTIVE" && fim.some((t) => t < agora)) return "EXPIRED";
+    return a.effective_status ?? null;
+  };
 
   return anuncios.map((a) => {
     const original = urlDoHash.get(hashDe(a.creative) ?? "") ?? null;
@@ -216,7 +226,7 @@ export async function buscarImagensCriativosMeta(
       original: !!original,
       destinos: [...new Set(destinos)],
       urlTags,
-      status: a.effective_status ?? null,
+      status: statusAnuncio(a),
     };
   });
 }

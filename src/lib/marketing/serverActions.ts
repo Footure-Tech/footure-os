@@ -7,7 +7,7 @@ import { executar, type ResultadoAcao } from "@/lib/acaoServidor";
 import type { BuFunil } from "@/lib/supabase/database.types";
 import { sincronizarMarketing, type ResultadoSincronizacao } from "./sincronizacao";
 import { gerarSugestoesIa } from "./sugestoesIa";
-import { iniciarVerificacao, verificarAgora } from "./verificacaoRastreio";
+import { iniciarVerificacao, relerParametrosCampanha, verificarAgora } from "./verificacaoRastreio";
 
 /** Prazo da sincronização manual: a página de Configurações tem maxDuration de 300 s. */
 const PRAZO_MANUAL_MS = 240_000;
@@ -63,6 +63,17 @@ export async function verificarRastreioAction(verificacaoId: string, chaveCampan
   const r = await executar(async () => {
     await exigirPapel("admin");
     saida = await verificarAgora(await createClient(), verificacaoId);
+    revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
+  });
+  return r.erro ? r : { ...saida };
+}
+
+/** Relê na Meta os parâmetros de URL dos anúncios da campanha (depois de corrigir um anúncio). */
+export async function relerParametrosRastreioAction(chaveCampanha: string): Promise<ResultadoAcao & { anuncios?: number; comErro?: number }> {
+  let saida: { anuncios: number; comErro: number } | undefined;
+  const r = await executar(async () => {
+    await exigirPapel("admin");
+    saida = await relerParametrosCampanha(await createClient(), chaveCampanha);
     revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
   });
   return r.erro ? r : { ...saida };

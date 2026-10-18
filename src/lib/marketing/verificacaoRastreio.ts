@@ -8,7 +8,8 @@ import { randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { buscarLeadDeTesteKommo } from "@/lib/integracoes/kommo";
-import { CAMPOS_PONTA_A_PONTA, conferirLead, PARAMETROS_META, statusDoResultado, type ChaveCampo, type ResultadoCampo } from "./rastreio";
+import { buscarImagensCriativosMeta } from "@/lib/integracoes/meta";
+import { avaliarTagsAnuncio, CAMPOS_PONTA_A_PONTA, conferirLead, PARAMETROS_META, statusDoResultado, type ChaveCampo, type ResultadoCampo } from "./rastreio";
 
 type Supa = SupabaseClient<Database>;
 
@@ -28,6 +29,30 @@ export interface VerificacaoRastreio {
 /** Nome e e-mail que a pessoa preenche no formulário de teste (o código identifica o lead). */
 export const nomeTeste = (codigo: string) => `Teste Rastreio ${codigo}`;
 export const emailTeste = (codigo: string) => `rastreio+${codigo.toLowerCase()}@footure.com.br`;
+
+/**
+ * "Verificar parâmetros de novo": relê na Meta os parâmetros de URL, o destino
+ * e a situação dos anúncios da campanha (o mesmo que a sincronização grava),
+ * para ver uma correção na hora sem esperar a próxima sincronização.
+ */
+export async function relerParametrosCampanha(supabase: Supa, chaveCampanha: string): Promise<{ anuncios: number; comErro: number }> {
+  const [accountId, campaignId] = chaveCampanha.split(":");
+  const ids = new Set<string>();
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await supabase.from("mkt_meta_anuncio_dia").select("ad_id").eq("account_id", accountId).eq("campaign_id", campaignId).range(de, de + 999);
+    if (error) throw new Error(error.message);
+    for (const d of data ?? []) ids.add(d.ad_id);
+    if ((data?.length ?? 0) < 1000) break;
+  }
+  if (!ids.size) return { anuncios: 0, comErro: 0 };
+  let comErro = 0;
+  for (const m of await buscarImagensCriativosMeta(accountId, [...ids])) {
+    const { error } = await supabase.from("mkt_meta_criativos").update({ urls_destino: m.destinos, url_tags: m.urlTags, status_anuncio: m.status }).eq("ad_id", m.adId);
+    if (error) throw new Error(`Não foi possível gravar o anúncio ${m.adId}: ${error.message}`);
+    if (avaliarTagsAnuncio(m.urlTags).status === "erro") comErro++;
+  }
+  return { anuncios: ids.size, comErro };
+}
 
 /** Abre uma verificação: link de teste com os IDs reais do anúncio ativo de maior gasto. */
 export async function iniciarVerificacao(supabase: Supa, chaveCampanha: string, usuarioId: string) {

@@ -1,9 +1,13 @@
 "use client";
 
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MdContentCopy, MdOpenInNew } from "react-icons/md";
+import { MdContentCopy, MdOpenInNew, MdRefresh } from "react-icons/md";
 import type { ProblemaTag, StatusRastreio } from "@/lib/marketing/rastreio";
 import { PARAMETROS_META } from "@/lib/marketing/rastreio";
+import { relerParametrosRastreioAction } from "@/lib/marketing/serverActions";
+import { exigirSucesso } from "@/lib/resultadoAcao";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,6 +28,52 @@ const VISUAL: Record<
   erro: { rotulo: "Rastreio com problema", tom: "inactive" },
 };
 
+// "Verificar parâmetros de novo": relê na Meta os anúncios da campanha na hora
+// (sem esperar a sincronização) e atualiza os selos.
+export function BotaoRelerParametros({ chave }: { chave: string }) {
+  const router = useRouter();
+  const [pendente, iniciar] = useTransition();
+  function reler() {
+    iniciar(async () => {
+      try {
+        const r = exigirSucesso(await relerParametrosRastreioAction(chave));
+        if (!r.anuncios)
+          toast.info("Nenhum anúncio desta campanha para verificar");
+        else if (r.comErro)
+          toast.warning(
+            `${r.comErro} de ${r.anuncios} ${r.anuncios === 1 ? "anúncio continua" : "anúncios continuam"} sem os parâmetros completos`,
+            {
+              description:
+                "Se acabou de publicar a correção, aguarde um minuto e tente de novo.",
+            },
+          );
+        else
+          toast.success(
+            `Parâmetros conferidos: ${r.anuncios} ${r.anuncios === 1 ? "anúncio" : "anúncios"} OK`,
+          );
+        router.refresh();
+      } catch (erro) {
+        toast.error("Não foi possível consultar a Meta", {
+          description: erro instanceof Error ? erro.message : undefined,
+        });
+      }
+    });
+  }
+  return (
+    <Button
+      type="button"
+      variant="white"
+      size="sm"
+      onClick={reler}
+      disabled={pendente}
+      title="Relê na Meta os parâmetros de URL dos anúncios desta campanha"
+    >
+      <MdRefresh className={pendente ? "size-4 animate-spin" : "size-4"} />
+      {pendente ? "Consultando a Meta…" : "Verificar parâmetros de novo"}
+    </Button>
+  );
+}
+
 // Selo do rastreio do anúncio (parâmetros de URL lidos da Meta) e, se houver
 // problema, o "Como corrigir" com o texto certo para colar.
 export function RastreioAnuncio({
@@ -33,7 +83,9 @@ export function RastreioAnuncio({
   adId,
   accountId,
   nome,
+  chave,
 }: {
+  chave: string;
   status: StatusRastreio;
   problemas: ProblemaTag[];
   urlTags: string | null;
@@ -118,18 +170,22 @@ export function RastreioAnuncio({
               conteúdo pelo texto acima e publique.
             </li>
             <li>
-              A verificação é atualizada na próxima sincronização do Marketing
-              (todo dia às 07:00, ou em Configurações → Sincronizar agora).
+              Depois de publicar, clique em{" "}
+              <strong>Verificar parâmetros de novo</strong> (a sincronização
+              diária também atualiza).
             </li>
           </ol>
-          <a
-            href={linkMeta}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 self-start text-sm font-semibold text-purple-text hover:underline"
-          >
-            <MdOpenInNew className="size-4" /> Abrir o anúncio no Gerenciador
-          </a>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <a
+              href={linkMeta}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 self-start text-sm font-semibold text-purple-text hover:underline"
+            >
+              <MdOpenInNew className="size-4" /> Abrir o anúncio no Gerenciador
+            </a>
+            <BotaoRelerParametros chave={chave} />
+          </div>
         </div>
       </DialogContent>
     </Dialog>
