@@ -89,5 +89,5 @@ export async function carregarVendas(supabase: Supa) {
     return vendas.filter((v) => v.dataFechamento >= inicio && v.dataFechamento <= hoje);
   };
 
-  return { doPeriodo, sincronizadoEm: base.sincronizadoEm, temCache: base.temCache };
+  return { vendas, doPeriodo, sincronizadoEm: base.sincronizadoEm, temCache: base.temCache };
 }

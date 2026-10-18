@@ -25,7 +25,7 @@ import { BadgeTom } from "@/components/ds/badge-tom";
 import { StatusPill } from "@/components/ds/status-pill";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { CardModulo } from "@/components/negocio/card-modulo";
-import { TOM_BU } from "@/components/marketing/tela-desempenho";
+import { TOM_BU } from "@/components/marketing/links";
 
 type Dados = NonNullable<Awaited<ReturnType<typeof carregarCriativos>>>;
 

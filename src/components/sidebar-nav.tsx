@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { IconType } from "react-icons";
-import { MdBusiness, MdCampaign, MdDashboard, MdDescription, MdGavel, MdHistoryEdu, MdPayments, MdManageAccounts, MdReceipt, MdSettings, MdTrendingUp, MdWarning } from "react-icons/md";
+import { MdBusiness, MdCampaign, MdDashboard, MdSavings, MdDescription, MdGavel, MdHistoryEdu, MdPayments, MdManageAccounts, MdReceipt, MdSettings, MdTrendingUp, MdWarning } from "react-icons/md";
 import { cn } from "@/lib/utils";
 import { SincronizarBlingButton } from "@/components/clientes/sincronizar-bling-button";
 import type { PapelUsuario } from "@/lib/supabase/database.types";
@@ -76,7 +76,8 @@ const PAGAMENTOS: SidebarLink = {
   cor: "bg-iconGreen",
   exact: true,
 };
-const DESEMPENHO_CAMPANHAS: SidebarLink = { href: "/marketing", label: "Desempenho de campanhas", icon: MdCampaign, cor: "bg-iconBlue", ativoEm: ["/marketing/campanhas/"] };
+const DESEMPENHO_CAMPANHAS: SidebarLink = { href: "/marketing", label: "Desempenho de campanhas", icon: MdCampaign, cor: "bg-iconBlue", exact: true, ativoEm: ["/marketing/campanhas/"] };
+const INVESTIMENTO_RETORNO: SidebarLink = { href: "/marketing/retorno", label: "Investimento × Retorno", icon: MdSavings, cor: "bg-iconGreen", exact: true };
 const INADIMPLENCIA: SidebarLink = {
   href: "/inadimplencia",
   label: "Inadimplência",
@@ -99,7 +100,7 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
   juridico: [{ label: "Jurídico", links: [{ ...CONTRATOS, ativoEm: ["/pedidos/"] }, HISTORICO_MODELO] }],
   admin: [
     { label: "Gestão", links: [DASHBOARD] },
-    { label: "Marketing", links: [DESEMPENHO_CAMPANHAS] },
+    { label: "Marketing", links: [DESEMPENHO_CAMPANHAS, INVESTIMENTO_RETORNO] },
     {
       label: "Comercial",
       links: [PEDIDOS_ADMIN, VENDAS, CLIENTES],

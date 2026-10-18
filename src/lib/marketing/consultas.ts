@@ -426,3 +426,151 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
     },
   };
 }
+
+// ─────────────────────── Visão B — Investimento × Retorno ───────────────────────
+
+export type Granularidade = "mes" | "semana";
+
+export interface PontoRetorno {
+  chave: string; // aaaa-mm (mês) ou aaaa-mm-dd (segunda-feira da semana)
+  rotulo: string;
+  rotuloCompleto: string;
+  investimento: number;
+  receita: number;
+  vendas: number;
+  /** Safra imatura: o período tem leads mais novos que a mediana lead → venda. */
+  imatura: boolean;
+}
+
+export interface LinhaRetorno {
+  chave: string;
+  nome: string;
+  bu: BuMarketing;
+  investimento: number;
+  receita: number;
+  vendas: number;
+  vendasPrimeiroToque: number;
+  roas: number | null;
+  cacTeto: number | null;
+}
+
+const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const segunda = (iso: string) => somarDias(iso, -((new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7));
+
+function bucket(dia: string, g: Granularidade) {
+  if (g === "mes") {
+    const [a, m] = dia.split("-");
+    return { chave: `${a}-${m}`, rotulo: MESES_CURTOS[Number(m) - 1], rotuloCompleto: `${MESES_CURTOS[Number(m) - 1]}/${a.slice(2)}` };
+  }
+  const s = segunda(dia);
+  return { chave: s, rotulo: `${s.slice(8, 10)}/${s.slice(5, 7)}`, rotuloCompleto: `semana de ${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(2, 4)}` };
+}
+
+/**
+ * Visão B: investimento da Meta × receita atribuída pelo Kommo (coorte: data
+ * de criação do lead), por mês ou semana, por BU e campanha. A receita
+ * contábil (vendas do Bling: Academy por curso, Footlink por pedido de venda)
+ * vem como referência, ao lado — nunca somada à atribuída (spec §6, R1).
+ */
+export async function carregarInvestimentoRetorno(supabase: Supa, filtro: FiltroMarketing, granularidade: Granularidade, contabil: { academy: { data: string; valor: number }[]; footlink: { data: string; valor: number }[] }) {
+  const base = await carregarBase(supabase);
+  const { de, ate } = intervaloMarketing(filtro.periodo, base.backfillDesde);
+  const daBu = (bu: BuMarketing) => filtro.bu === "todas" || filtro.bu === bu;
+  const daCampanha = (chave: string) => !filtro.campanha || filtro.campanha === chave;
+  const corteDia = diaBrt(base.mat.corte)!;
+
+  // Série vazia do período (todos os meses/semanas aparecem, mesmo sem gasto).
+  const pontos = new Map<string, PontoRetorno>();
+  for (let d = de; d <= ate; d = somarDias(d, 1)) {
+    const b = bucket(d, granularidade);
+    const p = pontos.get(b.chave) ?? { ...b, investimento: 0, receita: 0, vendas: 0, imatura: false };
+    if (d > corteDia) p.imatura = true;
+    pontos.set(b.chave, p);
+  }
+
+  const linhas = new Map<string, LinhaRetorno>();
+  const linha = (ctx: { chave: string; nome: string; bu: BuMarketing }) =>
+    linhas.get(ctx.chave) ?? { chave: ctx.chave, nome: ctx.nome, bu: ctx.bu, investimento: 0, receita: 0, vendas: 0, vendasPrimeiroToque: 0, roas: null, cacTeto: null };
+
+  for (const r of base.campanhas) {
+    if (r.dia < de || r.dia > ate) continue;
+    const ctx = base.campanha.get(r.campaign_id);
+    if (!ctx || !daBu(ctx.bu) || !daCampanha(ctx.chave)) continue;
+    const gasto = Number(r.spend);
+    pontos.get(bucket(r.dia, granularidade).chave)!.investimento += gasto;
+    const l = linha(ctx);
+    l.investimento += gasto;
+    linhas.set(ctx.chave, l);
+  }
+
+  let vendasTotais = 0;
+  let vendasAtribuidas = 0;
+  let receitaNaoAtribuida = 0;
+  for (const l of base.leads) {
+    if (!l.is_won || l.dia! < de || l.dia! > ate || !daBu(l.bu as BuMarketing)) continue;
+    const { ultimo, primeiro } = base.ctxLead(l);
+    if (!filtro.campanha) {
+      vendasTotais++;
+      if (ultimo) vendasAtribuidas++;
+      else receitaNaoAtribuida += l.revenue;
+    }
+    if (ultimo && daBu(ultimo.bu) && daCampanha(ultimo.chave)) {
+      if (filtro.campanha) {
+        vendasTotais++;
+        vendasAtribuidas++;
+      }
+      const p = pontos.get(bucket(l.dia!, granularidade).chave)!;
+      p.receita += l.revenue;
+      p.vendas++;
+      const li = linha(ultimo);
+      li.receita += l.revenue;
+      li.vendas++;
+      linhas.set(ultimo.chave, li);
+    }
+    if (primeiro && daBu(primeiro.bu) && daCampanha(primeiro.chave)) {
+      const li = linha(primeiro);
+      li.vendasPrimeiroToque++;
+      linhas.set(primeiro.chave, li);
+    }
+  }
+
+  const tabela = [...linhas.values()]
+    .map((l) => ({ ...l, roas: l.investimento ? l.receita / l.investimento : null, cacTeto: razao(l.investimento, l.vendasPrimeiroToque) }))
+    .filter((l) => l.investimento > 0 || l.receita > 0)
+    .sort((a, b) => b.investimento - a.investimento);
+  const porBu = (["academy", "footlink"] as BuMarketing[])
+    .filter(daBu)
+    .map((bu) => {
+      const ls = tabela.filter((l) => l.bu === bu);
+      const investimento = ls.reduce((s, l) => s + l.investimento, 0);
+      const receita = ls.reduce((s, l) => s + l.receita, 0);
+      const vendasPt = ls.reduce((s, l) => s + l.vendasPrimeiroToque, 0);
+      const contabilBu = filtro.campanha ? null : contabil[bu].filter((v) => v.data >= de && v.data <= ate).reduce((s, v) => s + v.valor, 0);
+      // Sem receita atribuída, o ROAS da BU é desconhecido (falta rastreio), não zero.
+      return { bu, investimento, receita, roas: investimento && receita ? receita / investimento : null, cacTeto: razao(investimento, vendasPt), contabil: contabilBu };
+    });
+
+  const investimento = tabela.reduce((s, l) => s + l.investimento, 0);
+  const receita = tabela.reduce((s, l) => s + l.receita, 0);
+  const vendasPt = tabela.reduce((s, l) => s + l.vendasPrimeiroToque, 0);
+  const taxa = vendasTotais ? vendasAtribuidas / vendasTotais : null;
+  const contabilTotal = porBu.every((b) => b.contabil !== null) ? porBu.reduce((s, b) => s + (b.contabil ?? 0), 0) : null;
+
+  return {
+    de,
+    ate,
+    temDados: base.temDados,
+    sincronizadoEm: base.sincronizadoEm,
+    erroSync: base.erroSync,
+    medianaDias: base.mat.mediana,
+    corteMaturidade: corteDia,
+    opcoesCampanha: [...base.campanha.values()]
+      .filter((c) => daBu(c.bu) && tabela.some((l) => l.chave === c.chave))
+      .map((c) => ({ valor: c.chave, rotulo: c.nome })),
+    kpis: { investimento, receita, roas: investimento ? receita / investimento : null, cacTeto: razao(investimento, vendasPt), contabil: contabilTotal },
+    cobertura: { vendasTotais, vendasAtribuidas, taxa, receitaNaoAtribuida, baixa: taxa !== null && taxa < base.limiares.cobertura_baixa },
+    serie: [...pontos.values()],
+    porBu,
+    tabela,
+  };
+}

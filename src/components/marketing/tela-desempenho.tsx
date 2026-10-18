@@ -1,5 +1,5 @@
+import Link from "next/link";
 import { MdCampaign, MdChevronRight, MdErrorOutline, MdInfoOutline, MdWarningAmber } from "react-icons/md";
-import type { BuMarketing } from "@/lib/supabase/database.types";
 import { ROTULO_BU, type carregarDesempenho, type FiltroMarketing, type PeriodoMarketing } from "@/lib/marketing/consultas";
 import { formatarMoeda, formatarMoedaCompacta, tempoDecorrido } from "@/lib/formatacao";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,6 +13,7 @@ import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { BarraProgresso } from "@/components/ds/barra-progresso";
 import { ExportarCsv } from "@/components/inadimplencia/exportar-csv";
 import { SeletorCampanha } from "@/components/marketing/seletor-campanha";
+import { TOM_BU, hrefDesempenho, hrefRetorno } from "@/components/marketing/links";
 import { cn } from "@/lib/utils";
 
 type Dados = Awaited<ReturnType<typeof carregarDesempenho>>;
@@ -23,17 +24,7 @@ const PERIODOS: { valor: PeriodoMarketing; rotulo: string }[] = [
   { valor: "ano", rotulo: "Ano inteiro" },
   { valor: "tudo", rotulo: "Tudo" },
 ];
-export const TOM_BU: Record<BuMarketing, "info" | "purple"> = { academy: "info", footlink: "purple" };
 
-/** URL da Visão A com os filtros (os padrões ficam fora da URL). */
-export function hrefDesempenho(f: FiltroMarketing, buPadrao: FiltroMarketing["bu"]) {
-  const p = new URLSearchParams();
-  if (f.periodo !== "90d") p.set("periodo", f.periodo);
-  if (f.bu !== buPadrao) p.set("bu", f.bu);
-  if (f.campanha) p.set("campanha", f.campanha);
-  const qs = p.toString();
-  return qs ? `/marketing?${qs}` : "/marketing";
-}
 
 const moeda = (v: number | null) => (v === null ? "—" : formatarMoeda(v));
 const decimal = (v: number | null, casas = 2) => (v === null ? "—" : v.toFixed(casas).replace(".", ","));
@@ -54,7 +45,14 @@ export function TelaDesempenho({ dados, filtro, buPadrao }: { dados: Dados; filt
         modulo="Marketing"
         titulo="Desempenho de campanhas"
         descricao="Gasto e leads da Meta cruzados com MQL, vendas e receita do Kommo."
-        acoes={<SegmentedToggle valor={filtro.periodo} opcoes={PERIODOS.map((p) => ({ ...p, href: href({ periodo: p.valor, campanha: null }) }))} />}
+        acoes={
+          <>
+            <Link href={hrefRetorno(filtro, buPadrao, "mes")} className="text-sm font-semibold text-purple-text hover:underline">
+              Ver investimento × retorno
+            </Link>
+            <SegmentedToggle valor={filtro.periodo} opcoes={PERIODOS.map((p) => ({ ...p, href: href({ periodo: p.valor, campanha: null }) }))} />
+          </>
+        }
       />
 
       {dados.erroSync && (
