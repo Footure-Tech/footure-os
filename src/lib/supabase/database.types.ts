@@ -60,6 +60,19 @@ type MetaDiaBase = {
 };
 export type MetaCampanhaDiaRow = MetaDiaBase & { campaign_id: string };
 export type MetaAnuncioDiaRow = MetaDiaBase & { ad_id: string; adset_id: string | null; adset_name: string | null; ad_name: string | null };
+export type VerificacaoRastreioRow = {
+  id: string;
+  campanha_chave: string;
+  codigo: string;
+  url_teste: string;
+  esperado: unknown;
+  status: "aguardando" | "ok" | "problema";
+  resultado: unknown;
+  lead_id: number | null;
+  criado_por: string | null;
+  criado_em: string;
+  verificado_em: string | null;
+};
 export type SugestaoIaRow = {
   id: string;
   campanha_chave: string;
@@ -567,12 +580,14 @@ export interface Database {
       mkt_meta_anuncio_dia: TableDef<MetaAnuncioDiaRow, Omit<MetaAnuncioDiaRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MetaAnuncioDiaRow>>;
       // supabase/migrations/0048_marketing_criativos.sql
       mkt_meta_criativos: TableDef<
-        { ad_id: string; account_id: string; creative_id: string | null; imagem_path: string | null; atualizado_em: string },
-        { ad_id: string; account_id: string; creative_id?: string | null; imagem_path?: string | null; atualizado_em?: string },
-        Partial<{ creative_id: string | null; imagem_path: string | null; atualizado_em: string }>
+        { ad_id: string; account_id: string; creative_id: string | null; imagem_path: string | null; urls_destino: string[] | null; url_tags: string | null; status_anuncio: string | null; atualizado_em: string },
+        { ad_id: string; account_id: string; creative_id?: string | null; imagem_path?: string | null; urls_destino?: string[] | null; url_tags?: string | null; status_anuncio?: string | null; atualizado_em?: string },
+        Partial<{ creative_id: string | null; imagem_path: string | null; urls_destino: string[] | null; url_tags: string | null; status_anuncio: string | null; atualizado_em: string }>
       >;
       // supabase/migrations/0049_marketing_sugestoes_ia.sql
       mkt_sugestoes_ia: TableDef<SugestaoIaRow, Omit<SugestaoIaRow, "id" | "criado_em"> & { id?: string; criado_em?: string }, Partial<SugestaoIaRow>>;
+      // supabase/migrations/0050_marketing_rastreio.sql
+      mkt_verificacoes_rastreio: TableDef<VerificacaoRastreioRow, Omit<VerificacaoRastreioRow, "id" | "criado_em" | "status" | "resultado" | "lead_id" | "verificado_em"> & Partial<VerificacaoRastreioRow>, Partial<VerificacaoRastreioRow>>;
       mkt_sync_execucoes: TableDef<
         SyncExecucaoRow,
         Partial<SyncExecucaoRow> & { fonte: SyncExecucaoRow["fonte"]; tipo: SyncExecucaoRow["tipo"] },

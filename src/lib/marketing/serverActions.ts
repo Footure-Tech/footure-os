@@ -7,6 +7,7 @@ import { executar, type ResultadoAcao } from "@/lib/acaoServidor";
 import type { BuFunil } from "@/lib/supabase/database.types";
 import { sincronizarMarketing, type ResultadoSincronizacao } from "./sincronizacao";
 import { gerarSugestoesIa } from "./sugestoesIa";
+import { iniciarVerificacao, verificarAgora } from "./verificacaoRastreio";
 
 /** Prazo da sincronização manual: a página de Configurações tem maxDuration de 300 s. */
 const PRAZO_MANUAL_MS = 240_000;
@@ -43,4 +44,26 @@ export async function gerarSugestoesIaAction(chaveCampanha: string, periodo: "30
     revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
   });
   return r.erro ? r : { id };
+}
+
+/** Inicia uma verificação de ponta a ponta do rastreio da campanha (link de teste + código). */
+export async function iniciarVerificacaoRastreioAction(chaveCampanha: string): Promise<ResultadoAcao & { id?: string }> {
+  let id: string | undefined;
+  const r = await executar(async () => {
+    const sessao = await exigirPapel("admin");
+    id = await iniciarVerificacao(await createClient(), chaveCampanha, sessao.id);
+    revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
+  });
+  return r.erro ? r : { id };
+}
+
+/** Procura o lead de teste no Kommo e grava o resultado da verificação. */
+export async function verificarRastreioAction(verificacaoId: string, chaveCampanha: string): Promise<ResultadoAcao & { encontrado?: boolean; status?: string }> {
+  let saida: { encontrado: boolean; status: string } | undefined;
+  const r = await executar(async () => {
+    await exigirPapel("admin");
+    saida = await verificarAgora(await createClient(), verificacaoId);
+    revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
+  });
+  return r.erro ? r : { ...saida };
 }

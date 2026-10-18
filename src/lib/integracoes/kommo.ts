@@ -180,3 +180,31 @@ export async function buscarPaginaLeadsKommo(pagina: number, filtro: { campo: "c
   const leads = data?._embedded?.leads ?? [];
   return leads.length ? leads : null;
 }
+
+/**
+ * Lead de teste da verificação de rastreio: procura o contato pelo código (no
+ * nome ou e-mail preenchido no formulário) e devolve o lead mais recente dele,
+ * com os campos personalizados por id.
+ */
+export async function buscarLeadDeTesteKommo(codigo: string): Promise<{ leadId: number; criadoEm: string; campos: Map<number, string> } | null> {
+  const contatos = await getKommo<{ _embedded?: { contacts?: Array<{ id: number; _embedded?: { leads?: Array<{ id: number }> } }> } }>("/contacts", {
+    query: codigo,
+    with: "leads",
+    limit: 10,
+  });
+  const ids = [...new Set((contatos?._embedded?.contacts ?? []).flatMap((c) => (c._embedded?.leads ?? []).map((l) => l.id)))];
+  if (!ids.length) return null;
+  const leads: LeadBruto[] = [];
+  for (const id of ids.slice(0, 5)) {
+    const lead = await getKommo<LeadBruto>(`/leads/${id}`);
+    if (lead) leads.push(lead);
+  }
+  const maisRecente = leads.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0];
+  if (!maisRecente) return null;
+  const campos = new Map<number, string>();
+  for (const c of maisRecente.custom_fields_values ?? []) {
+    const v = String(c.values?.[0]?.value ?? "").trim();
+    if (v) campos.set(c.field_id, v);
+  }
+  return { leadId: maisRecente.id, criadoEm: new Date((maisRecente.created_at ?? 0) * 1000).toISOString(), campos };
+}

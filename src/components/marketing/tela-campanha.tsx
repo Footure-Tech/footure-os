@@ -1,4 +1,9 @@
-import { MdCampaign, MdInfoOutline, MdLightbulbOutline } from "react-icons/md";
+import {
+  MdRule,
+  MdCampaign,
+  MdInfoOutline,
+  MdLightbulbOutline,
+} from "react-icons/md";
 import {
   ROTULO_BU,
   type carregarCriativos,
@@ -16,6 +21,11 @@ import { CardModulo } from "@/components/negocio/card-modulo";
 import { TOM_BU } from "@/components/marketing/links";
 import { ImagemCriativo } from "@/components/marketing/imagem-criativo";
 import { SugestoesIa } from "@/components/marketing/sugestoes-ia";
+import { InstrucoesRastreio } from "@/components/marketing/instrucoes-rastreio";
+import { RastreioAnuncio } from "@/components/marketing/rastreio-anuncio";
+import { VerificacaoPontaAPonta } from "@/components/marketing/verificacao-ponta-a-ponta";
+import { VISUAL_VERIFICACAO } from "@/lib/marketing/rastreio";
+import type { VerificacaoRastreio } from "@/lib/marketing/verificacaoRastreio";
 import type { carregarSugestoesIa } from "@/lib/marketing/sugestoesIa";
 
 type Dados = NonNullable<Awaited<ReturnType<typeof carregarCriativos>>>;
@@ -48,10 +58,12 @@ export function TelaCampanha({
   dados,
   periodo,
   sugestoes,
+  verificacoes,
 }: {
   dados: Dados;
   periodo: PeriodoMarketing;
   sugestoes: Awaited<ReturnType<typeof carregarSugestoesIa>>;
+  verificacoes: VerificacaoRastreio[];
 }) {
   const { campanha } = dados;
   const voltar =
@@ -83,6 +95,22 @@ export function TelaCampanha({
       />
 
       <KpisCampanha criativos={dados.criativos} />
+
+      <BlocoRastreio dados={dados} verificacoes={verificacoes}>
+        <InstrucoesRastreio
+          campanhaNome={campanha.nome}
+          campanhaId={campanha.campaignId}
+          destinos={dados.destinos}
+          diagnostico={{
+            leadsMeta: dados.criativos.reduce((s, c) => s + c.leadsMeta, 0),
+            leadsCrm: dados.criativos.reduce((s, c) => s + c.leads, 0),
+            // Só com volume mínimo na Meta (evita apontar amostra de 1–2 leads).
+            semCrm: dados.criativos
+              .filter((c) => c.leadsMeta >= 5 && c.leads === 0)
+              .map((c) => ({ nome: c.nome, leadsMeta: c.leadsMeta })),
+          }}
+        />
+      </BlocoRastreio>
 
       <CardModulo
         icone={MdLightbulbOutline}
@@ -127,7 +155,7 @@ export function TelaCampanha({
         <ul className="flex flex-col gap-4">
           {dados.criativos.map((c) => (
             <li key={c.adId}>
-              <CartaoCriativo c={c} />
+              <CartaoCriativo c={c} accountId={campanha.accountId} />
             </li>
           ))}
         </ul>
@@ -256,7 +284,7 @@ function Metrica({
  * Números sem dado ainda ficam de fora (receita, ROAS e CAC só com venda;
  * tendência de CPL só com leads nas duas metades do período).
  */
-function CartaoCriativo({ c }: { c: Criativo }) {
+function CartaoCriativo({ c, accountId }: { c: Criativo; accountId: string }) {
   return (
     <article className="flex flex-col gap-5 rounded-xl border border-gray5 bg-surface p-5 shadow-card lg:flex-row">
       <div className="flex min-w-0 flex-1 gap-4">
@@ -276,6 +304,23 @@ function CartaoCriativo({ c }: { c: Criativo }) {
               >
                 <StatusPill tom="not_started">Recuperado por nome</StatusPill>
               </span>
+            )}
+            {c.rastreio && (
+              <RastreioAnuncio
+                status={c.rastreio.status}
+                problemas={c.rastreio.problemas}
+                urlTags={c.urlTags}
+                adId={c.adId}
+                accountId={accountId}
+                nome={c.nome}
+              />
+            )}
+            {c.statusAnuncio && c.statusAnuncio !== "ACTIVE" && (
+              <StatusPill tom="not_started">
+                {c.statusAnuncio.includes("PAUSED")
+                  ? "Pausado"
+                  : c.statusAnuncio.toLowerCase()}
+              </StatusPill>
             )}
           </div>
           <h3 className="text-[15px] leading-snug font-bold text-darkPurple1">
@@ -328,5 +373,94 @@ function CartaoCriativo({ c }: { c: Criativo }) {
         )}
       </dl>
     </article>
+  );
+}
+
+/** Bloco "Rastreio": anúncios com parâmetros corretos, verificação de ponta a ponta e as instruções gerais. */
+function BlocoRastreio({
+  dados,
+  verificacoes,
+  children,
+}: {
+  dados: Dados;
+  verificacoes: VerificacaoRastreio[];
+  children: React.ReactNode;
+}) {
+  const comDado = dados.criativos.filter((c) => c.rastreio);
+  const ativos = comDado.filter((c) => c.statusAnuncio === "ACTIVE");
+  const base = ativos.length ? ativos : comDado;
+  const ok = base.filter((c) => c.rastreio!.status === "ok").length;
+  const problemas = base.filter((c) => c.rastreio!.status === "erro").length;
+  const atual = verificacoes[0];
+  return (
+    <CardModulo
+      icone={MdRule}
+      cor="bg-iconGreen"
+      titulo="Rastreio da campanha"
+      className="min-w-0"
+      extra={
+        <div className="flex flex-wrap gap-2">
+          {children}
+          <VerificacaoPontaAPonta
+            chave={dados.campanha.chave}
+            verificacoes={verificacoes}
+          />
+        </div>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">
+            Anúncios {ativos.length ? "ativos" : ""} (parâmetros na Meta)
+          </span>
+          {base.length === 0 ? (
+            <span className="text-sm text-gray3">
+              A verificação aparece depois da próxima sincronização do
+              Marketing.
+            </span>
+          ) : (
+            <span className="flex flex-wrap items-center gap-2 text-sm text-gray2">
+              <StatusPill
+                tom={
+                  problemas
+                    ? "inactive"
+                    : ok === base.length
+                      ? "active"
+                      : "pending"
+                }
+              >
+                {ok} de {base.length} OK
+              </StatusPill>
+              {problemas > 0
+                ? `${problemas} com problema — veja o selo em cada criativo abaixo.`
+                : ok === base.length
+                  ? "Todos com os IDs de campanha, conjunto e anúncio."
+                  : "Alguns sem o conjunto ou a origem."}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">
+            Ponta a ponta (anúncio → página → Kommo)
+          </span>
+          {atual ? (
+            <span className="flex flex-wrap items-center gap-2 text-sm text-gray2">
+              <StatusPill tom={VISUAL_VERIFICACAO[atual.status].tom}>
+                {VISUAL_VERIFICACAO[atual.status].rotulo}
+              </StatusPill>
+              {new Date(
+                atual.verificadoEm ?? atual.criadoEm,
+              ).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+              {atual.status === "problema" &&
+                " — abra a verificação para ver como corrigir."}
+            </span>
+          ) : (
+            <span className="text-sm text-gray3">
+              Nunca verificado. Use “Verificar ponta a ponta”.
+            </span>
+          )}
+        </div>
+      </div>
+    </CardModulo>
   );
 }

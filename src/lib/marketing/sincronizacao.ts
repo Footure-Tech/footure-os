@@ -204,23 +204,33 @@ const LIMITE_MINIATURAS = 150;
 const DIAS_NOVA_TENTATIVA_ORIGINAL = 7;
 
 /**
- * Imagens dos criativos (0048): para os anúncios com dados na janela recente
- * sem imagem guardada (ou só com a miniatura há mais de 7 dias), busca na Meta
- * a imagem original (ou a miniatura), baixa e guarda no Storage — a original
- * em "<conta>/<anúncio>-original.<ext>". Falha aqui não afeta os números.
+ * Imagens (0048), páginas de destino, parâmetros de URL e status (0050) dos
+ * anúncios com dados na janela recente. Destino, parâmetros e status são
+ * atualizados em toda execução; a imagem
+ * só é baixada se falta (ou se é só a miniatura há mais de 7 dias): a
+ * original em "<conta>/<anúncio>-original.<ext>". Falha aqui não afeta os números.
  */
 async function sincronizarMiniaturas(ctx: Contexto, conta: string) {
   const [{ data: anuncios }, { data: guardados }] = await Promise.all([
     ctx.supabase.from("mkt_meta_anuncio_dia").select("ad_id").eq("account_id", conta),
     ctx.supabase.from("mkt_meta_criativos").select("ad_id, imagem_path, atualizado_em").eq("account_id", conta),
   ]);
+  const todos = [...new Set((anuncios ?? []).map((a) => a.ad_id))];
+  if (!todos.length) return 0;
   const limite = new Date(Date.now() - DIAS_NOVA_TENTATIVA_ORIGINAL * 86_400_000).toISOString();
+  const existentes = new Set((guardados ?? []).map((g) => g.ad_id));
   const resolvido = new Set((guardados ?? []).filter((g) => g.imagem_path?.includes("-original") || g.atualizado_em > limite).map((g) => g.ad_id));
-  const pendentes = [...new Set((anuncios ?? []).map((a) => a.ad_id))].filter((id) => !resolvido.has(id)).slice(0, LIMITE_MINIATURAS);
-  if (!pendentes.length) return 0;
+  const pendentes = new Set(todos.filter((id) => !resolvido.has(id)).slice(0, LIMITE_MINIATURAS));
+
+  // Uma leitura para todos os anúncios da janela: o destino pode mudar (0050); a imagem só baixa se faltar.
   let gravadas = 0;
-  for (const m of await buscarImagensCriativosMeta(conta, pendentes)) {
+  for (const m of await buscarImagensCriativosMeta(conta, todos)) {
     if (!temTempo(ctx)) break;
+    if (!pendentes.has(m.adId)) {
+      if (existentes.has(m.adId))
+        await ctx.supabase.from("mkt_meta_criativos").update({ urls_destino: m.destinos, url_tags: m.urlTags, status_anuncio: m.status }).eq("ad_id", m.adId);
+      continue;
+    }
     let caminho: string | null = null;
     if (m.url) {
       try {
@@ -237,7 +247,18 @@ async function sincronizarMiniaturas(ctx: Contexto, conta: string) {
         continue; // tenta de novo na próxima execução
       }
     }
-    await ctx.supabase.from("mkt_meta_criativos").upsert({ ad_id: m.adId, account_id: conta, creative_id: m.creativeId, imagem_path: caminho, atualizado_em: new Date().toISOString() });
+    await ctx.supabase
+      .from("mkt_meta_criativos")
+      .upsert({
+        ad_id: m.adId,
+        account_id: conta,
+        creative_id: m.creativeId,
+        imagem_path: caminho,
+        urls_destino: m.destinos,
+        url_tags: m.urlTags,
+        status_anuncio: m.status,
+        atualizado_em: new Date().toISOString(),
+      });
     gravadas++;
   }
   return gravadas;

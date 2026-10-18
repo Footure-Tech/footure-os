@@ -151,7 +151,7 @@ export async function buscarInsightsMeta(accountId: string, de: string, ate: str
 }
 
 /**
- * Imagem de cada anúncio para ilustrar o ranking: a ORIGINAL do criativo
+ * Imagem e páginas de destino de cada anúncio. Imagem para ilustrar o ranking: a ORIGINAL do criativo
  * (biblioteca de imagens da conta, pelo hash — ex.: 1080×1080) quando existe;
  * senão a miniatura (vídeos: o token não tem permissão para a capa grande).
  * Os links da Meta expiram em poucos dias — quem chama baixa e guarda no
@@ -161,12 +161,21 @@ export async function buscarInsightsMeta(accountId: string, de: string, ate: str
 export async function buscarImagensCriativosMeta(
   accountId: string,
   adIds: string[],
-): Promise<Array<{ adId: string; creativeId: string | null; url: string | null; original: boolean }>> {
-  type Criativo = { id?: string; thumbnail_url?: string; image_hash?: string; asset_feed_spec?: { images?: Array<{ hash?: string }> } };
-  const anuncios: Array<{ id: string; creative?: Criativo }> = [];
+): Promise<Array<{ adId: string; creativeId: string | null; url: string | null; original: boolean; destinos: string[]; urlTags: string | null; status: string | null }>> {
+  type Criativo = {
+    id?: string;
+    thumbnail_url?: string;
+    image_hash?: string;
+    link_url?: string;
+    url_tags?: string;
+    object_story_spec?: { link_data?: { link?: string }; video_data?: { call_to_action?: { value?: { link?: string } } } };
+    asset_feed_spec?: { images?: Array<{ hash?: string }>; link_urls?: Array<{ website_url?: string; url_tags?: string }> };
+  };
+  const anuncios: Array<{ id: string; effective_status?: string; creative?: Criativo }> = [];
   for (let i = 0; i < adIds.length; i += 50) {
     const params = new URLSearchParams({
-      fields: "id,creative{id,thumbnail_url,image_hash,asset_feed_spec{images}}",
+      fields:
+        "id,effective_status,creative{id,thumbnail_url,image_hash,link_url,url_tags,object_story_spec{link_data{link},video_data{call_to_action{value{link}}}},asset_feed_spec{images,link_urls{website_url,url_tags}}}",
       filtering: JSON.stringify([{ field: "id", operator: "IN", value: adIds.slice(i, i + 50) }]),
       thumbnail_width: "320",
       thumbnail_height: "320",
@@ -175,7 +184,7 @@ export async function buscarImagensCriativosMeta(
     });
     let url: string | undefined = `${API_BASE}/${versao()}/${accountId}/ads?${params}`;
     while (url) {
-      const pagina: { data?: Array<{ id: string; creative?: Criativo }>; paging?: { next?: string } } = await getMeta(url);
+      const pagina: { data?: Array<{ id: string; effective_status?: string; creative?: Criativo }>; paging?: { next?: string } } = await getMeta(url);
       anuncios.push(...(pagina.data ?? []));
       url = pagina.paging?.next;
     }
@@ -193,6 +202,21 @@ export async function buscarImagensCriativosMeta(
 
   return anuncios.map((a) => {
     const original = urlDoHash.get(hashDe(a.creative) ?? "") ?? null;
-    return { adId: a.id, creativeId: a.creative?.id ?? null, url: original ?? a.creative?.thumbnail_url ?? null, original: !!original };
+    const c = a.creative;
+    // Páginas de destino do anúncio (sem a query string; o anúncio dinâmico pode ter várias).
+    const destinos = [c?.link_url, c?.object_story_spec?.link_data?.link, c?.object_story_spec?.video_data?.call_to_action?.value?.link, ...(c?.asset_feed_spec?.link_urls ?? []).map((l) => l.website_url)]
+      .filter((u): u is string => !!u && /^https?:\/\//.test(u))
+      .map((u) => u.split("?")[0]);
+    // "Parâmetros de URL" do anúncio (no criativo dinâmico, os do primeiro link).
+    const urlTags = c?.url_tags || c?.asset_feed_spec?.link_urls?.find((l) => l.url_tags)?.url_tags || null;
+    return {
+      adId: a.id,
+      creativeId: c?.id ?? null,
+      url: original ?? c?.thumbnail_url ?? null,
+      original: !!original,
+      destinos: [...new Set(destinos)],
+      urlTags,
+      status: a.effective_status ?? null,
+    };
   });
 }

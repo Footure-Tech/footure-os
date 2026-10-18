@@ -10,6 +10,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BuMarketing, Database, LimiaresMarketing } from "@/lib/supabase/database.types";
 import { BUCKET_CRIATIVOS } from "./sincronizacao";
+import { avaliarTagsAnuncio } from "./rastreio";
 import { avaliarCriativo, maturidade, normalizarNome, ORDEM_ACAO, razao, recomendacoesCampanha, saturacao, type Acao } from "./motor";
 
 type Supa = SupabaseClient<Database>;
@@ -263,7 +264,8 @@ export async function carregarDesempenho(supabase: Supa, filtro: FiltroMarketing
       receita,
       cplMeta: razao(gasto, soma((l) => l.leadsMeta)),
       cacTeto: razao(gasto, vendasPt),
-      roas: razao(receita, gasto),
+      // Sem receita atribuída, o ROAS é desconhecido (falta rastreio), não zero.
+      roas: receita ? razao(receita, gasto) : null,
     },
     cobertura: { vendasTotais, vendasAtribuidas, taxa: cobertura, receitaNaoAtribuida, baixa: cobertura !== null && cobertura < base.limiares.cobertura_baixa },
     linhas,
@@ -275,6 +277,10 @@ export interface LinhaCriativo {
   nome: string;
   /** Link assinado (1 h) da miniatura guardada no Storage (0048); null sem imagem. */
   imagemUrl: string | null;
+  /** Status do anúncio na Meta (ACTIVE, PAUSED…) e avaliação dos "Parâmetros de URL" (0050); null antes da sincronização. */
+  statusAnuncio: string | null;
+  urlTags: string | null;
+  rastreio: ReturnType<typeof avaliarTagsAnuncio> | null;
   conjunto: string | null;
   gasto: number;
   impressoes: number;
@@ -372,6 +378,9 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
       adId,
       nome: m.nome,
       imagemUrl: null as string | null,
+      statusAnuncio: null as string | null,
+      urlTags: null as string | null,
+      rastreio: null as ReturnType<typeof avaliarTagsAnuncio> | null,
       conjunto: m.conjunto,
       gasto: m.gasto,
       impressoes: m.impr,
@@ -397,8 +406,25 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
   criativos.sort((a, b) => ORDEM_ACAO[a.acao] - ORDEM_ACAO[b.acao] || b.vendas - a.vendas || b.gasto - a.gasto);
 
   // Miniaturas: links assinados do bucket privado, numa chamada só.
-  const { data: imagens } = await supabase.from("mkt_meta_criativos").select("ad_id, imagem_path").in("ad_id", criativos.map((c) => c.adId)).not("imagem_path", "is", null);
-  if (imagens?.length) {
+  const { data: criativosMeta } = await supabase
+    .from("mkt_meta_criativos")
+    .select("ad_id, imagem_path, urls_destino, url_tags, status_anuncio")
+    .in("ad_id", criativos.map((c) => c.adId));
+  // Rastreio de cada anúncio (0050): status na Meta e avaliação dos parâmetros de URL.
+  for (const cm of criativosMeta ?? []) {
+    const c = criativos.find((x) => x.adId === cm.ad_id);
+    if (!c || cm.status_anuncio === null) continue;
+    c.statusAnuncio = cm.status_anuncio;
+    c.urlTags = cm.url_tags;
+    c.rastreio = avaliarTagsAnuncio(cm.url_tags);
+  }
+  const imagens = (criativosMeta ?? []).filter((c) => c.imagem_path);
+  // Páginas de destino da campanha, da que recebeu mais gasto para a que recebeu menos.
+  const gastoPorDestino = new Map<string, number>();
+  for (const cm of criativosMeta ?? [])
+    for (const u of cm.urls_destino ?? []) gastoPorDestino.set(u, (gastoPorDestino.get(u) ?? 0) + (criativos.find((c) => c.adId === cm.ad_id)?.gasto ?? 0));
+  const destinos = [...gastoPorDestino].sort((a, b) => b[1] - a[1]).map(([u]) => u);
+  if (imagens.length) {
     const { data: links } = await supabase.storage.from(BUCKET_CRIATIVOS).createSignedUrls(imagens.map((i) => i.imagem_path!), 3600);
     const porCaminho = new Map((links ?? []).map((l) => [l.path, l.signedUrl]));
     const porAnuncio = new Map(imagens.map((i) => [i.ad_id, porCaminho.get(i.imagem_path!) ?? null]));
@@ -415,6 +441,7 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
     campanha: ctx,
     de,
     ate,
+    destinos,
     inicioJanelaAnuncio: inicioJanela,
     medianaDias: base.mat.mediana,
     sincronizadoEm: base.sincronizadoEm,
@@ -567,7 +594,7 @@ export async function carregarInvestimentoRetorno(supabase: Supa, filtro: Filtro
     opcoesCampanha: [...base.campanha.values()]
       .filter((c) => daBu(c.bu) && tabela.some((l) => l.chave === c.chave))
       .map((c) => ({ valor: c.chave, rotulo: c.nome })),
-    kpis: { investimento, receita, roas: investimento ? receita / investimento : null, cacTeto: razao(investimento, vendasPt), contabil: contabilTotal },
+    kpis: { investimento, receita, roas: investimento && receita ? receita / investimento : null, cacTeto: razao(investimento, vendasPt), contabil: contabilTotal },
     cobertura: { vendasTotais, vendasAtribuidas, taxa, receitaNaoAtribuida, baixa: taxa !== null && taxa < base.limiares.cobertura_baixa },
     serie: [...pontos.values()],
     porBu,
