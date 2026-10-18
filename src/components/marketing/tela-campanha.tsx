@@ -15,6 +15,8 @@ import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { CardModulo } from "@/components/negocio/card-modulo";
 import { TOM_BU } from "@/components/marketing/links";
 import { ImagemCriativo } from "@/components/marketing/imagem-criativo";
+import { SugestoesIa } from "@/components/marketing/sugestoes-ia";
+import type { carregarSugestoesIa } from "@/lib/marketing/sugestoesIa";
 
 type Dados = NonNullable<Awaited<ReturnType<typeof carregarCriativos>>>;
 type Criativo = Dados["criativos"][number];
@@ -45,9 +47,11 @@ const dataCurta = (iso: string) =>
 export function TelaCampanha({
   dados,
   periodo,
+  sugestoes,
 }: {
   dados: Dados;
   periodo: PeriodoMarketing;
+  sugestoes: Awaited<ReturnType<typeof carregarSugestoesIa>>;
 }) {
   const { campanha } = dados;
   const voltar =
@@ -85,6 +89,15 @@ export function TelaCampanha({
         cor="bg-iconYellow"
         titulo="Recomendações da campanha"
         className="min-w-0"
+        extra={
+          <SugestoesIa
+            chave={campanha.chave}
+            periodo={periodo === "30d" ? "30d" : "90d"}
+            rodadas={sugestoes.rodadas}
+            recenteId={sugestoes.recenteId}
+            consumo={sugestoes.consumo}
+          />
+        }
       >
         <ul className="flex flex-col gap-2.5">
           {dados.recomendacoes.map((r) => (

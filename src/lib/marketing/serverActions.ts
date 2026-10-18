@@ -6,6 +6,7 @@ import { exigirPapel } from "@/lib/auth/session";
 import { executar, type ResultadoAcao } from "@/lib/acaoServidor";
 import type { BuFunil } from "@/lib/supabase/database.types";
 import { sincronizarMarketing, type ResultadoSincronizacao } from "./sincronizacao";
+import { gerarSugestoesIa } from "./sugestoesIa";
 
 /** Prazo da sincronização manual: a página de Configurações tem maxDuration de 300 s. */
 const PRAZO_MANUAL_MS = 240_000;
@@ -31,4 +32,15 @@ export async function definirBuFunilAction(pipelineId: number, bu: BuFunil): Pro
     if (error) throw new Error(error.message);
     revalidatePath("/admin/configuracoes");
   });
+}
+
+/** "Gerar novas sugestões" (Sugestões por IA da campanha): uma chamada ao Claude, gravada com tokens e custo. */
+export async function gerarSugestoesIaAction(chaveCampanha: string, periodo: "30d" | "90d"): Promise<ResultadoAcao & { id?: string }> {
+  let id: string | undefined;
+  const r = await executar(async () => {
+    const sessao = await exigirPapel("admin");
+    id = await gerarSugestoesIa(await createClient(), chaveCampanha, periodo === "30d" ? "30d" : "90d", sessao.id);
+    revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
+  });
+  return r.erro ? r : { id };
 }

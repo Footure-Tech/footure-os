@@ -60,6 +60,22 @@ type MetaDiaBase = {
 };
 export type MetaCampanhaDiaRow = MetaDiaBase & { campaign_id: string };
 export type MetaAnuncioDiaRow = MetaDiaBase & { ad_id: string; adset_id: string | null; adset_name: string | null; ad_name: string | null };
+export type SugestaoIaRow = {
+  id: string;
+  campanha_chave: string;
+  campanha_nome: string;
+  periodo: "30d" | "90d";
+  periodo_de: string;
+  periodo_ate: string;
+  modelo: string;
+  tokens_entrada: number;
+  tokens_saida: number;
+  custo_usd: number;
+  entrada: unknown;
+  resultado: unknown;
+  criado_por: string | null;
+  criado_em: string;
+};
 export type SyncExecucaoRow = {
   id: string;
   fonte: "meta" | "kommo";
@@ -555,6 +571,8 @@ export interface Database {
         { ad_id: string; account_id: string; creative_id?: string | null; imagem_path?: string | null; atualizado_em?: string },
         Partial<{ creative_id: string | null; imagem_path: string | null; atualizado_em: string }>
       >;
+      // supabase/migrations/0049_marketing_sugestoes_ia.sql
+      mkt_sugestoes_ia: TableDef<SugestaoIaRow, Omit<SugestaoIaRow, "id" | "criado_em"> & { id?: string; criado_em?: string }, Partial<SugestaoIaRow>>;
       mkt_sync_execucoes: TableDef<
         SyncExecucaoRow,
         Partial<SyncExecucaoRow> & { fonte: SyncExecucaoRow["fonte"]; tipo: SyncExecucaoRow["tipo"] },
