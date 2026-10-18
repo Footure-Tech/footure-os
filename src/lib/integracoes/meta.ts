@@ -149,3 +149,30 @@ export async function buscarInsightsMeta(accountId: string, de: string, ate: str
   }
   return linhas;
 }
+
+/**
+ * Miniatura do criativo de cada anúncio (vídeo também tem). O link da Meta
+ * expira em poucos dias — quem chama baixa a imagem e guarda no Storage.
+ * Lista os anúncios da conta filtrando pelos ids, em lotes de 50 (a v26 não
+ * aceita mais o parâmetro `ids`).
+ */
+export async function buscarMiniaturasMeta(accountId: string, adIds: string[]): Promise<Array<{ adId: string; creativeId: string | null; url: string | null }>> {
+  const saida: Array<{ adId: string; creativeId: string | null; url: string | null }> = [];
+  for (let i = 0; i < adIds.length; i += 50) {
+    const params = new URLSearchParams({
+      fields: "id,creative{id,thumbnail_url}",
+      filtering: JSON.stringify([{ field: "id", operator: "IN", value: adIds.slice(i, i + 50) }]),
+      thumbnail_width: "320",
+      thumbnail_height: "320",
+      limit: "100",
+      access_token: tokenMeta(),
+    });
+    let url: string | undefined = `${API_BASE}/${versao()}/${accountId}/ads?${params}`;
+    while (url) {
+      const pagina: { data?: Array<{ id: string; creative?: { id?: string; thumbnail_url?: string } }>; paging?: { next?: string } } = await getMeta(url);
+      for (const ad of pagina.data ?? []) saida.push({ adId: ad.id, creativeId: ad.creative?.id ?? null, url: ad.creative?.thumbnail_url ?? null });
+      url = pagina.paging?.next;
+    }
+  }
+  return saida;
+}

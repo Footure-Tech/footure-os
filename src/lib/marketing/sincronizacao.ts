@@ -14,7 +14,7 @@
 //   auditoria (status ok · parcial · erro).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BuFunil, Database, KommoCampos, SyncExecucaoRow } from "@/lib/supabase/database.types";
-import { buscarInsightsMeta, type LinhaMeta, type NivelMeta } from "@/lib/integracoes/meta";
+import { buscarInsightsMeta, buscarMiniaturasMeta, type LinhaMeta, type NivelMeta } from "@/lib/integracoes/meta";
 import { buscarCamposLeadKommo, buscarFunisKommo, buscarPaginaLeadsKommo, normalizarLead } from "@/lib/integracoes/kommo";
 
 type Supa = SupabaseClient<Database>;
@@ -195,6 +195,49 @@ async function sincronizarConta(ctx: Contexto, conta: string, config: { backfill
   }
 }
 
+/** Bucket privado das miniaturas (0048). */
+export const BUCKET_CRIATIVOS = "marketing-criativos";
+/** Miniaturas baixadas por execução (cada uma ~0,5 s) — o resto fica para a próxima. */
+const LIMITE_MINIATURAS = 150;
+
+/**
+ * Miniaturas dos criativos (0048): para os anúncios com dados na janela recente
+ * que ainda não têm imagem guardada, busca o link na Meta, baixa e guarda no
+ * Storage. Falha aqui não afeta os números — só a ilustração.
+ */
+async function sincronizarMiniaturas(ctx: Contexto, conta: string) {
+  const [{ data: anuncios }, { data: guardados }] = await Promise.all([
+    ctx.supabase.from("mkt_meta_anuncio_dia").select("ad_id").eq("account_id", conta),
+    ctx.supabase.from("mkt_meta_criativos").select("ad_id").eq("account_id", conta),
+  ]);
+  const jaTem = new Set((guardados ?? []).map((g) => g.ad_id));
+  const pendentes = [...new Set((anuncios ?? []).map((a) => a.ad_id))].filter((id) => !jaTem.has(id)).slice(0, LIMITE_MINIATURAS);
+  if (!pendentes.length) return 0;
+  let gravadas = 0;
+  for (const m of await buscarMiniaturasMeta(conta, pendentes)) {
+    if (!temTempo(ctx)) break;
+    let caminho: string | null = null;
+    if (m.url) {
+      try {
+        const resposta = await fetch(m.url);
+        if (resposta.ok) {
+          caminho = `${conta}/${m.adId}.jpg`;
+          const { error } = await ctx.supabase.storage
+            .from(BUCKET_CRIATIVOS)
+            .upload(caminho, await resposta.arrayBuffer(), { contentType: resposta.headers.get("content-type") ?? "image/jpeg", upsert: true });
+          if (error) throw new Error(error.message);
+        }
+      } catch (e) {
+        console.error(`[marketing] miniatura do anúncio ${m.adId}:`, mensagem(e));
+        continue; // tenta de novo na próxima execução
+      }
+    }
+    await ctx.supabase.from("mkt_meta_criativos").upsert({ ad_id: m.adId, account_id: conta, creative_id: m.creativeId, imagem_path: caminho, atualizado_em: new Date().toISOString() });
+    gravadas++;
+  }
+  return gravadas;
+}
+
 // ───────────────────────────── Kommo ─────────────────────────────
 
 /** Funis e etapas (todo run) e a BU de cada funil; descobre o campo de primeiro toque. */
@@ -319,6 +362,15 @@ export async function sincronizarMarketing(
   for (const c of contas ?? []) {
     if (!temTempo(ctx)) break;
     resultados.push(await sincronizarConta(ctx, c.account_id, { backfillDesde: config.backfill_desde, janelaAnuncio: config.janela_anuncio_dias }));
+  }
+  // Por último, a ilustração dos criativos (não entra no resultado: não afeta números).
+  for (const c of contas ?? []) {
+    if (!temTempo(ctx)) break;
+    try {
+      await sincronizarMiniaturas(ctx, c.account_id);
+    } catch (e) {
+      console.error(`[marketing] miniaturas da conta ${c.account_id}:`, mensagem(e));
+    }
   }
   return resultados;
 }

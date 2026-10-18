@@ -549,6 +549,12 @@ export interface Database {
       mkt_kommo_leads: TableDef<LeadKommoRow, Omit<LeadKommoRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<LeadKommoRow>>;
       mkt_meta_campanha_dia: TableDef<MetaCampanhaDiaRow, Omit<MetaCampanhaDiaRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MetaCampanhaDiaRow>>;
       mkt_meta_anuncio_dia: TableDef<MetaAnuncioDiaRow, Omit<MetaAnuncioDiaRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MetaAnuncioDiaRow>>;
+      // supabase/migrations/0048_marketing_criativos.sql
+      mkt_meta_criativos: TableDef<
+        { ad_id: string; account_id: string; creative_id: string | null; imagem_path: string | null; atualizado_em: string },
+        { ad_id: string; account_id: string; creative_id?: string | null; imagem_path?: string | null; atualizado_em?: string },
+        Partial<{ creative_id: string | null; imagem_path: string | null; atualizado_em: string }>
+      >;
       mkt_sync_execucoes: TableDef<
         SyncExecucaoRow,
         Partial<SyncExecucaoRow> & { fonte: SyncExecucaoRow["fonte"]; tipo: SyncExecucaoRow["tipo"] },
