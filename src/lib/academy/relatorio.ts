@@ -53,6 +53,8 @@ export interface RelatorioCurso {
     /** Vendas com a taxa estimada pela forma de pagamento (ainda sem baixa no Bling). */
     taxasEstimadas: number;
     ticketMedio: number;
+    /** Líquido (após taxas e impostos) por venda. */
+    ticketMedioLiquido: number;
     faturamentoDia: number;
     emAberto: number;
   };
@@ -108,6 +110,7 @@ export function montarRelatorioCurso(vendasEdicao: VendaAcademy[], inicio: strin
       liquido: bruto - taxas - impostos,
       taxasEstimadas: vendas.filter((v) => !v.taxaReal).length,
       ticketMedio: vendas.length ? bruto / vendas.length : 0,
+      ticketMedioLiquido: vendas.length ? (bruto - taxas - impostos) / vendas.length : 0,
       faturamentoDia: bruto / dias,
       emAberto: vendas.filter((v) => v.situacao === "em_aberto").length,
     },

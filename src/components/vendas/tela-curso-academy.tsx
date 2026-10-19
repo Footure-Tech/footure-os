@@ -95,7 +95,22 @@ export function TelaCursoAcademy({
               valor={String(kpis.vendas)}
               apoio={kpis.emAberto ? `${kpis.emAberto} em aberto no Bling` : "vendas líquidas (sem canceladas)"}
             />
-            <KpiCard rotulo="Faturamento bruto" valor={formatarMoedaCompacta(kpis.bruto)} apoio={`ticket médio ${formatarMoeda(kpis.ticketMedio)}`} />
+            <KpiCard
+              rotulo="Ticket médio"
+              valor={formatarMoeda(kpis.ticketMedio)}
+              apoio="bruto por venda"
+              rodape={
+                <>
+                  Líquido <strong className="font-bold text-darkPurple1">{formatarMoeda(kpis.ticketMedioLiquido)}</strong>
+                  <span className="text-gray3"> por venda</span>
+                </>
+              }
+            />
+            <KpiCard
+              rotulo="Faturamento bruto"
+              valor={formatarMoedaCompacta(kpis.bruto)}
+              apoio={`média de ${formatarMoeda(kpis.faturamentoDia)}/dia em ${relatorio.dias} ${relatorio.dias === 1 ? "dia" : "dias"}`}
+            />
             <KpiCard
               rotulo="Líquido"
               valor={formatarMoedaCompacta(kpis.liquido)}
@@ -108,11 +123,6 @@ export function TelaCursoAcademy({
                   ]}
                 />
               }
-            />
-            <KpiCard
-              rotulo="Faturamento médio/dia"
-              valor={formatarMoedaCompacta(kpis.faturamentoDia)}
-              apoio={`em ${relatorio.dias} ${relatorio.dias === 1 ? "dia" : "dias"} · ${formatarMoeda(kpis.ticketMedio)} por venda`}
             />
           </GradeKpis>
           {kpis.taxasEstimadas > 0 && (
