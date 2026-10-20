@@ -66,9 +66,16 @@ async function carregarBase(supabase: Supa) {
   }
   const campanhaDoAnuncio = new Map(anuncios.filter((a) => a.campaign_id).map((a) => [a.ad_id, a.campaign_id!]));
 
+  // Desde ~20/09 a maioria dos leads chega ao Kommo só com ftp_utm_campaign (UTMs
+  // de último toque vazias): sem último toque, a campanha do primeiro toque é a
+  // única conhecida e vale como atribuição — sem isso esses leads somem da campanha.
   const ctxLead = (l: (typeof leads)[number]) => {
-    const ultimo = (l.campaign_id && campanha.get(l.campaign_id)) || (l.ad_id && campanhaDoAnuncio.has(l.ad_id) ? campanha.get(campanhaDoAnuncio.get(l.ad_id)!) : undefined);
-    const primeiro = (l.ftp_campaign_id && campanha.get(l.ftp_campaign_id)) || ultimo;
+    const primeiroToque = l.ftp_campaign_id ? campanha.get(l.ftp_campaign_id) : undefined;
+    const ultimo =
+      (l.campaign_id && campanha.get(l.campaign_id)) ||
+      (l.ad_id && campanhaDoAnuncio.has(l.ad_id) ? campanha.get(campanhaDoAnuncio.get(l.ad_id)!) : undefined) ||
+      primeiroToque;
+    const primeiro = primeiroToque || ultimo;
     return { ultimo: ultimo ?? null, primeiro: primeiro ?? null };
   };
 
