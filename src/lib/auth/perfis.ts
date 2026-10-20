@@ -7,4 +7,5 @@ export const ROTULO_PERFIL: Record<PapelUsuario, string> = {
   admin: "Diretoria",
   vendedor: "Comercial",
   juridico: "Jurídico",
+  marketing: "Marketing",
 };

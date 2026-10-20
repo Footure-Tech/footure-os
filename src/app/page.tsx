@@ -5,6 +5,7 @@ const AREA_POR_PAPEL = {
   vendedor: "/vendedor",
   juridico: "/juridico",
   admin: "/dashboard",
+  marketing: "/marketing",
 } as const;
 
 export default async function Home() {

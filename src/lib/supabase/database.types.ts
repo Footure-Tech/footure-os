@@ -4,7 +4,7 @@
 //   supabase gen types typescript --project-id <ref> > src/lib/supabase/database.types.ts
 // e conferir se nada divergiu do que está aqui.
 
-export type PapelUsuario = "vendedor" | "juridico" | "admin";
+export type PapelUsuario = "vendedor" | "juridico" | "admin" | "marketing";
 export type TipoCliente = "clube" | "agente";
 /** 0047 · Marketing */
 export type BuMarketing = "academy" | "footlink";

@@ -6,6 +6,7 @@ const AREA_POR_PAPEL: Record<string, string> = {
   vendedor: "/vendedor",
   juridico: "/juridico",
   admin: "/dashboard",
+  marketing: "/marketing",
 };
 
 // Sem sessão: login e "esqueci minha senha". Quem já está logado e abre uma

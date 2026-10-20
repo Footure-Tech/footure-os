@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { carregarInvestimentoRetorno, type FiltroMarketing, type Granularidade, type PeriodoMarketing } from "@/lib/marketing/consultas";
 import { carregarVendasAcademy } from "@/lib/academy/vendas";
 import { carregarVendas } from "@/lib/vendas/consultas";
@@ -20,7 +21,11 @@ export default async function RetornoPage({ searchParams }: PageProps<"/marketin
   };
   const granularidade: Granularidade = g === "semana" ? "semana" : "mes";
   const supabase = await createClient();
-  const [academy, footlink] = await Promise.all([carregarVendasAcademy(supabase), carregarVendas(supabase)]);
+  // Receita contábil pelo client de serviço: o perfil Marketing não lê as
+  // tabelas de vendas (RLS); a página já passou pelo exigirPapel do layout e
+  // só data e valor de cada venda seguem para a série.
+  const servico = createServiceClient();
+  const [academy, footlink] = await Promise.all([carregarVendasAcademy(servico), carregarVendas(servico)]);
   const dados = await carregarInvestimentoRetorno(supabase, filtro, granularidade, {
     academy: academy.vendas.map((v) => ({ data: v.dataVenda, valor: v.valorTotal })),
     footlink: footlink.vendas.map((v) => ({ data: v.dataFechamento, valor: v.valorTotal })),

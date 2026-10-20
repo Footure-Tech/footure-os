@@ -39,7 +39,7 @@ export async function definirBuFunilAction(pipelineId: number, bu: BuFunil): Pro
 export async function gerarSugestoesIaAction(chaveCampanha: string, periodo: "30d" | "90d"): Promise<ResultadoAcao & { id?: string }> {
   let id: string | undefined;
   const r = await executar(async () => {
-    const sessao = await exigirPapel("admin");
+    const sessao = await exigirPapel("admin", "marketing");
     id = await gerarSugestoesIa(await createClient(), chaveCampanha, periodo === "30d" ? "30d" : "90d", sessao.id);
     revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
   });
@@ -50,7 +50,7 @@ export async function gerarSugestoesIaAction(chaveCampanha: string, periodo: "30
 export async function iniciarVerificacaoRastreioAction(chaveCampanha: string): Promise<ResultadoAcao & { id?: string }> {
   let id: string | undefined;
   const r = await executar(async () => {
-    const sessao = await exigirPapel("admin");
+    const sessao = await exigirPapel("admin", "marketing");
     id = await iniciarVerificacao(await createClient(), chaveCampanha, sessao.id);
     revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
   });
@@ -61,7 +61,7 @@ export async function iniciarVerificacaoRastreioAction(chaveCampanha: string): P
 export async function verificarRastreioAction(verificacaoId: string, chaveCampanha: string): Promise<ResultadoAcao & { encontrado?: boolean; status?: string }> {
   let saida: { encontrado: boolean; status: string } | undefined;
   const r = await executar(async () => {
-    await exigirPapel("admin");
+    await exigirPapel("admin", "marketing");
     saida = await verificarAgora(await createClient(), verificacaoId);
     revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
   });
@@ -72,7 +72,7 @@ export async function verificarRastreioAction(verificacaoId: string, chaveCampan
 export async function relerParametrosRastreioAction(chaveCampanha: string): Promise<ResultadoAcao & { anuncios?: number; comErro?: number }> {
   let saida: { anuncios: number; comErro: number } | undefined;
   const r = await executar(async () => {
-    await exigirPapel("admin");
+    await exigirPapel("admin", "marketing");
     saida = await relerParametrosCampanha(await createClient(), chaveCampanha);
     revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
   });

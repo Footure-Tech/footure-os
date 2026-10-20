@@ -40,7 +40,7 @@ import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 // análise das mudanças com IA (pode levar ~1 min) — mais tempo que o padrão.
 export const maxDuration = 300;
 
-const VOLTAR_POR_PAPEL = { vendedor: "/vendedor", admin: "/admin", juridico: "/juridico" } as const;
+const VOLTAR_POR_PAPEL = { vendedor: "/vendedor", admin: "/admin", juridico: "/juridico", marketing: "/marketing" } as const;
 const ROTULO_PERFIL_CLIENTE = { clube: "Clube", agente: "Agente" } as const;
 const MODELO_CONTRATO = { clube: "Footlink Clube", agente: "Footlink Agente" } as const;
 

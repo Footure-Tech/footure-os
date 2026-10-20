@@ -3,7 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { IconType } from "react-icons";
-import { MdBusiness, MdCampaign, MdDashboard, MdSavings, MdDescription, MdGavel, MdHistoryEdu, MdPayments, MdManageAccounts, MdReceipt, MdSettings, MdTrendingUp, MdWarning } from "react-icons/md";
+import {
+  MdBusiness,
+  MdCampaign,
+  MdDashboard,
+  MdSavings,
+  MdDescription,
+  MdGavel,
+  MdHistoryEdu,
+  MdPayments,
+  MdManageAccounts,
+  MdReceipt,
+  MdSettings,
+  MdTrendingUp,
+  MdWarning,
+} from "react-icons/md";
 import { cn } from "@/lib/utils";
 import { SincronizarBlingButton } from "@/components/clientes/sincronizar-bling-button";
 import type { PapelUsuario } from "@/lib/supabase/database.types";
@@ -52,9 +66,26 @@ const PEDIDOS_ADMIN: SidebarLink = {
   href: "/admin",
   contador: "aprovacao",
 };
-const DASHBOARD: SidebarLink = { href: "/dashboard", label: "Dashboard", icon: MdDashboard, cor: "bg-iconPurple", exact: true };
-const CLIENTES: SidebarLink = { href: "/clientes", label: "Clientes", icon: MdBusiness, cor: "bg-iconBlue" };
-const VENDAS: SidebarLink = { href: "/vendas", label: "Vendas", icon: MdTrendingUp, cor: "bg-iconPurple", exact: true };
+const DASHBOARD: SidebarLink = {
+  href: "/dashboard",
+  label: "Dashboard",
+  icon: MdDashboard,
+  cor: "bg-iconPurple",
+  exact: true,
+};
+const CLIENTES: SidebarLink = {
+  href: "/clientes",
+  label: "Clientes",
+  icon: MdBusiness,
+  cor: "bg-iconBlue",
+};
+const VENDAS: SidebarLink = {
+  href: "/vendas",
+  label: "Vendas",
+  icon: MdTrendingUp,
+  cor: "bg-iconPurple",
+  exact: true,
+};
 const CONTRATOS: SidebarLink = {
   href: "/juridico",
   label: "Assinatura de contratos",
@@ -63,7 +94,13 @@ const CONTRATOS: SidebarLink = {
   contador: "contratos",
   exact: true,
 };
-const HISTORICO_MODELO: SidebarLink = { href: "/juridico/historico", label: "Histórico do modelo", icon: MdHistoryEdu, cor: "bg-iconGray", exact: true };
+const HISTORICO_MODELO: SidebarLink = {
+  href: "/juridico/historico",
+  label: "Histórico do modelo",
+  icon: MdHistoryEdu,
+  cor: "bg-iconGray",
+  exact: true,
+};
 const CONTRATOS_FINANCEIRO: SidebarLink = {
   href: "/financeiro",
   label: "Contratos",
@@ -79,8 +116,21 @@ const PAGAMENTOS: SidebarLink = {
   cor: "bg-iconGreen",
   exact: true,
 };
-const DESEMPENHO_CAMPANHAS: SidebarLink = { href: "/marketing", label: "Desempenho de campanhas", icon: MdCampaign, cor: "bg-iconBlue", exact: true, ativoEm: ["/marketing/campanhas/"] };
-const INVESTIMENTO_RETORNO: SidebarLink = { href: "/marketing/retorno", label: "Investimento × Retorno", icon: MdSavings, cor: "bg-iconGreen", exact: true };
+const DESEMPENHO_CAMPANHAS: SidebarLink = {
+  href: "/marketing",
+  label: "Desempenho de campanhas",
+  icon: MdCampaign,
+  cor: "bg-iconBlue",
+  exact: true,
+  ativoEm: ["/marketing/campanhas/"],
+};
+const INVESTIMENTO_RETORNO: SidebarLink = {
+  href: "/marketing/retorno",
+  label: "Investimento × Retorno",
+  icon: MdSavings,
+  cor: "bg-iconGreen",
+  exact: true,
+};
 const INADIMPLENCIA: SidebarLink = {
   href: "/inadimplencia",
   label: "Inadimplência",
@@ -98,9 +148,20 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
   vendedor: [
     { label: "Gestão", links: [DASHBOARD] },
     { label: "Comercial", links: [PEDIDOS_VENDEDOR, VENDAS, CLIENTES] },
-    { label: "Financeiro", links: [CONTRATOS_FINANCEIRO, PAGAMENTOS, INADIMPLENCIA] },
+    {
+      label: "Financeiro",
+      links: [CONTRATOS_FINANCEIRO, PAGAMENTOS, INADIMPLENCIA],
+    },
   ],
-  juridico: [{ label: "Jurídico", links: [{ ...CONTRATOS, ativoEm: ["/pedidos/"] }, HISTORICO_MODELO] }],
+  marketing: [
+    { label: "Marketing", links: [DESEMPENHO_CAMPANHAS, INVESTIMENTO_RETORNO] },
+  ],
+  juridico: [
+    {
+      label: "Jurídico",
+      links: [{ ...CONTRATOS, ativoEm: ["/pedidos/"] }, HISTORICO_MODELO],
+    },
+  ],
   admin: [
     { label: "Gestão", links: [DASHBOARD] },
     { label: "Marketing", links: [DESEMPENHO_CAMPANHAS, INVESTIMENTO_RETORNO] },
@@ -109,27 +170,56 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
       links: [PEDIDOS_ADMIN, VENDAS, CLIENTES],
     },
     { label: "Jurídico", links: [CONTRATOS, HISTORICO_MODELO] },
-    { label: "Financeiro", links: [CONTRATOS_FINANCEIRO, PAGAMENTOS, INADIMPLENCIA] },
+    {
+      label: "Financeiro",
+      links: [CONTRATOS_FINANCEIRO, PAGAMENTOS, INADIMPLENCIA],
+    },
     {
       label: "Administração",
       links: [
-        { href: "/admin/usuarios", label: "Usuários", icon: MdManageAccounts, cor: "bg-iconGray", exact: true },
-        { href: "/admin/configuracoes", label: "Configurações", icon: MdSettings, cor: "bg-iconGray", exact: true },
+        {
+          href: "/admin/usuarios",
+          label: "Usuários",
+          icon: MdManageAccounts,
+          cor: "bg-iconGray",
+          exact: true,
+        },
+        {
+          href: "/admin/configuracoes",
+          label: "Configurações",
+          icon: MdSettings,
+          cor: "bg-iconGray",
+          exact: true,
+        },
       ],
     },
   ],
 };
 
 /** Contexto Academy: sem as telas que só existem para o Footlink (pedido → contrato → assinatura → parcelas). */
-const SO_FOOTLINK = new Set([PEDIDOS_VENDEDOR.href, PEDIDOS_ADMIN.href, CONTRATOS.href, HISTORICO_MODELO.href, CONTRATOS_FINANCEIRO.href, PAGAMENTOS.href]);
+const SO_FOOTLINK = new Set([
+  PEDIDOS_VENDEDOR.href,
+  PEDIDOS_ADMIN.href,
+  CONTRATOS.href,
+  HISTORICO_MODELO.href,
+  CONTRATOS_FINANCEIRO.href,
+  PAGAMENTOS.href,
+]);
 
-function gruposDoContexto(grupos: SidebarGroup[], contexto: ContextoDados): SidebarGroup[] {
+function gruposDoContexto(
+  grupos: SidebarGroup[],
+  contexto: ContextoDados,
+): SidebarGroup[] {
   if (contexto === "footlink") return grupos;
   return grupos
     .map((g) => ({
       ...g,
       // O contador de inadimplentes é do Footlink.
-      links: g.links.filter((l) => !SO_FOOTLINK.has(l.href)).map((l) => (l.contador === "inadimplentes" ? { ...l, contador: undefined } : l)),
+      links: g.links
+        .filter((l) => !SO_FOOTLINK.has(l.href))
+        .map((l) =>
+          l.contador === "inadimplentes" ? { ...l, contador: undefined } : l,
+        ),
     }))
     .filter((g) => g.links.length > 0);
 }
@@ -161,13 +251,19 @@ export function SidebarNav({
       <nav className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto pb-4">
         {groups.map((group) => (
           <div key={group.label} className="flex flex-col gap-0.5">
-            <span className="hidden px-6 pb-1.5 text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase lg:block">{group.label}</span>
+            <span className="hidden px-6 pb-1.5 text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase lg:block">
+              {group.label}
+            </span>
             {group.links.map((link) => {
               const ativo =
-                (link.exact ? pathname === link.href : pathname.startsWith(link.href)) ||
+                (link.exact
+                  ? pathname === link.href
+                  : pathname.startsWith(link.href)) ||
                 !!link.ativoEm?.some((prefixo) => pathname.startsWith(prefixo));
               const Icon = link.icon;
-              const contagem = link.contador ? (contadores[link.contador] ?? 0) : 0;
+              const contagem = link.contador
+                ? (contadores[link.contador] ?? 0)
+                : 0;
               return (
                 <Link
                   key={link.href}
@@ -176,10 +272,16 @@ export function SidebarNav({
                   aria-current={ativo ? "page" : undefined}
                   className={cn(
                     "relative mx-2 flex items-center justify-center gap-3 rounded-lg border-l-[3px] border-transparent py-[9px] text-sm font-semibold text-darkPurple1 transition-all duration-200 hover:bg-surface-hover focus-visible:shadow-focus focus-visible:outline-none lg:mx-3 lg:justify-start lg:pr-3 lg:pl-[9px]",
-                    ativo && "border-lightPurple1 bg-nav-active text-nav-active-foreground hover:bg-nav-active",
+                    ativo &&
+                      "border-lightPurple1 bg-nav-active text-nav-active-foreground hover:bg-nav-active",
                   )}
                 >
-                  <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg text-white", link.cor)}>
+                  <span
+                    className={cn(
+                      "flex size-7 shrink-0 items-center justify-center rounded-lg text-white",
+                      link.cor,
+                    )}
+                  >
                     <Icon className="size-4" />
                   </span>
                   <span className="hidden flex-1 lg:inline">{link.label}</span>
@@ -201,17 +303,32 @@ export function SidebarNav({
         ))}
       </nav>
 
-      <div className="mx-5 hidden shrink-0 flex-col gap-2.5 rounded-[10px] border border-gray5 p-3.5 lg:flex">
-        <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Integrações</span>
-        {integracoes.map((integracao) => (
-          <div key={integracao.nome} title={integracao.detalhe} className="flex items-center gap-2 text-[13px]">
-            <span className={cn("size-2 shrink-0 rounded-full", integracao.falhou ? "bg-red" : integracao.ok ? "bg-green2" : "bg-gray3")} />
-            <span className="flex-1 font-semibold text-darkPurple1">{integracao.nome}</span>
-            <span className={cn("text-xs", integracao.falhou ? "text-red" : "text-gray3")}>{integracao.status}</span>
-          </div>
-        ))}
-        {podeSincronizar && <SincronizarBlingButton emAndamento={blingSincronizando} />}
-      </div>
+      {integracoes.length > 0 && (
+        <div className="mx-5 hidden shrink-0 flex-col gap-2.5 rounded-[10px] border border-gray5 p-3.5 lg:flex">
+          <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">
+            Integrações
+          </span>
+          {integracoes.map((integracao) => (
+            <div
+              key={integracao.nome}
+              title={integracao.detalhe}
+              className="flex items-center gap-2 text-[13px]"
+            >
+              <span
+                className={cn(
+                  "size-2 shrink-0 rounded-full",
+                  integracao.falhou ? "bg-red" : integracao.ok ? "bg-green2" : "bg-gray3",
+                )}
+              />
+              <span className="flex-1 font-semibold text-darkPurple1">
+                {integracao.nome}
+              </span>
+              <span className={cn("text-xs", integracao.falhou ? "text-red" : "text-gray3")}>{integracao.status}</span>
+            </div>
+          ))}
+          {podeSincronizar && <SincronizarBlingButton emAndamento={blingSincronizando} />}
+        </div>
+      )}
       {/* Trilho estreito: o card de integrações some, fica só o atalho. */}
       {podeSincronizar && (
         <div className="lg:hidden">
