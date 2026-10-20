@@ -6,8 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { exigirPapel } from "@/lib/auth/session";
-import { obterAccessTokenValido, sincronizarContatosBling } from "@/lib/integracoes/bling";
-import { sincronizarVendasAcademy } from "@/lib/academy/vendas";
+import { executarSincronizacaoBling, type ResultadoSincronizacaoBling } from "@/lib/integracoes/blingSincronizacao";
 
 const ClientePayloadSchema = z.object({
   clienteId: z.string().uuid().optional(), // presente = edição
@@ -104,23 +103,11 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
   redirect("/clientes");
 }
 
-export async function sincronizarContatosBlingAction(): Promise<Partial<Awaited<ReturnType<typeof sincronizarContatosBling>>> & ResultadoAcao> {
-  let resultado: Awaited<ReturnType<typeof sincronizarContatosBling>> | null = null;
+export async function sincronizarContatosBlingAction(): Promise<Partial<ResultadoSincronizacaoBling> & ResultadoAcao> {
+  let resultado: ResultadoSincronizacaoBling | null = null;
   const r = await executar(async () => {
-    await exigirPapel("vendedor", "admin");
-    const supabase = await createClient();
-    resultado = await sincronizarContatosBling(supabase);
-    // Vendas do Footure Academy (0042) — falha aqui não derruba a sincronização do Footlink.
-    try {
-      await sincronizarVendasAcademy(supabase, await obterAccessTokenValido(supabase));
-    } catch (erro) {
-      console.error("[academy] sincronização das vendas:", erro instanceof Error ? erro.message : erro);
-    }
-    revalidatePath("/clientes");
-    revalidatePath("/financeiro");
-    revalidatePath("/financeiro/pagamentos");
-    revalidatePath("/inadimplencia");
-    revalidatePath("/vendas");
+    const sessao = await exigirPapel("vendedor", "admin");
+    resultado = await executarSincronizacaoBling(await createClient(), { origem: "manual", disparadoPor: sessao.id });
   });
   return r.erro || !resultado ? r : resultado;
 }

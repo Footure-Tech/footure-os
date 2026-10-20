@@ -9,18 +9,23 @@ import { Button } from "@/components/ui/button";
 import { sincronizarContatosBlingAction } from "@/lib/clientes/serverActions";
 import { cn } from "@/lib/utils";
 
-// Sincronização sob demanda com o Bling (contatos + parcelas em cache).
+// Sincronização sob demanda com o Bling (contatos + parcelas em cache). Além
+// dela, o cron roda às 7h, 12h e 18h (/api/cron/bling); `emAndamento` = a
+// última execução registrada ainda está rodando (o servidor recusaria outra).
 // Fica só na sidebar (decisão de produto): "sidebar" = dentro do card de
 // Integrações; "icone" = trilho estreito da sidebar.
 export function SincronizarBlingButton({
   rotulo = "Sincronizar Bling",
   variante = "sidebar",
+  emAndamento = false,
 }: {
   rotulo?: string;
   variante?: "sidebar" | "icone";
+  emAndamento?: boolean;
 }) {
   const router = useRouter();
-  const [pendente, iniciar] = useTransition();
+  const [clicado, iniciar] = useTransition();
+  const pendente = clicado || emAndamento;
 
   function aoClicar() {
     iniciar(async () => {

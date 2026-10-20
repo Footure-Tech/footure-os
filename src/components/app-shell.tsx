@@ -3,12 +3,26 @@ import Link from "next/link";
 import { MdLock } from "react-icons/md";
 import type { SessaoUsuario } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { obterDadosShell } from "@/lib/shell/dadosShell";
+import { obterDadosShell, type StatusIntegracoes } from "@/lib/shell/dadosShell";
 import { lerContextoDados } from "@/lib/contexto/contexto";
 import { tempoDecorrido } from "@/lib/formatacao";
 import { AppBar } from "@/components/shell/app-bar";
 import { SidebarNav, type IntegracaoSidebar } from "@/components/sidebar-nav";
 import { TransicaoTela } from "@/components/shell/transicao-tela";
+
+// Bling: sincroniza por cron (7h, 12h, 18h) e pelo botão; a última execução
+// registrada (0053) diz se está rodando ou se falhou.
+function statusBling({ blingSincronizadoEm, blingUltimaExecucao: execucao }: StatusIntegracoes): IntegracaoSidebar {
+  if (execucao?.status === "rodando") return { nome: "Bling", ok: true, status: "Sincronizando…" };
+  if (execucao?.status === "erro") {
+    return { nome: "Bling", ok: false, falhou: true, status: `Falhou ${tempoDecorrido(execucao.iniciadoEm)}`, detalhe: execucao.erro ?? undefined };
+  }
+  return {
+    nome: "Bling",
+    ok: !!blingSincronizadoEm,
+    status: blingSincronizadoEm ? tempoDecorrido(blingSincronizadoEm) : "Nunca sincronizado",
+  };
+}
 
 // App shell do handoff: AppBar roxa no topo, sidebar por módulo e conteúdo
 // com padding de 30px. Contadores e integrações vêm de consultas reais
@@ -26,18 +40,15 @@ export async function AppShell({ sessao, children }: { sessao: SessaoUsuario; ch
       ok: integracoes.clicksignConfigurada,
       status: integracoes.clicksignConfigurada ? "Conectado" : "Não configurado",
     },
-    {
-      nome: "Bling",
-      ok: !!integracoes.blingSincronizadoEm,
-      status: integracoes.blingSincronizadoEm ? tempoDecorrido(integracoes.blingSincronizadoEm) : "Nunca sincronizado",
-    },
+    statusBling(integracoes),
   ];
+  const blingSincronizando = integracoes.blingUltimaExecucao?.status === "rodando";
 
   return (
     <div className="flex min-h-full flex-col bg-background">
       <AppBar sessao={sessao} contexto={comContexto ? contexto : null} />
       <div className="flex flex-1 items-start">
-        <SidebarNav papel={sessao.papel} contexto={contexto} contadores={contadores} integracoes={statusIntegracoes} />
+        <SidebarNav papel={sessao.papel} contexto={contexto} contadores={contadores} integracoes={statusIntegracoes} blingSincronizando={blingSincronizando} />
         <main className="min-w-0 flex-1 p-[30px]">
           <div className="max-w-[1500px]">
             {sessao.senhaTemporaria && (

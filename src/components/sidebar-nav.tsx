@@ -33,6 +33,9 @@ export interface IntegracaoSidebar {
   nome: string;
   ok: boolean;
   status: string;
+  /** Última execução falhou: ponto vermelho, mensagem no title. */
+  falhou?: boolean;
+  detalhe?: string;
 }
 
 const PEDIDOS_VENDEDOR: SidebarLink = {
@@ -140,11 +143,13 @@ export function SidebarNav({
   contexto,
   contadores,
   integracoes,
+  blingSincronizando = false,
 }: {
   papel: PapelUsuario;
   contexto: ContextoDados;
   contadores: Partial<Record<ChaveContador, number>>;
   integracoes: IntegracaoSidebar[];
+  blingSincronizando?: boolean;
 }) {
   const pathname = usePathname();
   const groups = gruposDoContexto(GRUPOS_POR_PAPEL[papel], contexto);
@@ -199,18 +204,18 @@ export function SidebarNav({
       <div className="mx-5 hidden shrink-0 flex-col gap-2.5 rounded-[10px] border border-gray5 p-3.5 lg:flex">
         <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Integrações</span>
         {integracoes.map((integracao) => (
-          <div key={integracao.nome} className="flex items-center gap-2 text-[13px]">
-            <span className={cn("size-2 shrink-0 rounded-full", integracao.ok ? "bg-green2" : "bg-gray3")} />
+          <div key={integracao.nome} title={integracao.detalhe} className="flex items-center gap-2 text-[13px]">
+            <span className={cn("size-2 shrink-0 rounded-full", integracao.falhou ? "bg-red" : integracao.ok ? "bg-green2" : "bg-gray3")} />
             <span className="flex-1 font-semibold text-darkPurple1">{integracao.nome}</span>
-            <span className="text-xs text-gray3">{integracao.status}</span>
+            <span className={cn("text-xs", integracao.falhou ? "text-red" : "text-gray3")}>{integracao.status}</span>
           </div>
         ))}
-        {podeSincronizar && <SincronizarBlingButton />}
+        {podeSincronizar && <SincronizarBlingButton emAndamento={blingSincronizando} />}
       </div>
       {/* Trilho estreito: o card de integrações some, fica só o atalho. */}
       {podeSincronizar && (
         <div className="lg:hidden">
-          <SincronizarBlingButton variante="icone" />
+          <SincronizarBlingButton variante="icone" emAndamento={blingSincronizando} />
         </div>
       )}
     </aside>

@@ -104,6 +104,17 @@ export type SyncExecucaoRow = {
   terminado_em: string | null;
   disparado_por: string | null;
 };
+/** 0053: execuções da sincronização com o Bling (cron e botão da sidebar). */
+export type BlingSyncExecucaoRow = {
+  id: string;
+  origem: "cron" | "manual";
+  status: "rodando" | "ok" | "erro";
+  resumo: Record<string, unknown> | null;
+  erro: string | null;
+  iniciado_em: string;
+  terminado_em: string | null;
+  disparado_por: string | null;
+};
 
 /** 0042/0043/0045: classificação dos produtos do Footure Academy. */
 export type CategoriaAcademy = "especializacao" | "livre" | "hotmart" | "assinatura" | "mensalidade" | "outro";
@@ -592,6 +603,12 @@ export interface Database {
         SyncExecucaoRow,
         Partial<SyncExecucaoRow> & { fonte: SyncExecucaoRow["fonte"]; tipo: SyncExecucaoRow["tipo"] },
         Partial<SyncExecucaoRow>
+      >;
+      // supabase/migrations/0053_bling_sync_execucoes.sql
+      bling_sync_execucoes: TableDef<
+        BlingSyncExecucaoRow,
+        Partial<BlingSyncExecucaoRow> & { origem: BlingSyncExecucaoRow["origem"] },
+        Partial<BlingSyncExecucaoRow>
       >;
       // supabase/migrations/0046_academy_parcelas.sql
       academy_parcelas: TableDef<

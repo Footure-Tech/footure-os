@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 // Badge do Footlink DS (components/core/Badge.jsx): 3px 10px, 11px/700
 // uppercase +0.04em. Tons literais do DS onde não há token.
-export type TomBadge = "purple" | "latam" | "fifa" | "brazil" | "global" | "active" | "inactive" | "pending" | "info";
+export type TomBadge = "purple" | "latam" | "fifa" | "brazil" | "global" | "active" | "inactive" | "pending" | "info" | "footlink" | "academy";
 
 const CLASSES_TOM: Record<TomBadge, string> = {
   purple: "bg-lightPurple4 text-purple-text",
@@ -15,6 +15,9 @@ const CLASSES_TOM: Record<TomBadge, string> = {
   inactive: "bg-dangerBg text-red",
   pending: "bg-orange3 text-[#ce9232]",
   info: "bg-info/15 text-info",
+  // Cores das marcas (logos Footlink e Academy).
+  footlink: "bg-footlink/12 text-footlink",
+  academy: "bg-academy/20 text-academy-text",
 };
 
 export function BadgeTom({ tom = "purple", children, className }: { tom?: TomBadge; children: ReactNode; className?: string }) {

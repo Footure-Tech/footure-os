@@ -2,7 +2,7 @@
 import type { BuMarketing } from "@/lib/supabase/database.types";
 import type { FiltroMarketing, Granularidade } from "@/lib/marketing/consultas";
 
-export const TOM_BU: Record<BuMarketing, "info" | "purple"> = { academy: "info", footlink: "purple" };
+export const TOM_BU: Record<BuMarketing, "academy" | "footlink"> = { academy: "academy", footlink: "footlink" };
 
 /** URL da Visão A com os filtros (os padrões ficam fora da URL; a BU vem do contexto da AppBar). */
 export function hrefDesempenho(f: FiltroMarketing) {

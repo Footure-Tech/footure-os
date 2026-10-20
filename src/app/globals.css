@@ -92,6 +92,8 @@
   --color-empty-state-icon: var(--empty-state-icon);
   --color-appbar: var(--surface-appbar);
   --color-footlink: var(--footlink);
+  --color-academy: var(--academy);
+  --color-academy-text: var(--academy-text);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -157,6 +159,9 @@
   --darkPurple1: #0a0a0a;
   /* Roxo restrito à linha de receita Footlink. */
   --footlink: #5a00ff;
+  /* Amarelo da marca Academy; o texto escurece pra manter contraste no claro. */
+  --academy: #ffc200;
+  --academy-text: #8a6100;
   /* Neutros */
   --black: #000000;
   --dark: #4a4a4a;
@@ -265,6 +270,8 @@
   --darkPurple1: #ffffff;
   --iconPurple: #3a3a3a;
   --footlink: #9d75ff;
+  --academy: #ffc200;
+  --academy-text: #ffcf3d;
   /* Não definido no DS — mantém o valor que o projeto já usava no escuro. */
   --lightGrey2: #1f1f1f;
   --surface-hover: #1f1f1f;

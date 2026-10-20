@@ -10,6 +10,8 @@ export interface StatusIntegracoes {
   clicksignConfigurada: boolean;
   /** Última sincronização de contatos do Bling (null = nunca sincronizado). */
   blingSincronizadoEm: string | null;
+  /** Última execução registrada (0053) — sinaliza falha e sincronização em andamento. */
+  blingUltimaExecucao: { status: "rodando" | "ok" | "erro"; erro: string | null; iniciadoEm: string } | null;
 }
 
 export interface DadosShell {
@@ -81,13 +83,21 @@ export async function obterDadosShell(supabase: Supa, papel: PapelUsuario, usuar
     .limit(1)
     .maybeSingle();
 
-  const [{ data: sincronizacao }] = await Promise.all([ultimaSincronizacao, ...tarefas]);
+  const ultimaExecucao = supabase
+    .from("bling_sync_execucoes")
+    .select("status, erro, iniciado_em")
+    .order("iniciado_em", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const [{ data: sincronizacao }, { data: execucao }] = await Promise.all([ultimaSincronizacao, ultimaExecucao, ...tarefas]);
 
   return {
     contadores,
     integracoes: {
       clicksignConfigurada: !!process.env.CLICKSIGN_API_URL && !!process.env.CLICKSIGN_ACCESS_TOKEN,
       blingSincronizadoEm: sincronizacao?.sincronizado_em ?? null,
+      blingUltimaExecucao: execucao ? { status: execucao.status, erro: execucao.erro, iniciadoEm: execucao.iniciado_em } : null,
     },
   };
 }
