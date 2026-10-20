@@ -317,6 +317,36 @@ export async function buscarPaginaMensagensKommo(pagina: number, direcao: "entra
 }
 
 /**
+ * Notas comuns (texto livre do vendedor) dos leads, em lotes de 50 ids, 4
+ * lotes por vez (o Kommo aceita ~7 requisições/s). Fonte das objeções nas
+ * Estratégias por IA da aba Funil.
+ */
+export async function buscarNotasLeadsKommo(leadIds: number[]): Promise<Array<{ lead_id: number; texto: string; criado_em: string }>> {
+  const notas: Array<{ lead_id: number; texto: string; criado_em: string }> = [];
+  const lotes: number[][] = [];
+  for (let i = 0; i < leadIds.length; i += 50) lotes.push(leadIds.slice(i, i + 50));
+  const lerLote = async (ids: number[]) => {
+    const filtro = Object.fromEntries(ids.map((id, n) => [`filter[entity_id][${n}]`, id]));
+    for (let page = 1; page <= 10; page++) {
+      const data = await getKommo<{ _embedded?: { notes?: Array<{ entity_id: number; note_type: string; created_at: number; params?: { text?: string } }> } }>("/leads/notes", {
+        limit: 250,
+        page,
+        "filter[note_type][0]": "common",
+        ...filtro,
+      });
+      const lista = data?._embedded?.notes ?? [];
+      for (const n of lista) {
+        const texto = (n.params?.text ?? "").trim();
+        if (texto) notas.push({ lead_id: n.entity_id, texto, criado_em: new Date(n.created_at * 1000).toISOString() });
+      }
+      if (lista.length < 250) break;
+    }
+  };
+  for (let i = 0; i < lotes.length; i += 4) await Promise.all(lotes.slice(i, i + 4).map(lerLote));
+  return notas;
+}
+
+/**
  * Lead de teste da verificação de rastreio: procura o contato pelo código (no
  * nome ou e-mail preenchido no formulário) e devolve o lead mais recente dele,
  * com os campos personalizados por id.

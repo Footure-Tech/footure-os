@@ -14,15 +14,29 @@ const MENSAGENS = [
 // Animação enquanto a IA gera as sugestões (30 s a 1 min): cartões de criativo
 // com varredura e mensagens que se alternam — mesmo espírito do loader da
 // análise de contratos.
-export function GerandoSugestoes() {
+export function GerandoSugestoes({
+  mensagens = MENSAGENS,
+  intervaloMs = 6000,
+  aviso = "Leva de 30 segundos a 1 minuto. Não feche esta janela.",
+}: {
+  mensagens?: string[];
+  /** Tempo entre uma mensagem e a próxima (a última fica até o fim). */
+  intervaloMs?: number;
+  aviso?: string;
+}) {
   const [i, setI] = useState(0);
+  const [segundos, setSegundos] = useState(0);
   useEffect(() => {
     const t = setInterval(
-      () => setI((n) => Math.min(n + 1, MENSAGENS.length - 1)),
-      6000,
+      () => setI((n) => Math.min(n + 1, mensagens.length - 1)),
+      intervaloMs,
     );
-    return () => clearInterval(t);
-  }, []);
+    const relogio = setInterval(() => setSegundos((s) => s + 1), 1000);
+    return () => {
+      clearInterval(t);
+      clearInterval(relogio);
+    };
+  }, [mensagens.length, intervaloMs]);
   return (
     <div
       className="flex flex-col items-center gap-5 py-10"
@@ -75,9 +89,10 @@ export function GerandoSugestoes() {
           </g>
         ))}
       </svg>
-      <p className="text-sm font-semibold text-darkPurple1">{MENSAGENS[i]}</p>
+      <p className="text-sm font-semibold text-darkPurple1">{mensagens[i]}</p>
       <p className="text-xs text-gray3">
-        Leva de 30 segundos a 1 minuto. Não feche esta janela.
+        {aviso} · {Math.floor(segundos / 60)}:
+        {String(segundos % 60).padStart(2, "0")}
       </p>
     </div>
   );

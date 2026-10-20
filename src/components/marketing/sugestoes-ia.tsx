@@ -9,8 +9,15 @@ import {
   MdChevronRight,
   MdWarningAmber,
 } from "react-icons/md";
-import type { RodadaSugestoes } from "@/lib/marketing/sugestoesIa";
-import { gerarSugestoesIaAction } from "@/lib/marketing/serverActions";
+import type {
+  ResultadoSugestoes,
+  RodadaSugestoes,
+} from "@/lib/marketing/sugestoesIa";
+import type { ResultadoEstrategias } from "@/lib/marketing/estrategiasIa";
+import {
+  gerarEstrategiasFunilAction,
+  gerarSugestoesIaAction,
+} from "@/lib/marketing/serverActions";
 import { exigirSucesso } from "@/lib/resultadoAcao";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,23 +60,75 @@ type Visao =
   | { tipo: "confirmar" }
   | { tipo: "gerando" };
 
-// "Sugestões por IA" do detalhe da campanha: modal com o histórico de rodadas,
-// o detalhe de cada uma e o botão de gerar (com confirmação se a última tem
-// menos de 7 dias). Ao final, o custo da rodada e o consumo das sugestões.
+/** Sugestões de criativos (aba Criativos) ou Estratégias do funil (aba Funil). */
+type Props =
+  | {
+      tipo?: "criativos";
+      periodo: "30d" | "90d";
+      rodadas: RodadaSugestoes<ResultadoSugestoes>[];
+    }
+  | {
+      tipo: "funil";
+      periodo: "30d" | "90d" | "tudo";
+      rodadas: RodadaSugestoes<ResultadoEstrategias>[];
+    };
+
+const TEXTOS = {
+  criativos: {
+    botao: "Sugestões por IA",
+    titulo: "Sugestões por IA",
+    descricao:
+      "Interpretação e ideias geradas pelo Claude a partir dos números e das imagens da campanha — para validação humana; as regras continuam sendo a base da decisão.",
+    gerar: "Gerar novas sugestões",
+    vazio: "Nenhuma sugestão gerada ainda",
+    mensagens: undefined,
+    intervaloMs: undefined,
+    aviso: undefined,
+    // A geração dura ~1 min: a janela fica aberta até o fim.
+    fechavelGerando: false,
+  },
+  funil: {
+    botao: "Estratégias por IA",
+    titulo: "Estratégias por IA",
+    descricao:
+      "Objeções, abordagem e ajustes gerados pelo Claude a partir do funil da campanha e das notas dos vendedores no Kommo — para validação humana.",
+    gerar: "Gerar novas estratégias",
+    vazio: "Nenhuma estratégia gerada ainda",
+    mensagens: [
+      "Lendo o funil da campanha…",
+      "Comparando cada passagem com a média da BU…",
+      "Lendo as notas dos vendedores…",
+      "Mapeando as objeções…",
+      "Escrevendo o roteiro de abordagem…",
+      "Quase lá — organizando as estratégias…",
+    ],
+    intervaloMs: 25_000,
+    aviso:
+      "Leva de 2 a 4 minutos. Pode fechar a janela: a rodada aparece no histórico quando terminar",
+    // A geração dura minutos: dá para fechar e voltar (a action segue rodando).
+    fechavelGerando: true,
+  },
+} as const;
+
+// "Sugestões por IA" (aba Criativos) e "Estratégias por IA" (aba Funil) do
+// detalhe da campanha: modal com o histórico de rodadas, o detalhe de cada
+// uma e o botão de gerar (com confirmação se a última tem menos de 7 dias).
+// Ao final, o custo da rodada e o consumo das sugestões.
 export function SugestoesIa({
   chave,
-  periodo,
-  rodadas,
   recenteId,
   consumo,
-}: {
+  ...props
+}: Props & {
   chave: string;
-  periodo: "30d" | "90d";
-  rodadas: RodadaSugestoes[];
   /** Rodada com menos de 7 dias (calculado no servidor): gerar outra pede confirmação. */
   recenteId: string | null;
   consumo: Consumo;
 }) {
+  const tipo = props.tipo ?? "criativos";
+  const textos = TEXTOS[tipo];
+  const rodadas: RodadaSugestoes<ResultadoSugestoes | ResultadoEstrategias>[] =
+    props.rodadas;
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [visao, setVisao] = useState<Visao>({ tipo: "lista" });
@@ -82,7 +141,9 @@ export function SugestoesIa({
     iniciar(async () => {
       try {
         const { id } = exigirSucesso(
-          await gerarSugestoesIaAction(chave, periodo),
+          props.tipo === "funil"
+            ? await gerarEstrategiasFunilAction(chave, props.periodo)
+            : await gerarSugestoesIaAction(chave, props.periodo),
         );
         router.refresh();
         setVisao(id ? { tipo: "detalhe", id, nova: true } : { tipo: "lista" });
@@ -104,32 +165,35 @@ export function SugestoesIa({
     <Dialog
       open={aberto}
       onOpenChange={(v) => {
-        if (gerando && !v) return;
+        if (gerando && !v && !textos.fechavelGerando) return;
         setAberto(v);
-        if (v) setVisao({ tipo: "lista" });
+        // Reaberta durante a geração, continua mostrando o andamento.
+        if (v && !gerando) setVisao({ tipo: "lista" });
       }}
     >
       <DialogTrigger
         render={<Button type="button" variant="secondary" size="sm" />}
       >
         <MdAutoAwesome className="size-4" />
-        Sugestões por IA
+        {textos.botao}
       </DialogTrigger>
       <DialogContent
         className="flex max-h-[88vh] flex-col sm:max-w-3xl"
-        showCloseButton={!gerando}
+        showCloseButton={!gerando || textos.fechavelGerando}
       >
         <DialogHeader>
-          <DialogTitle>Sugestões por IA</DialogTitle>
-          <DialogDescription>
-            Interpretação e ideias geradas pelo Claude a partir dos números e
-            das imagens da campanha — para validação humana; as regras continuam
-            sendo a base da decisão.
-          </DialogDescription>
+          <DialogTitle>{textos.titulo}</DialogTitle>
+          <DialogDescription>{textos.descricao}</DialogDescription>
         </DialogHeader>
 
         <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
-          {visao.tipo === "gerando" && <GerandoSugestoes />}
+          {visao.tipo === "gerando" && (
+            <GerandoSugestoes
+              mensagens={textos.mensagens && [...textos.mensagens]}
+              intervaloMs={textos.intervaloMs}
+              aviso={textos.aviso}
+            />
+          )}
 
           {visao.tipo === "confirmar" && recente && (
             <div className="flex flex-col items-center gap-4 py-8 text-center">
@@ -164,7 +228,7 @@ export function SugestoesIa({
                 <EstadoVazio
                   compacto
                   icone={MdAutoAwesome}
-                  titulo="Nenhuma sugestão gerada ainda"
+                  titulo={textos.vazio}
                   descricao="Gere a primeira rodada para esta campanha."
                 />
               ) : (
@@ -188,8 +252,11 @@ export function SugestoesIa({
                           </span>
                           <span className="truncate text-xs text-gray3">
                             {r.autor ?? "—"} · período {data(r.de)} a{" "}
-                            {data(r.ate)} · {r.resultado.conceitos.length}{" "}
-                            conceitos · {usd(r.custoUsd)}
+                            {data(r.ate)} ·{" "}
+                            {"objecoes" in r.resultado
+                              ? `${r.resultado.objecoes.length} objeções`
+                              : `${r.resultado.conceitos.length} conceitos`}{" "}
+                            · {usd(r.custoUsd)}
                           </span>
                         </span>
                         <MdChevronRight className="size-[18px] shrink-0 text-gray3" />
@@ -201,7 +268,22 @@ export function SugestoesIa({
             </div>
           )}
 
-          {visao.tipo === "detalhe" && rodada && <DetalheRodada r={rodada} />}
+          {visao.tipo === "detalhe" && !rodada && (
+            <p className="py-10 text-center text-sm text-gray3">
+              Carregando a rodada…
+            </p>
+          )}
+          {visao.tipo === "detalhe" &&
+            rodada &&
+            ("objecoes" in rodada.resultado ? (
+              <DetalheEstrategia
+                r={rodada as RodadaSugestoes<ResultadoEstrategias>}
+              />
+            ) : (
+              <DetalheRodada
+                r={rodada as RodadaSugestoes<ResultadoSugestoes>}
+              />
+            ))}
         </div>
 
         {!gerando && visao.tipo !== "confirmar" && (
@@ -244,7 +326,7 @@ export function SugestoesIa({
                 }
               >
                 <MdAutoAwesome className="size-4" />
-                Gerar novas sugestões
+                {textos.gerar}
               </Button>
             </div>
           </div>
@@ -272,7 +354,7 @@ function Secao({
 }
 
 /** Detalhe de uma rodada: diagnóstico, leitura dos criativos, conceitos, testes e alertas. */
-function DetalheRodada({ r }: { r: RodadaSugestoes }) {
+function DetalheRodada({ r }: { r: RodadaSugestoes<ResultadoSugestoes> }) {
   const s = r.resultado;
   return (
     <div className="flex flex-col gap-5 text-sm text-gray2">
@@ -352,6 +434,163 @@ function DetalheRodada({ r }: { r: RodadaSugestoes }) {
             </li>
           ))}
         </ol>
+      </Secao>
+      {s.alertas.length > 0 && (
+        <Secao titulo="Alertas de dados">
+          <ul className="flex flex-col gap-1.5 rounded-lg bg-orange3 p-3 text-[13px] text-[#8a5a12]">
+            {s.alertas.map((a) => (
+              <li key={a} className="flex gap-2">
+                <MdWarningAmber className="mt-0.5 size-4 shrink-0" />
+                {a}
+              </li>
+            ))}
+          </ul>
+        </Secao>
+      )}
+    </div>
+  );
+}
+
+const ROTULO_ONDE: Record<
+  ResultadoEstrategias["ajustesCampanha"][number]["onde"],
+  string
+> = {
+  publico: "Público",
+  criativo: "Criativo",
+  pagina: "Página",
+  oferta: "Oferta",
+};
+const ROTULO_QUEM: Record<
+  ResultadoEstrategias["acoesComerciais"][number]["quem"],
+  string
+> = {
+  sdr: "SDR",
+  closer: "Closer",
+  gestao: "Gestão comercial",
+  marketing: "Marketing",
+};
+
+/** Mensagem pronta para o WhatsApp: fundo destacado e quebras de linha preservadas. */
+function MensagemWhats({ texto }: { texto: string }) {
+  return (
+    <p className="rounded-lg bg-green5/60 px-3 py-2 text-[13px] whitespace-pre-line text-darkPurple1">
+      {texto}
+    </p>
+  );
+}
+
+/** Detalhe de uma rodada de estratégias do funil. */
+function DetalheEstrategia({
+  r,
+}: {
+  r: RodadaSugestoes<ResultadoEstrategias>;
+}) {
+  const s = r.resultado;
+  return (
+    <div className="flex flex-col gap-5 text-sm text-gray2">
+      <p className="text-xs text-gray3">
+        Gerada em {quando(r.criadoEm)} por {r.autor ?? "—"} · período{" "}
+        {data(r.de)} a {data(r.ate)}
+      </p>
+      <Secao titulo="Leitura do funil">
+        <p className="leading-relaxed">{s.leitura}</p>
+        <ul className="flex flex-col gap-2 text-[13px]">
+          {s.gargalos.map((g) => (
+            <li key={g.etapa} className="rounded-lg border border-gray5 p-3">
+              <strong className="font-bold text-darkPurple1">{g.etapa}:</strong>{" "}
+              {g.causa} <span className="text-gray3">({g.evidencia})</span>
+            </li>
+          ))}
+        </ul>
+      </Secao>
+      <Secao titulo="Objeções e como quebrar">
+        <div className="flex flex-col gap-3">
+          {s.objecoes.map((o) => (
+            <article
+              key={o.objecao}
+              className="flex flex-col gap-1.5 rounded-lg border border-gray5 p-3 text-[13px]"
+            >
+              <strong className="text-sm font-bold text-darkPurple1">
+                “{o.objecao}”
+              </strong>
+              <span className="text-xs text-gray3">
+                Onde aparece: {o.sinais}
+              </span>
+              <span>
+                <b className="font-semibold text-darkPurple1">Como quebrar:</b>{" "}
+                {o.comoQuebrar}
+              </span>
+              <MensagemWhats texto={o.mensagemExemplo} />
+            </article>
+          ))}
+        </div>
+      </Secao>
+      <Secao titulo="Abordagem no WhatsApp">
+        <span className="text-xs font-bold text-darkPurple1">
+          Primeira mensagem humana
+        </span>
+        <MensagemWhats texto={s.abordagem.primeiraMensagem} />
+        <span className="mt-2 text-xs font-bold text-darkPurple1">
+          Cadência para quem não respondeu
+        </span>
+        <ol className="flex flex-col gap-2">
+          {s.abordagem.cadencia.map((c) => (
+            <li key={c.quando} className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-gray3">
+                {c.quando}
+              </span>
+              <MensagemWhats texto={c.mensagem} />
+            </li>
+          ))}
+        </ol>
+        <span className="mt-2 text-xs font-bold text-darkPurple1">
+          Perguntas para qualificar na conversa
+        </span>
+        <ul className="list-disc pl-5 text-[13px]">
+          {s.abordagem.perguntasDescoberta.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
+      </Secao>
+      <Secao titulo="Ajustes na campanha">
+        <ul className="flex flex-col gap-2 text-[13px]">
+          {s.ajustesCampanha.map((a) => (
+            <li key={a.acao}>
+              <strong className="font-semibold text-darkPurple1">
+                {ROTULO_ONDE[a.onde]}:
+              </strong>{" "}
+              {a.acao} <span className="text-gray3">— {a.porQue}</span>
+            </li>
+          ))}
+        </ul>
+      </Secao>
+      <Secao titulo="Ações do time comercial">
+        <ul className="flex flex-col gap-2 text-[13px]">
+          {s.acoesComerciais.map((a) => (
+            <li key={a.acao}>
+              <strong className="font-semibold text-darkPurple1">
+                {ROTULO_QUEM[a.quem]}:
+              </strong>{" "}
+              {a.acao} <span className="text-gray3">— {a.impacto}</span>
+            </li>
+          ))}
+        </ul>
+      </Secao>
+      <Secao titulo="Perguntas de qualificação para o formulário">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {s.perguntasFormulario.map((p) => (
+            <article
+              key={p.pergunta}
+              className="flex flex-col gap-1.5 rounded-lg border border-gray5 p-3 text-[13px]"
+            >
+              <strong className="text-sm font-bold text-darkPurple1">
+                {p.pergunta}
+              </strong>
+              <span>{p.opcoes.join(" · ")}</span>
+              <span className="text-xs text-gray3">{p.porQue}</span>
+            </article>
+          ))}
+        </div>
       </Secao>
       {s.alertas.length > 0 && (
         <Secao titulo="Alertas de dados">

@@ -529,6 +529,16 @@ export async function carregarFunil(supabase: Supa, chaveCampanha: string, perio
     qualidade: { criativos: ordenar(porCriativo), publicos: ordenar(porPublico) },
     origem: { fonte: lista(fonte), funil: lista(funil), toque },
     conexao: { campanha: conexaoCampanha, bu: conexaoBu, parados, diasParado: DIAS_PARADO },
+    /** Leads da safra da campanha, compactos (contexto das notas nas Estratégias por IA; a tela não usa). */
+    leadsDaSafra: daCampanha.map((l) => {
+      const degrau = maximo.get(l.lead_id) ?? -1;
+      return {
+        leadId: l.lead_id,
+        estagio: (Object.entries(DEGRAU).find(([, d]) => d === degrau)?.[0] ?? null) as EstagioFunil | null,
+        desfecho: l.is_won ? ("ganho" as const) : l.is_lost ? ("perdido" as const) : ("em andamento" as const),
+        motivo: l.is_lost ? (l.loss_reason_id === null ? "sem motivo" : (nomeMotivo.get(l.loss_reason_id) ?? null)) : null,
+      };
+    }),
   };
 }
 

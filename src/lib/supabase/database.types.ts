@@ -129,7 +129,9 @@ export type SugestaoIaRow = {
   id: string;
   campanha_chave: string;
   campanha_nome: string;
-  periodo: "30d" | "90d";
+  /** 0056: 'criativos' (aba Criativos) ou 'funil' (Estratégias por IA da aba Funil). */
+  tipo: "criativos" | "funil";
+  periodo: "30d" | "90d" | "tudo";
   periodo_de: string;
   periodo_ate: string;
   modelo: string;
@@ -654,7 +656,7 @@ export interface Database {
         Partial<{ creative_id: string | null; imagem_path: string | null; urls_destino: string[] | null; url_tags: string | null; status_anuncio: string | null; atualizado_em: string }>
       >;
       // supabase/migrations/0049_marketing_sugestoes_ia.sql
-      mkt_sugestoes_ia: TableDef<SugestaoIaRow, Omit<SugestaoIaRow, "id" | "criado_em"> & { id?: string; criado_em?: string }, Partial<SugestaoIaRow>>;
+      mkt_sugestoes_ia: TableDef<SugestaoIaRow, Omit<SugestaoIaRow, "id" | "criado_em" | "tipo"> & { id?: string; criado_em?: string; tipo?: SugestaoIaRow["tipo"] }, Partial<SugestaoIaRow>>;
       // supabase/migrations/0050_marketing_rastreio.sql
       mkt_verificacoes_rastreio: TableDef<VerificacaoRastreioRow, Omit<VerificacaoRastreioRow, "id" | "criado_em" | "status" | "resultado" | "lead_id" | "verificado_em"> & Partial<VerificacaoRastreioRow>, Partial<VerificacaoRastreioRow>>;
       mkt_sync_execucoes: TableDef<

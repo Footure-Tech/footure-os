@@ -196,11 +196,11 @@ export async function gerarSugestoesIa(supabase: Supa, chaveCampanha: string, pe
   return data.id;
 }
 
-export interface RodadaSugestoes {
+export interface RodadaSugestoes<R = ResultadoSugestoes> {
   id: string;
   criadoEm: string;
   autor: string | null;
-  periodo: "30d" | "90d";
+  periodo: "30d" | "90d" | "tudo";
   de: string;
   ate: string;
   modelo: string;
@@ -208,14 +208,18 @@ export interface RodadaSugestoes {
   tokensSaida: number;
   custoUsd: number;
   imagens: string[];
-  resultado: ResultadoSugestoes;
+  resultado: R;
 }
 
-/** Histórico de rodadas de uma campanha (mais recente primeiro) e o consumo das sugestões no sistema. */
-export async function carregarSugestoesIa(supabase: Supa, chaveCampanha: string) {
+/**
+ * Histórico de rodadas de uma campanha (mais recente primeiro) e o consumo
+ * das sugestões no sistema (criativos + funil). `tipo`: as Sugestões da aba
+ * Criativos ou as Estratégias da aba Funil (0056).
+ */
+export async function carregarSugestoesIa<R = ResultadoSugestoes>(supabase: Supa, chaveCampanha: string, tipo: "criativos" | "funil" = "criativos") {
   const inicioMes = `${new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }).slice(0, 7)}-01`;
   const [{ data: rodadas }, { data: todas }, { data: perfis }] = await Promise.all([
-    supabase.from("mkt_sugestoes_ia").select("*").eq("campanha_chave", chaveCampanha).order("criado_em", { ascending: false }),
+    supabase.from("mkt_sugestoes_ia").select("*").eq("campanha_chave", chaveCampanha).eq("tipo", tipo).order("criado_em", { ascending: false }),
     supabase.from("mkt_sugestoes_ia").select("custo_usd, criado_em"),
     supabase.from("profiles").select("user_id, nome"),
   ]);
@@ -223,7 +227,7 @@ export async function carregarSugestoesIa(supabase: Supa, chaveCampanha: string)
   const custos = (todas ?? []).map((r) => ({ custo: Number(r.custo_usd), data: r.criado_em }));
   return {
     rodadas: (rodadas ?? []).map(
-      (r): RodadaSugestoes => ({
+      (r): RodadaSugestoes<R> => ({
         id: r.id,
         criadoEm: r.criado_em,
         autor: r.criado_por ? (nome.get(r.criado_por) ?? null) : null,
@@ -235,7 +239,7 @@ export async function carregarSugestoesIa(supabase: Supa, chaveCampanha: string)
         tokensSaida: r.tokens_saida,
         custoUsd: Number(r.custo_usd),
         imagens: ((r.entrada as { imagensEnviadas?: string[] } | null)?.imagensEnviadas ?? []) as string[],
-        resultado: r.resultado as ResultadoSugestoes,
+        resultado: r.resultado as R,
       }),
     ),
     // Última rodada com menos de 7 dias: gerar outra pede confirmação.

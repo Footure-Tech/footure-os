@@ -19,6 +19,10 @@ import { StatusPill } from "@/components/ds/status-pill";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import type { PeriodoMarketing } from "@/lib/marketing/consultas";
+import type { carregarSugestoesIa } from "@/lib/marketing/sugestoesIa";
+import type { ResultadoEstrategias } from "@/lib/marketing/estrategiasIa";
+import { SugestoesIa } from "@/components/marketing/sugestoes-ia";
 
 type Funil = NonNullable<Awaited<ReturnType<typeof carregarFunil>>>;
 
@@ -48,7 +52,17 @@ const ACAO: Record<Hipotese, string> = {
 // Marketing · detalhe da campanha · aba Funil: a campanha da impressão à venda,
 // comparada com a média da BU, com o gargalo, as perdas, a qualidade por
 // criativo e público e a origem dos leads (safra: leads criados no período).
-export function TelaFunil({ funil }: { funil: Funil }) {
+export function TelaFunil({
+  funil,
+  chave,
+  periodo,
+  estrategias,
+}: {
+  funil: Funil;
+  chave: string;
+  periodo: PeriodoMarketing;
+  estrategias: Awaited<ReturnType<typeof carregarSugestoesIa<ResultadoEstrategias>>> | null;
+}) {
   const semLeads = funil.contagem.leads === 0;
   return (
     <div className="flex flex-col gap-6">
@@ -60,7 +74,25 @@ export function TelaFunil({ funil }: { funil: Funil }) {
         </div>
       </CardModulo>
 
-      <CardModulo icone={MdTroubleshoot} cor="bg-iconYellow" titulo="Onde está o gargalo" className="min-w-0">
+      <CardModulo
+        icone={MdTroubleshoot}
+        cor="bg-iconYellow"
+        titulo="Onde está o gargalo"
+        className="min-w-0"
+        extra={
+          estrategias &&
+          !semLeads && (
+            <SugestoesIa
+              tipo="funil"
+              chave={chave}
+              periodo={periodo === "30d" || periodo === "tudo" ? periodo : "90d"}
+              rodadas={estrategias.rodadas}
+              recenteId={estrategias.recenteId}
+              consumo={estrategias.consumo}
+            />
+          )
+        }
+      >
         <p className="-mt-1 text-sm text-gray2">Cada passagem do funil aponta uma causa provável. A comparação é com a média de todas as campanhas da BU no mesmo período.</p>
         <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {funil.cartoes.map((c) => (

@@ -7,6 +7,7 @@ import { executar, type ResultadoAcao } from "@/lib/acaoServidor";
 import type { BuFunil, EstagioFunil } from "@/lib/supabase/database.types";
 import { sincronizarMarketing, type ResultadoSincronizacao } from "./sincronizacao";
 import { gerarSugestoesIa } from "./sugestoesIa";
+import { gerarEstrategiasFunil } from "./estrategiasIa";
 import { ESTAGIOS_FUNIL } from "./funil";
 import { iniciarVerificacao, relerParametrosCampanha, verificarAgora } from "./verificacaoRastreio";
 
@@ -54,6 +55,17 @@ export async function gerarSugestoesIaAction(chaveCampanha: string, periodo: "30
   const r = await executar(async () => {
     const sessao = await exigirPapel("admin", "marketing");
     id = await gerarSugestoesIa(await createClient(), chaveCampanha, periodo === "30d" ? "30d" : "90d", sessao.id);
+    revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
+  });
+  return r.erro ? r : { id };
+}
+
+/** "Gerar novas estratégias" (Estratégias por IA da aba Funil): uma chamada ao Claude, gravada com tokens e custo. */
+export async function gerarEstrategiasFunilAction(chaveCampanha: string, periodo: "30d" | "90d" | "tudo"): Promise<ResultadoAcao & { id?: string }> {
+  let id: string | undefined;
+  const r = await executar(async () => {
+    const sessao = await exigirPapel("admin", "marketing");
+    id = await gerarEstrategiasFunil(await createClient(), chaveCampanha, periodo === "30d" || periodo === "tudo" ? periodo : "90d", sessao.id);
     revalidatePath(`/marketing/campanhas/${encodeURIComponent(chaveCampanha)}`);
   });
   return r.erro ? r : { id };

@@ -33,8 +33,12 @@ import {
 import { VerificacaoPontaAPonta } from "@/components/marketing/verificacao-ponta-a-ponta";
 import { VISUAL_VERIFICACAO } from "@/lib/marketing/rastreio";
 import type { VerificacaoRastreio } from "@/lib/marketing/verificacaoRastreio";
-import type { carregarSugestoesIa } from "@/lib/marketing/sugestoesIa";
+import type {
+  carregarSugestoesIa,
+  ResultadoSugestoes,
+} from "@/lib/marketing/sugestoesIa";
 import type { carregarFunil } from "@/lib/marketing/consultasFunil";
+import type { ResultadoEstrategias } from "@/lib/marketing/estrategiasIa";
 import { TelaFunil } from "@/components/marketing/tela-funil";
 
 type Dados = NonNullable<Awaited<ReturnType<typeof carregarCriativos>>>;
@@ -74,13 +78,19 @@ export function TelaCampanha({
   sugestoes,
   verificacoes,
   funil,
+  estrategias,
 }: {
   dados: Dados;
   periodo: PeriodoMarketing;
   visao: VisaoCampanha;
-  sugestoes: Awaited<ReturnType<typeof carregarSugestoesIa>> | null;
+  sugestoes: Awaited<
+    ReturnType<typeof carregarSugestoesIa<ResultadoSugestoes>>
+  > | null;
   verificacoes: VerificacaoRastreio[];
   funil: Awaited<ReturnType<typeof carregarFunil>> | null;
+  estrategias: Awaited<
+    ReturnType<typeof carregarSugestoesIa<ResultadoEstrategias>>
+  > | null;
 }) {
   const { campanha } = dados;
   const voltar =
@@ -134,7 +144,12 @@ export function TelaCampanha({
       />
 
       {visao === "funil" && funil ? (
-        <TelaFunil funil={funil} />
+        <TelaFunil
+          funil={funil}
+          chave={campanha.chave}
+          periodo={periodo}
+          estrategias={estrategias}
+        />
       ) : (
         <>
           <CardModulo
