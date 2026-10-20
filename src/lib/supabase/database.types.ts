@@ -17,7 +17,12 @@ export interface KommoCampos {
   ftp_utm_campaign: number | null;
   /** URL de entrada do primeiro toque (com as UTMs); descoberto pelo nome, como ftp_utm_campaign. */
   landing_page?: number | null;
+  /** 0054: conjunto de anúncios e origem do lead (campos do formulário). */
+  utm_adset_id?: number;
+  utm_source?: number;
 }
+/** 0054: estágio padrão de uma etapa do Kommo (visão Funil). */
+export type EstagioFunil = "entrada" | "tentativa" | "conectado" | "qualificado" | "oferta" | "negociacao" | "ganho" | "perdido";
 export interface LimiaresMarketing {
   roas_escalar: number;
   roas_piso: number;
@@ -45,6 +50,24 @@ export type LeadKommoRow = {
   fechado_em: string | null;
   atualizado_em: string | null;
   dias_ate_venda: number | null;
+  /** 0054 */
+  loss_reason_id: number | null;
+  responsavel_id: number | null;
+  tags: string[] | null;
+  adset_id: string | null;
+  utm_source: string | null;
+  sincronizado_em: string;
+};
+/** 0054: uma mudança de etapa de um lead (evento lead_status_changed do Kommo). */
+export type MovimentoKommoRow = {
+  evento_id: string;
+  lead_id: number;
+  criado_em: string;
+  pipeline_de: number | null;
+  status_de: number | null;
+  pipeline_para: number | null;
+  status_para: number | null;
+  autor_id: number | null;
   sincronizado_em: string;
 };
 type MetaDiaBase = {
@@ -57,6 +80,11 @@ type MetaDiaBase = {
   frequency: number;
   leads: number;
   purchases: number;
+  /** 0054: topo do funil (do actions_raw). */
+  link_clicks: number;
+  landing_page_views: number;
+  checkouts: number;
+  video_views: number;
   actions_raw: unknown;
   sincronizado_em: string;
 };
@@ -584,10 +612,14 @@ export interface Database {
         Partial<{ nome: string; bu: BuFunil; bu_manual: boolean; sincronizado_em: string }>
       >;
       mkt_kommo_etapas: TableDef<
-        { pipeline_id: number; status_id: number; nome: string; sort: number; eh_mql: boolean },
-        { pipeline_id: number; status_id: number; nome: string; sort?: number; eh_mql?: boolean },
-        Partial<{ nome: string; sort: number; eh_mql: boolean }>
+        { pipeline_id: number; status_id: number; nome: string; sort: number; eh_mql: boolean; estagio: EstagioFunil | null; estagio_manual: boolean },
+        { pipeline_id: number; status_id: number; nome: string; sort?: number; eh_mql?: boolean; estagio?: EstagioFunil | null; estagio_manual?: boolean },
+        Partial<{ nome: string; sort: number; eh_mql: boolean; estagio: EstagioFunil | null; estagio_manual: boolean }>
       >;
+      // supabase/migrations/0054_marketing_funil.sql
+      mkt_kommo_motivos_perda: TableDef<{ id: number; nome: string; sort: number }, { id: number; nome: string; sort?: number }, Partial<{ nome: string; sort: number }>>;
+      mkt_kommo_usuarios: TableDef<{ id: number; nome: string; ativo: boolean }, { id: number; nome: string; ativo?: boolean }, Partial<{ nome: string; ativo: boolean }>>;
+      mkt_kommo_movimentos: TableDef<MovimentoKommoRow, Omit<MovimentoKommoRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MovimentoKommoRow>>;
       mkt_kommo_leads: TableDef<LeadKommoRow, Omit<LeadKommoRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<LeadKommoRow>>;
       mkt_meta_campanha_dia: TableDef<MetaCampanhaDiaRow, Omit<MetaCampanhaDiaRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MetaCampanhaDiaRow>>;
       mkt_meta_anuncio_dia: TableDef<MetaAnuncioDiaRow, Omit<MetaAnuncioDiaRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MetaAnuncioDiaRow>>;

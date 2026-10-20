@@ -2,7 +2,8 @@
 // marketing/kommo_pull.py: MQL detectado por funil (etapa com "mql" no nome),
 // venda = 142, perdida = 143, receita = price com "Valor Total" como
 // alternativa e chaves de atribuição numéricas (utm_ad_id → utm_content,
-// utm_campaign_id). Só busca e normaliza; quem grava é
+// utm_campaign_id). Também motivo de perda, responsável, tags e os movimentos
+// entre etapas (visão Funil, 0054). Só busca e normaliza; quem grava é
 // src/lib/marketing/sincronizacao.ts. KOMMO_SUBDOMAIN e KOMMO_TOKEN em env.
 import type { KommoCampos } from "@/lib/supabase/database.types";
 
@@ -97,7 +98,9 @@ interface LeadBruto {
   created_at?: number;
   closed_at?: number | null;
   updated_at?: number;
+  responsible_user_id?: number | null;
   custom_fields_values?: Array<{ field_id: number; values?: Array<{ value?: unknown }> }> | null;
+  _embedded?: { loss_reason?: Array<{ id: number }>; tags?: Array<{ name?: string }> };
 }
 
 export interface LeadNormalizado {
@@ -116,10 +119,15 @@ export interface LeadNormalizado {
   fechado_em: string | null;
   atualizado_em: string | null;
   dias_ate_venda: number | null;
+  loss_reason_id: number | null;
+  responsavel_id: number | null;
+  tags: string[] | null;
+  adset_id: string | null;
+  utm_source: string | null;
 }
 
-const campo = (lead: LeadBruto, id: number | null) =>
-  id === null ? "" : String(lead.custom_fields_values?.find((c) => c.field_id === id)?.values?.[0]?.value ?? "").trim();
+const campo = (lead: LeadBruto, id: number | null | undefined) =>
+  id == null ? "" : String(lead.custom_fields_values?.find((c) => c.field_id === id)?.values?.[0]?.value ?? "").trim();
 const numerico = (v: string) => /^\d+$/.test(v);
 
 /** utm_content da URL de entrada (landing_page): o anúncio do primeiro toque. */
@@ -156,6 +164,8 @@ export function normalizarLead(lead: LeadBruto, campos: KommoCampos, sortDe: Map
     const vt = campo(lead, campos.valor_total).replace(",", ".");
     receita = /^\d+(\.\d+)?$/.test(vt) ? Number(vt) : 0;
   }
+  const adset = campo(lead, campos.utm_adset_id);
+  const tags = (lead._embedded?.tags ?? []).map((t) => t.name?.trim() ?? "").filter(Boolean);
   const dias = ganho && lead.closed_at && lead.created_at ? Math.round(((lead.closed_at - lead.created_at) / 86400) * 10) / 10 : null;
 
   return {
@@ -174,6 +184,11 @@ export function normalizarLead(lead: LeadBruto, campos: KommoCampos, sortDe: Map
     fechado_em: isoDeEpoch(lead.closed_at),
     atualizado_em: isoDeEpoch(lead.updated_at),
     dias_ate_venda: dias,
+    loss_reason_id: perdido ? (lead._embedded?.loss_reason?.[0]?.id ?? null) : null,
+    responsavel_id: lead.responsible_user_id || null,
+    tags: tags.length ? tags : null,
+    adset_id: numerico(adset) ? adset : null,
+    utm_source: campo(lead, campos.utm_source).toLowerCase() || null,
   };
 }
 
@@ -186,10 +201,71 @@ export async function buscarPaginaLeadsKommo(pagina: number, filtro: { campo: "c
   const data = await getKommo<{ _embedded?: { leads?: LeadBruto[] } }>("/leads", {
     limit: 250,
     page: pagina,
+    with: "loss_reason",
     [`filter[${filtro.campo}][from]`]: filtro.desde,
   });
   const leads = data?._embedded?.leads ?? [];
   return leads.length ? leads : null;
+}
+
+/** Motivos de perda cadastrados (Falta de Conexão, Fora do Perfil…). */
+export async function buscarMotivosPerdaKommo(): Promise<Array<{ id: number; nome: string; sort: number }>> {
+  const data = await getKommo<{ _embedded?: { loss_reasons?: Array<{ id: number; name: string; sort?: number }> } }>("/leads/loss_reasons");
+  return (data?._embedded?.loss_reasons ?? []).map((m) => ({ id: m.id, nome: m.name, sort: m.sort ?? 0 }));
+}
+
+/** Usuários da conta (responsável pelo lead). */
+export async function buscarUsuariosKommo(): Promise<Array<{ id: number; nome: string; ativo: boolean }>> {
+  const data = await getKommo<{ _embedded?: { users?: Array<{ id: number; name: string; rights?: { is_active?: boolean } }> } }>("/users", { limit: 250 });
+  return (data?._embedded?.users ?? []).map((u) => ({ id: u.id, nome: u.name, ativo: u.rights?.is_active ?? true }));
+}
+
+export interface MovimentoKommo {
+  evento_id: string;
+  lead_id: number;
+  criado_em: string;
+  pipeline_de: number | null;
+  status_de: number | null;
+  pipeline_para: number | null;
+  status_para: number | null;
+  autor_id: number | null;
+}
+
+type StatusDoEvento = Array<{ lead_status?: { id?: number; pipeline_id?: number } }> | undefined;
+
+/**
+ * Uma página (100) de mudanças de etapa de lead criadas na janela [de, ate]
+ * (epoch s). O Kommo devolve do mais recente para o mais antigo: a janela
+ * precisa estar fechada no passado para a paginação ser estável (o incremental
+ * relê a margem e o upsert pelo id do evento evita duplicar). null = acabou.
+ */
+export async function buscarPaginaMovimentosKommo(pagina: number, de: number, ate: number): Promise<MovimentoKommo[] | null> {
+  const data = await getKommo<{
+    _embedded?: { events?: Array<{ id: string; entity_id: number; created_at: number; created_by?: number; value_before?: StatusDoEvento; value_after?: StatusDoEvento }> };
+  }>("/events", {
+    limit: 100,
+    page: pagina,
+    "filter[type]": "lead_status_changed",
+    "filter[entity]": "lead",
+    "filter[created_at][from]": de,
+    "filter[created_at][to]": ate,
+  });
+  const eventos = data?._embedded?.events ?? [];
+  if (!eventos.length) return null;
+  return eventos.map((e) => {
+    const antes = e.value_before?.[0]?.lead_status;
+    const depois = e.value_after?.[0]?.lead_status;
+    return {
+      evento_id: String(e.id),
+      lead_id: e.entity_id,
+      criado_em: new Date(e.created_at * 1000).toISOString(),
+      pipeline_de: antes?.pipeline_id ?? null,
+      status_de: antes?.id ?? null,
+      pipeline_para: depois?.pipeline_id ?? null,
+      status_para: depois?.id ?? null,
+      autor_id: e.created_by ?? null,
+    };
+  });
 }
 
 /**

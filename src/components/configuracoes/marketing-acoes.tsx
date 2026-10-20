@@ -4,8 +4,9 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { MdSync } from "react-icons/md";
 import { toast } from "sonner";
-import type { BuFunil } from "@/lib/supabase/database.types";
-import { definirBuFunilAction, sincronizarMarketingAction } from "@/lib/marketing/serverActions";
+import type { BuFunil, EstagioFunil } from "@/lib/supabase/database.types";
+import { definirBuFunilAction, definirEstagioEtapaAction, sincronizarMarketingAction } from "@/lib/marketing/serverActions";
+import { ESTAGIOS_FUNIL, ROTULO_ESTAGIO } from "@/lib/marketing/funil";
 import { exigirSucesso } from "@/lib/resultadoAcao";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -73,6 +74,46 @@ export function SeletorBuFunil({ pipelineId, bu }: { pipelineId: number; bu: BuF
         {(Object.keys(ROTULO_BU) as BuFunil[]).map((k) => (
           <SelectItem key={k} value={k}>
             {ROTULO_BU[k]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+const SEM_ESTAGIO = "sem";
+const ROTULO_OPCAO_ESTAGIO: Record<string, string> = { ...ROTULO_ESTAGIO, [SEM_ESTAGIO]: "Fora do funil" };
+
+/** Estágio padrão de uma etapa (visão Funil); a escolha manual não é sobrescrita pela sincronização. */
+export function SeletorEstagioEtapa({ pipelineId, statusId, estagio }: { pipelineId: number; statusId: number; estagio: EstagioFunil | null }) {
+  const router = useRouter();
+  const [pendente, iniciar] = useTransition();
+  const atual = estagio ?? SEM_ESTAGIO;
+  return (
+    <Select
+      items={ROTULO_OPCAO_ESTAGIO}
+      value={atual}
+      disabled={pendente}
+      onValueChange={(v) =>
+        v &&
+        v !== atual &&
+        iniciar(async () => {
+          try {
+            exigirSucesso(await definirEstagioEtapaAction(pipelineId, statusId, v === SEM_ESTAGIO ? null : (v as EstagioFunil)));
+            router.refresh();
+          } catch (erro) {
+            toast.error(erro instanceof Error ? erro.message : "Falha ao salvar o estágio da etapa.");
+          }
+        })
+      }
+    >
+      <SelectTrigger className="h-8 w-[200px]" aria-label="Estágio da etapa">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {[...ESTAGIOS_FUNIL, SEM_ESTAGIO].map((k) => (
+          <SelectItem key={k} value={k}>
+            {ROTULO_OPCAO_ESTAGIO[k]}
           </SelectItem>
         ))}
       </SelectContent>

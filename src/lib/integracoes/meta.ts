@@ -11,7 +11,15 @@ const versao = () => process.env.META_API_VERSION || "v26.0";
 
 /** Janelas de atribuição: "clique de 7 dias, visualização de 1 dia". */
 const JANELAS = ["7d_click", "1d_view"] as const;
-const ACOES = { leads: "offsite_conversion.fb_pixel_lead", purchases: "offsite_conversion.fb_pixel_purchase" } as const;
+const ACOES = {
+  leads: "offsite_conversion.fb_pixel_lead",
+  purchases: "offsite_conversion.fb_pixel_purchase",
+  // Topo do funil (0054).
+  linkClicks: "link_click",
+  landingPageViews: "landing_page_view",
+  checkouts: "offsite_conversion.fb_pixel_initiate_checkout",
+  videoViews: "video_view",
+} as const;
 
 const CAMPOS_CAMPANHA = ["date_start", "campaign_id", "campaign_name", "spend", "impressions", "frequency", "actions", "cost_per_action_type"];
 const CAMPOS_ANUNCIO = [...CAMPOS_CAMPANHA, "adset_id", "adset_name", "ad_id", "ad_name"];
@@ -51,6 +59,10 @@ export interface LinhaMeta {
   frequency: number;
   leads: number;
   purchases: number;
+  link_clicks: number;
+  landing_page_views: number;
+  checkouts: number;
+  video_views: number;
   actions_raw: Acao[];
 }
 
@@ -96,6 +108,10 @@ export function normalizarInsight(bruto: InsightBruto): LinhaMeta {
     frequency: num(bruto.frequency),
     leads: extrairAcao(bruto.actions, ACOES.leads),
     purchases: extrairAcao(bruto.actions, ACOES.purchases),
+    link_clicks: extrairAcao(bruto.actions, ACOES.linkClicks),
+    landing_page_views: extrairAcao(bruto.actions, ACOES.landingPageViews),
+    checkouts: extrairAcao(bruto.actions, ACOES.checkouts),
+    video_views: extrairAcao(bruto.actions, ACOES.videoViews),
     // Guardado para auditoria e eventos que ainda não mapeamos.
     actions_raw: bruto.actions ?? [],
   };

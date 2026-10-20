@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { exigirPapel } from "@/lib/auth/session";
 import { executar, type ResultadoAcao } from "@/lib/acaoServidor";
-import type { BuFunil } from "@/lib/supabase/database.types";
+import type { BuFunil, EstagioFunil } from "@/lib/supabase/database.types";
 import { sincronizarMarketing, type ResultadoSincronizacao } from "./sincronizacao";
 import { gerarSugestoesIa } from "./sugestoesIa";
+import { ESTAGIOS_FUNIL } from "./funil";
 import { iniciarVerificacao, relerParametrosCampanha, verificarAgora } from "./verificacaoRastreio";
 
 /** Prazo da sincronização manual: a página de Configurações tem maxDuration de 300 s. */
@@ -30,6 +31,18 @@ export async function definirBuFunilAction(pipelineId: number, bu: BuFunil): Pro
     if (!["academy", "footlink", "fora"].includes(bu)) throw new Error("BU inválida.");
     const supabase = await createClient();
     const { error } = await supabase.from("mkt_kommo_funis").update({ bu, bu_manual: true }).eq("pipeline_id", pipelineId);
+    if (error) throw new Error(error.message);
+    revalidatePath("/admin/configuracoes");
+  });
+}
+
+/** Estágio padrão de uma etapa do Kommo (visão Funil), definido à mão; null = fora do funil. */
+export async function definirEstagioEtapaAction(pipelineId: number, statusId: number, estagio: EstagioFunil | null): Promise<ResultadoAcao> {
+  return executar(async () => {
+    await exigirPapel("admin");
+    if (estagio !== null && !ESTAGIOS_FUNIL.includes(estagio)) throw new Error("Estágio inválido.");
+    const supabase = await createClient();
+    const { error } = await supabase.from("mkt_kommo_etapas").update({ estagio, estagio_manual: true }).eq("pipeline_id", pipelineId).eq("status_id", statusId);
     if (error) throw new Error(error.message);
     revalidatePath("/admin/configuracoes");
   });

@@ -1,15 +1,17 @@
 // Situação do módulo de Marketing para a Diretoria (card em Configurações):
-// credenciais, última execução de cada fonte/conta, funis e campos do Kommo.
+// credenciais, última execução de cada fonte/conta, funis (com o estágio
+// padrão de cada etapa) e campos do Kommo.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, SyncExecucaoRow } from "@/lib/supabase/database.types";
 
 type Supa = SupabaseClient<Database>;
 
 export async function carregarStatusMarketing(supabase: Supa) {
-  const [{ data: config, error }, { data: contas }, { data: funis }, { data: execucoes }, { count: leads }] = await Promise.all([
+  const [{ data: config, error }, { data: contas }, { data: funis }, { data: etapas }, { data: execucoes }, { count: leads }] = await Promise.all([
     supabase.from("mkt_configuracao").select("*").eq("id", true).maybeSingle(),
     supabase.from("mkt_contas").select("*").order("bu"),
     supabase.from("mkt_kommo_funis").select("*").order("nome"),
+    supabase.from("mkt_kommo_etapas").select("*").order("sort"),
     supabase.from("mkt_sync_execucoes").select("*").order("iniciado_em", { ascending: false }).limit(12),
     supabase.from("mkt_kommo_leads").select("*", { count: "exact", head: true }),
   ]);
@@ -21,6 +23,7 @@ export async function carregarStatusMarketing(supabase: Supa) {
     config,
     contas: contas ?? [],
     funis: funis ?? [],
+    etapas: etapas ?? [],
     execucoes: execucoes ?? [],
     ultimaPorFonte: ultima,
     totalLeads: leads ?? 0,

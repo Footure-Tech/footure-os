@@ -10,12 +10,16 @@
 // • Incremental: Meta reescreve os últimos 7 dias (a Meta revisa conversões na
 //   janela de 7 dias de clique); Kommo pega leads ATUALIZADOS desde a última
 //   execução boa − 1 dia (lead antigo que virou venda também entra).
+// • Movimentos entre etapas do Kommo (visão Funil, 0054): execução própria
+//   (conta = 'movimentos'); a carga do histórico vai semana a semana desde
+//   backfill_desde e o incremental relê desde a última execução boa − 1 dia.
 // • A falha de uma conta/fonte não impede as outras; cada uma tem sua linha de
 //   auditoria (status ok · parcial · erro).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   BuFunil,
   Database,
+  EstagioFunil,
   KommoCampos,
   SyncExecucaoRow,
 } from "@/lib/supabase/database.types";
@@ -28,8 +32,13 @@ import {
 import {
   buscarCamposLeadKommo,
   buscarFunisKommo,
+  buscarMotivosPerdaKommo,
   buscarPaginaLeadsKommo,
+  buscarPaginaMovimentosKommo,
+  buscarUsuariosKommo,
   normalizarLead,
+  STATUS_GANHO,
+  STATUS_PERDIDO,
 } from "@/lib/integracoes/kommo";
 
 type Supa = SupabaseClient<Database>;
@@ -59,6 +68,28 @@ export function buPeloNomeDoFunil(nome: string): BuFunil {
   if (n.startsWith("footure pro") || n.startsWith("footure insights"))
     return "fora";
   return "academy";
+}
+
+/**
+ * Estágio padrão de uma etapa pelo nome (visão Funil). Os 18 funis do Kommo
+ * nomeiam as etapas cada um do seu jeito; a ordem das regras importa
+ * ("Conectado - negociação" é negociação, "Não conectado" é tentativa).
+ * Etapa sem regra fica sem estágio até alguém definir em Configurações.
+ */
+export function estagioPelaEtapa(nome: string, statusId: number): EstagioFunil | null {
+  if (statusId === STATUS_GANHO) return "ganho";
+  if (statusId === STATUS_PERDIDO) return "perdido";
+  const n = nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  if (/descartad|desqualific/.test(n)) return "perdido";
+  if (/vendid|fechados|^pago$|efetuou pagamento|assinatura de contrato|onboarding/.test(n)) return "ganho";
+  if (/agendar/.test(n)) return "qualificado";
+  if (/sql|negocia|venda iminente|chance de fechar|leads quentes|link para|com link|aguardando pagamento/.test(n)) return "negociacao";
+  if (/reuni|no show|oferta|proposta/.test(n)) return "oferta";
+  if (/mql|tem perfil|qualificad|longo prazo/.test(n)) return "qualificado";
+  if (/nao conect|sem conex|nao respond|tentativa|contato inicial|contato com|reengaj|disparo/.test(n)) return "tentativa";
+  if (/conectad|conexao inicial|conversa iniciada|interessad|material enviado/.test(n)) return "conectado";
+  if (/sem contato|entrada|novos? leads?|base geral|inscrit|prospect/.test(n)) return "entrada";
+  return null;
 }
 
 export interface ResultadoSincronizacao {
@@ -157,6 +188,10 @@ function linhasCampanha(
       frequency: l.frequency,
       leads: l.leads,
       purchases: l.purchases,
+      link_clicks: l.link_clicks,
+      landing_page_views: l.landing_page_views,
+      checkouts: l.checkouts,
+      video_views: l.video_views,
       actions_raw: l.actions_raw,
       sincronizado_em: agora,
     }));
@@ -183,6 +218,10 @@ function linhasAnuncio(
       frequency: l.frequency,
       leads: l.leads,
       purchases: l.purchases,
+      link_clicks: l.link_clicks,
+      landing_page_views: l.landing_page_views,
+      checkouts: l.checkouts,
+      video_views: l.video_views,
       actions_raw: l.actions_raw,
       sincronizado_em: agora,
     }));
@@ -480,11 +519,36 @@ async function sincronizarFunis(ctx: Contexto, campos: KommoCampos) {
       sincronizado_em: agora,
     })),
   );
+  const { data: etapasAtuais } = await ctx.supabase
+    .from("mkt_kommo_etapas")
+    .select("pipeline_id, status_id, estagio")
+    .eq("estagio_manual", true);
+  const estagioManual = new Map(
+    (etapasAtuais ?? []).map((e) => [`${e.pipeline_id}:${e.status_id}`, e.estagio]),
+  );
   await upsertEmLotes(
     ctx.supabase,
     "mkt_kommo_etapas",
-    funis.flatMap((f) => f.etapas),
+    funis.flatMap((f) =>
+      f.etapas.map((e) => {
+        const chave = `${e.pipeline_id}:${e.status_id}`;
+        return {
+          ...e,
+          estagio: estagioManual.has(chave)
+            ? estagioManual.get(chave)!
+            : estagioPelaEtapa(e.nome, e.status_id),
+          estagio_manual: estagioManual.has(chave),
+        };
+      }),
+    ),
   );
+  // Motivos de perda e usuários (responsável do lead): listas curtas, todo run.
+  const [motivos, usuarios] = await Promise.all([
+    buscarMotivosPerdaKommo(),
+    buscarUsuariosKommo(),
+  ]);
+  await upsertEmLotes(ctx.supabase, "mkt_kommo_motivos_perda", motivos);
+  await upsertEmLotes(ctx.supabase, "mkt_kommo_usuarios", usuarios);
 
   // ftp_utm_campaign e landing_page: IDs descobertos pelo nome na primeira vez.
   if (campos.ftp_utm_campaign === null || campos.landing_page == null) {
@@ -517,7 +581,7 @@ async function sincronizarFunis(ctx: Contexto, campos: KommoCampos) {
 }
 
 /** Versão da normalização dos leads (normalizarLead); subir força um backfill novo. */
-const VERSAO_LEADS_KOMMO = 2;
+const VERSAO_LEADS_KOMMO = 3;
 
 async function sincronizarKommo(
   ctx: Contexto,
@@ -545,7 +609,8 @@ async function sincronizarKommo(
   }
 
   // Backfill concluído numa versão anterior da normalização é refeito do zero
-  // (v2: anúncio pela landing_page) — os leads antigos não passam no incremental.
+  // (v2: anúncio pela landing_page; v3: motivo de perda, responsável, tags,
+  // conjunto e utm_source) — os leads antigos não passam no incremental.
   const ultimo = await ultimoBackfill(ctx, "kommo", null);
   const versaoAntiga = ultimo?.status === "ok" && ((ultimo.cursor as { versao?: number } | null)?.versao ?? 1) < VERSAO_LEADS_KOMMO;
   const anterior = versaoAntiga ? null : ultimo;
@@ -581,6 +646,7 @@ async function sincronizarKommo(
       .from("mkt_sync_execucoes")
       .select("iniciado_em")
       .eq("fonte", "kommo")
+      .is("conta", null)
       .eq("status", "ok")
       .order("iniciado_em", { ascending: false })
       .limit(1)
@@ -656,6 +722,124 @@ async function sincronizarKommo(
   }
 }
 
+/** Execução dos movimentos entre etapas (fonte kommo, conta própria). */
+const CONTA_MOVIMENTOS = "movimentos";
+const SEMANA_S = 7 * 86_400;
+
+/** Grava todas as páginas de mudanças de etapa da janela [de, ate] (epoch s). */
+async function puxarMovimentos(ctx: Contexto, de: number, ate: number) {
+  let linhas = 0;
+  for (let pagina = 1; ; pagina++) {
+    const movimentos = await buscarPaginaMovimentosKommo(pagina, de, ate);
+    if (!movimentos) break;
+    const agora = new Date().toISOString();
+    await upsertEmLotes(
+      ctx.supabase,
+      "mkt_kommo_movimentos",
+      movimentos.map((m) => ({ ...m, sincronizado_em: agora })),
+    );
+    linhas += movimentos.length;
+    await esperar(200);
+  }
+  return linhas;
+}
+
+/**
+ * Mudanças de etapa dos leads (visão Funil). Carga do histórico semana a
+ * semana desde backfill_desde (cada semana inteira numa vez: a paginação do
+ * Kommo só é estável com a janela fechada); pronta, o incremental relê desde
+ * a última execução boa − 1 dia até o início desta.
+ */
+async function sincronizarMovimentosKommo(
+  ctx: Contexto,
+  backfillDesde: string,
+): Promise<ResultadoSincronizacao> {
+  const agora = Math.floor(Date.now() / 1000);
+  const anterior = await ultimoBackfill(ctx, "kommo", CONTA_MOVIMENTOS);
+  const backfill = !anterior || anterior.status !== "ok";
+  let id: string;
+  let linhas = 0;
+  let semana = Math.floor(Date.parse(`${backfillDesde}T00:00:00-03:00`) / 1000);
+  if (backfill) {
+    semana = (anterior?.cursor as { semana?: number } | null)?.semana ?? semana;
+    linhas = anterior?.linhas_gravadas ?? 0;
+    id = anterior
+      ? anterior.id
+      : await abrirExecucao(ctx, {
+          fonte: "kommo",
+          conta: CONTA_MOVIMENTOS,
+          tipo: "backfill",
+          janela_de: backfillDesde,
+          janela_ate: hojeBrt(),
+        });
+    if (anterior)
+      await ctx.supabase
+        .from("mkt_sync_execucoes")
+        .update({ status: "rodando", erro: null, janela_ate: hojeBrt() })
+        .eq("id", id);
+  } else {
+    const { data: ultimaOk } = await ctx.supabase
+      .from("mkt_sync_execucoes")
+      .select("iniciado_em")
+      .eq("fonte", "kommo")
+      .eq("conta", CONTA_MOVIMENTOS)
+      .eq("status", "ok")
+      .order("iniciado_em", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    semana = Math.floor(
+      ((ultimaOk ? Date.parse(ultimaOk.iniciado_em) : Date.now()) - 86_400_000) / 1000,
+    );
+    id = await abrirExecucao(ctx, {
+      fonte: "kommo",
+      conta: CONTA_MOVIMENTOS,
+      tipo: ctx.tipoIncremental,
+      janela_de: new Date(semana * 1000).toISOString().slice(0, 10),
+      janela_ate: hojeBrt(),
+    });
+  }
+
+  const tipo = backfill ? "backfill" : ctx.tipoIncremental;
+  try {
+    if (backfill) {
+      while (semana <= agora && temTempo(ctx)) {
+        const fim = Math.min(semana + SEMANA_S - 1, agora);
+        linhas += await puxarMovimentos(ctx, semana, fim);
+        semana = fim + 1;
+        await ctx.supabase
+          .from("mkt_sync_execucoes")
+          .update({ cursor: { semana }, linhas_gravadas: linhas })
+          .eq("id", id);
+      }
+    } else {
+      linhas = await puxarMovimentos(ctx, semana, agora);
+      semana = agora + 1;
+    }
+    const status = semana > agora ? "ok" : "parcial";
+    await fecharExecucao(ctx, id, {
+      status,
+      linhas_gravadas: linhas,
+      cursor: { semana },
+    });
+    return { fonte: "kommo", conta: CONTA_MOVIMENTOS, tipo, status, linhas };
+  } catch (e) {
+    await fecharExecucao(ctx, id, {
+      status: "erro",
+      erro: mensagem(e),
+      linhas_gravadas: linhas,
+      cursor: { semana },
+    });
+    return {
+      fonte: "kommo",
+      conta: CONTA_MOVIMENTOS,
+      tipo,
+      status: "erro",
+      linhas,
+      erro: mensagem(e),
+    };
+  }
+}
+
 /**
  * Sincroniza Meta (cada conta ativa) e Kommo. `prazoMs`: tempo disponível —
  * nenhuma fatia nova começa depois disso (a função da Vercel tem limite).
@@ -697,6 +881,11 @@ export async function sincronizarMarketing(
       }),
     );
   }
+  // Depois dos números, o caminho dos leads pelas etapas (visão Funil).
+  if (temTempo(ctx))
+    resultados.push(
+      await sincronizarMovimentosKommo(ctx, config.backfill_desde),
+    );
   // Por último, a ilustração dos criativos (não entra no resultado: não afeta números).
   for (const c of contas ?? []) {
     if (!temTempo(ctx)) break;
