@@ -12,10 +12,14 @@
 //   página, conexão, qualificação, fechamento); a pior em relação à média da
 //   BU, com amostra suficiente, é o gargalo. Rastreio é medição, não etapa:
 //   aparece como alerta (distorce as taxas do Kommo) e não concorre a gargalo.
+// • Conexão (F3, 0055): mensagens de WhatsApp/Instagram no Kommo. A primeira
+//   mensagem enviada costuma ser automática (~6 min); a velocidade do time é
+//   medida da primeira resposta do lead até a mensagem seguinte da Footure.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { BuMarketing, Database, EstagioFunil } from "@/lib/supabase/database.types";
+import type { BuMarketing, Database, EstagioFunil, ResumoConversaRow } from "@/lib/supabase/database.types";
 import { anunciosPorNomeUnico, carregarBase, periodoDaCampanha, type PeriodoMarketing } from "./consultas";
 import { normalizarNome, razao } from "./motor";
+import { urlLeadKommo } from "@/lib/integracoes/kommo";
 
 type Supa = SupabaseClient<Database>;
 type Base = Awaited<ReturnType<typeof carregarBase>>;
@@ -33,6 +37,20 @@ const FAIXA_MEDIA = 0.15;
 const MIN_PARTE_VIDEO = 0.01;
 
 export type Hipotese = "mensagem" | "pagina" | "rastreio" | "conexao" | "qualificacao" | "fechamento";
+
+/** Lead em andamento sem mensagem nem mudança de etapa há este tanto de dias = parado. */
+const DIAS_PARADO = 3;
+
+/** Faixa do tempo do time para responder o lead depois da primeira resposta dele. */
+export type FaixaResposta = "ate1h" | "ate4h" | "ate24h" | "mais24h" | "semRetorno";
+export const ROTULO_FAIXA_RESPOSTA: Record<FaixaResposta, string> = {
+  ate1h: "Até 1 hora",
+  ate4h: "De 1 a 4 horas",
+  ate24h: "De 4 a 24 horas",
+  mais24h: "Mais de 24 horas",
+  semRetorno: "Lead respondeu e ficou sem retorno",
+};
+const faixaResposta = (min: number | null): FaixaResposta => (min === null ? "semRetorno" : min <= 60 ? "ate1h" : min <= 240 ? "ate4h" : min <= 1440 ? "ate24h" : "mais24h");
 
 /** Onde o lead perdido parou (estágio máximo antes da perda). */
 export type FaixaPerda = "antes" | "conectado" | "qualificado";
@@ -119,6 +137,16 @@ export interface LinhaQualidade {
 }
 
 /** Percentual com uma casa abaixo de 10% (taxa de clique) e inteiro acima. */
+const mediana = (v: number[]) => {
+  if (!v.length) return null;
+  const s = [...v].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+};
+const minutos = (de: string | null, ate: string | null) => (de && ate ? (Date.parse(ate) - Date.parse(de)) / 60_000 : null);
+/** Duração legível: minutos, horas ou dias. */
+export const duracao = (min: number | null) =>
+  min === null ? "—" : min < 90 ? `${Math.round(min)} min` : min < 2880 ? `${(min / 60).toFixed(1).replace(".", ",")} h` : `${(min / 1440).toFixed(1).replace(".", ",")} dias`;
+
 const pct = (v: number | null) => (v === null ? "—" : v < 0.1 ? `${(v * 100).toFixed(1).replace(".", ",")}%` : `${Math.round(v * 100)}%`);
 
 export async function carregarFunil(supabase: Supa, chaveCampanha: string, periodo: PeriodoMarketing) {
@@ -128,11 +156,15 @@ export async function carregarFunil(supabase: Supa, chaveCampanha: string, perio
   if (!ctx || ctx.accountId !== accountId) return null;
   const { de, ate } = periodoDaCampanha(base, campaignId, periodo);
 
-  const [{ data: etapas }, { data: motivos }, { data: funis }] = await Promise.all([
-    supabase.from("mkt_kommo_etapas").select("pipeline_id, status_id, estagio"),
+  const [{ data: etapas }, { data: motivos }, { data: funis }, { data: usuarios }, resumos] = await Promise.all([
+    supabase.from("mkt_kommo_etapas").select("pipeline_id, status_id, estagio, nome"),
     supabase.from("mkt_kommo_motivos_perda").select("id, nome"),
     supabase.from("mkt_kommo_funis").select("pipeline_id, nome"),
+    supabase.from("mkt_kommo_usuarios").select("id, nome"),
+    lerResumosConversa(supabase, de, ate),
   ]);
+  const nomeEtapa = new Map((etapas ?? []).map((e) => [`${e.pipeline_id}:${e.status_id}`, e.nome.trim()]));
+  const nomeUsuario = new Map((usuarios ?? []).map((u) => [u.id, u.nome]));
   const estagioDe = new Map((etapas ?? []).map((e) => [`${e.pipeline_id}:${e.status_id}`, e.estagio]));
   const degrauDe = (pipeline: number | null, status: number | null) => {
     const e = estagioDe.get(`${pipeline}:${status}`);
@@ -157,18 +189,20 @@ export async function carregarFunil(supabase: Supa, chaveCampanha: string, perio
   const movimentos = () =>
     supabase
       .from("mkt_kommo_movimentos")
-      .select("lead_id, pipeline_de, status_de, pipeline_para, status_para", { count: "exact" })
+      .select("lead_id, criado_em, pipeline_de, status_de, pipeline_para, status_para", { count: "exact" })
       .gte("criado_em", `${de}T00:00:00-03:00`)
       .order("evento_id");
   // Primeira página com a contagem; as demais em paralelo.
   const primeira = await movimentos().range(0, 999);
   if (primeira.error) throw new Error(primeira.error.message);
   const paginas = [primeira, ...(await Promise.all(Array.from({ length: Math.ceil((primeira.count ?? 0) / 1000) - 1 }, (_, i) => movimentos().range((i + 1) * 1000, (i + 1) * 1000 + 999))))];
+  const ultimoMovimento = new Map<number, string>();
   for (const { data, error } of paginas) {
     if (error) throw new Error(error.message);
     for (const m of data ?? []) {
       const atual = maximo.get(m.lead_id);
       if (atual === undefined) continue;
+      if (m.criado_em > (ultimoMovimento.get(m.lead_id) ?? "")) ultimoMovimento.set(m.lead_id, m.criado_em);
       maximo.set(m.lead_id, Math.max(atual, degrauDe(m.pipeline_de, m.status_de), degrauDe(m.pipeline_para, m.status_para)));
     }
   }
@@ -196,6 +230,85 @@ export async function carregarFunil(supabase: Supa, chaveCampanha: string, perio
       t.leadsMeta += Number(r.leads);
     }
   }
+
+  // ── Conexão e velocidade (mensagens do Kommo) ──
+  const conexaoDe = (leads: LeadBase[]) => {
+    const r = {
+      leads: leads.length,
+      comConversa: 0,
+      semMensagem: 0,
+      responderam: 0,
+      primeiraMensagem: [] as number[],
+      tempoTime: [] as number[],
+      tentativasSemResposta: [] as number[],
+      soUmaTentativa: 0,
+      faixas: Object.fromEntries((Object.keys(ROTULO_FAIXA_RESPOSTA) as FaixaResposta[]).map((f) => [f, { leads: 0, qualificados: 0, vendas: 0 }])) as Record<
+        FaixaResposta,
+        { leads: number; qualificados: number; vendas: number }
+      >,
+    };
+    for (const l of leads) {
+      const c = resumos.get(l.lead_id);
+      if (!c) {
+        r.semMensagem++;
+        continue;
+      }
+      r.comConversa++;
+      if (!c.saidas) r.semMensagem++;
+      const primeira = minutos(l.criado_em, c.primeira_saida_em);
+      if (primeira !== null && primeira >= 0) r.primeiraMensagem.push(primeira);
+      if (c.primeira_entrada_em) {
+        r.responderam++;
+        const t = minutos(c.primeira_entrada_em, c.resposta_time_em);
+        if (t !== null) r.tempoTime.push(t);
+        const f = r.faixas[faixaResposta(t)];
+        f.leads++;
+        if ((maximo.get(l.lead_id) ?? -1) >= 3) f.qualificados++;
+        if (l.is_won) f.vendas++;
+      } else if (c.saidas) {
+        r.tentativasSemResposta.push(c.saidas);
+        if (c.saidas <= 1) r.soUmaTentativa++;
+      }
+    }
+    const ate1h = r.tempoTime.filter((t) => t <= 60).length;
+    return {
+      leads: r.leads,
+      comConversa: r.comConversa,
+      semMensagem: r.semMensagem,
+      taxaResposta: razao(r.responderam, r.leads),
+      responderam: r.responderam,
+      primeiraMensagemMin: mediana(r.primeiraMensagem),
+      tempoTimeMin: mediana(r.tempoTime),
+      // Base: quem respondeu (sem retorno conta como fora de 1 h).
+      respondidosAte1h: razao(ate1h, r.responderam),
+      semRetorno: r.faixas.semRetorno.leads,
+      tentativasMediana: mediana(r.tentativasSemResposta),
+      naoResponderam: r.tentativasSemResposta.length,
+      soUmaTentativa: r.soUmaTentativa,
+      faixas: (Object.keys(r.faixas) as FaixaResposta[]).map((f) => ({ faixa: f, rotulo: ROTULO_FAIXA_RESPOSTA[f], ...r.faixas[f] })),
+    };
+  };
+  const conexaoCampanha = conexaoDe(daCampanha);
+  const conexaoBu = conexaoDe(daBu);
+
+  // Parados: em andamento, sem mensagem nem mudança de etapa há DIAS_PARADO dias (os mais avançados primeiro).
+  const limiteParado = Date.now() - DIAS_PARADO * 86_400_000;
+  const parados = daCampanha
+    .filter((l) => !l.is_won && !l.is_lost)
+    .map((l) => {
+      const ultima = [l.criado_em!, resumos.get(l.lead_id)?.ultima_mensagem_em ?? "", ultimoMovimento.get(l.lead_id) ?? ""].reduce((a, b) => (b > a ? b : a));
+      return { l, ultima, degrau: maximo.get(l.lead_id) ?? -1 };
+    })
+    .filter((p) => Date.parse(p.ultima) < limiteParado)
+    .sort((a, b) => b.degrau - a.degrau || a.ultima.localeCompare(b.ultima))
+    .map(({ l, ultima }) => ({
+      leadId: l.lead_id,
+      url: urlLeadKommo(l.lead_id),
+      etapa: nomeEtapa.get(`${l.pipeline_id}:${l.status_id}`) ?? "—",
+      responsavel: l.responsavel_id ? (nomeUsuario.get(l.responsavel_id) ?? null) : null,
+      diasParado: Math.floor((Date.now() - Date.parse(ultima)) / 86_400_000),
+      respondeu: !!resumos.get(l.lead_id)?.primeira_entrada_em,
+    }));
 
   // ── Funil passo a passo ──
   const passos: Array<PassoFunil & { valorBu: number }> = [];
@@ -288,7 +401,12 @@ export async function carregarFunil(supabase: Supa, chaveCampanha: string, perio
         const i = indiceComposto([conexao.taxa, conexao.taxaBu], [perdasConexao[1], perdasConexao[0]]);
         return { indice: i, situacao: situacao(i, amostraCrm) };
       })(),
-      evidencias: [vsBu("Leads que conectaram", conexao.taxa, conexao.taxaBu), vsBu("“Falta de Conexão” nas perdas", ...perdasConexao)],
+      evidencias: [
+        vsBu("Leads que conectaram", conexao.taxa, conexao.taxaBu),
+        vsBu("“Falta de Conexão” nas perdas", ...perdasConexao),
+        ...(conexaoCampanha.comConversa ? [vsBu("Responderam no WhatsApp", conexaoCampanha.taxaResposta, conexaoBu.taxaResposta)] : []),
+        ...(conexaoCampanha.responderam ? [vsBu("Time respondeu o lead em até 1 h", conexaoCampanha.respondidosAte1h, conexaoBu.respondidosAte1h)] : []),
+      ],
       gargalo: false,
     },
     {
@@ -410,5 +528,18 @@ export async function carregarFunil(supabase: Supa, chaveCampanha: string, perio
     perdas,
     qualidade: { criativos: ordenar(porCriativo), publicos: ordenar(porPublico) },
     origem: { fonte: lista(fonte), funil: lista(funil), toque },
+    conexao: { campanha: conexaoCampanha, bu: conexaoBu, parados, diasParado: DIAS_PARADO },
   };
+}
+
+/** Resumo das conversas por lead criado no período (mkt_resumo_conversas, paginado de 1.000 em 1.000). */
+async function lerResumosConversa(supabase: Supa, de: string, ate: string) {
+  const mapa = new Map<number, ResumoConversaRow>();
+  for (let p = 0; ; p++) {
+    const { data, error } = await supabase.rpc("mkt_resumo_conversas", { de, ate }).range(p * 1000, p * 1000 + 999);
+    if (error) throw new Error(`Resumo das conversas: ${error.message}`);
+    for (const r of data ?? []) mapa.set(r.lead_id, r);
+    if ((data?.length ?? 0) < 1000) break;
+  }
+  return mapa;
 }

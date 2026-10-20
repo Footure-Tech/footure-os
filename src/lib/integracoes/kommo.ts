@@ -22,6 +22,11 @@ function credenciais() {
   return { base: `https://${sub}.kommo.com/api/v4`, token };
 }
 
+/** Link do lead no Kommo (para abrir direto da tela). */
+export function urlLeadKommo(leadId: number) {
+  return `${credenciais().base.replace("/api/v4", "")}/leads/detail/${leadId}`;
+}
+
 const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** GET com retry: 429 espera 2^t s; erro de rede 2^t × 3 s; 204 = sem conteúdo (null). */
@@ -266,6 +271,49 @@ export async function buscarPaginaMovimentosKommo(pagina: number, de: number, at
       autor_id: e.created_by ?? null,
     };
   });
+}
+
+export interface MensagemKommo {
+  evento_id: string;
+  lead_id: number;
+  criado_em: string;
+  entrada: boolean;
+  autor_id: number | null;
+  origem: string | null;
+  talk_id: number | null;
+}
+
+/**
+ * Uma página (100) de mensagens de chat (WhatsApp/Instagram) recebidas ou
+ * enviadas na janela [de, ate] (epoch s), só as ligadas a lead. Um tipo por
+ * chamada: o filtro de vários tipos (ou por entidade) não traz as mensagens.
+ * Mesma regra de paginação dos movimentos. null = acabou.
+ */
+export async function buscarPaginaMensagensKommo(pagina: number, direcao: "entrada" | "saida", de: number, ate: number): Promise<MensagemKommo[] | null> {
+  const data = await getKommo<{
+    _embedded?: {
+      events?: Array<{ id: string; entity_id: number; entity_type: string; created_at: number; created_by?: number; value_after?: Array<{ message?: { origin?: string; talk_id?: number } }> }>;
+    };
+  }>("/events", {
+    limit: 100,
+    page: pagina,
+    "filter[type]": direcao === "entrada" ? "incoming_chat_message" : "outgoing_chat_message",
+    "filter[created_at][from]": de,
+    "filter[created_at][to]": ate,
+  });
+  const eventos = data?._embedded?.events ?? [];
+  if (!eventos.length) return null;
+  return eventos
+    .filter((e) => e.entity_type === "lead")
+    .map((e) => ({
+      evento_id: String(e.id),
+      lead_id: e.entity_id,
+      criado_em: new Date(e.created_at * 1000).toISOString(),
+      entrada: direcao === "entrada",
+      autor_id: e.created_by ?? null,
+      origem: e.value_after?.[0]?.message?.origin ?? null,
+      talk_id: e.value_after?.[0]?.message?.talk_id ?? null,
+    }));
 }
 
 /**

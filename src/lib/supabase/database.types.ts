@@ -58,6 +58,28 @@ export type LeadKommoRow = {
   utm_source: string | null;
   sincronizado_em: string;
 };
+/** 0055: uma mensagem de WhatsApp/Instagram do lead (sem o conteúdo). */
+export type MensagemKommoRow = {
+  evento_id: string;
+  lead_id: number;
+  criado_em: string;
+  entrada: boolean;
+  autor_id: number | null;
+  origem: string | null;
+  talk_id: number | null;
+  sincronizado_em: string;
+};
+/** 0055: resumo das conversas de um lead (mkt_resumo_conversas). */
+export type ResumoConversaRow = {
+  lead_id: number;
+  primeira_saida_em: string | null;
+  primeira_entrada_em: string | null;
+  resposta_time_em: string | null;
+  saidas_antes_resposta: number;
+  saidas: number;
+  entradas: number;
+  ultima_mensagem_em: string | null;
+};
 /** 0054: uma mudança de etapa de um lead (evento lead_status_changed do Kommo). */
 export type MovimentoKommoRow = {
   evento_id: string;
@@ -620,6 +642,8 @@ export interface Database {
       mkt_kommo_motivos_perda: TableDef<{ id: number; nome: string; sort: number }, { id: number; nome: string; sort?: number }, Partial<{ nome: string; sort: number }>>;
       mkt_kommo_usuarios: TableDef<{ id: number; nome: string; ativo: boolean }, { id: number; nome: string; ativo?: boolean }, Partial<{ nome: string; ativo: boolean }>>;
       mkt_kommo_movimentos: TableDef<MovimentoKommoRow, Omit<MovimentoKommoRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MovimentoKommoRow>>;
+      // supabase/migrations/0055_marketing_conversas.sql
+      mkt_kommo_mensagens: TableDef<MensagemKommoRow, Omit<MensagemKommoRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MensagemKommoRow>>;
       mkt_kommo_leads: TableDef<LeadKommoRow, Omit<LeadKommoRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<LeadKommoRow>>;
       mkt_meta_campanha_dia: TableDef<MetaCampanhaDiaRow, Omit<MetaCampanhaDiaRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MetaCampanhaDiaRow>>;
       mkt_meta_anuncio_dia: TableDef<MetaAnuncioDiaRow, Omit<MetaAnuncioDiaRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<MetaAnuncioDiaRow>>;
@@ -983,6 +1007,11 @@ export interface Database {
       registrar_transicao: {
         Args: { p_pedido_id: string; p_para: StatusPedido; p_comentario?: string | null };
         Returns: undefined;
+      };
+      // supabase/migrations/0055_marketing_conversas.sql
+      mkt_resumo_conversas: {
+        Args: { de: string; ate: string };
+        Returns: ResumoConversaRow[];
       };
     };
   };

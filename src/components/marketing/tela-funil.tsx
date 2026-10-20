@@ -6,11 +6,13 @@ import {
   MdFlag,
   MdGroups,
   MdInfoOutline,
+  MdOpenInNew,
+  MdSpeed,
   MdTroubleshoot,
   MdTrendingDown,
   MdWarningAmber,
 } from "react-icons/md";
-import type { carregarFunil, CartaoDiagnostico, Hipotese, LinhaQualidade, PassoFunil } from "@/lib/marketing/consultasFunil";
+import { duracao, type carregarFunil, type CartaoDiagnostico, type Hipotese, type LinhaQualidade, type PassoFunil } from "@/lib/marketing/consultasFunil";
 import { formatarMoeda } from "@/lib/formatacao";
 import { CardModulo } from "@/components/negocio/card-modulo";
 import { StatusPill } from "@/components/ds/status-pill";
@@ -68,6 +70,8 @@ export function TelaFunil({ funil }: { funil: Funil }) {
           ))}
         </ul>
       </CardModulo>
+
+      {!semLeads && <Conexao funil={funil} />}
 
       {semLeads ? (
         <div className="rounded-xl border border-gray5 bg-surface shadow-table">
@@ -239,6 +243,102 @@ function BarraParte({ valor }: { valor: number | null }) {
       </span>
       <span className="text-[13px] font-semibold text-darkPurple1">{pct(valor)}</span>
     </span>
+  );
+}
+
+function Conexao({ funil }: { funil: Funil }) {
+  const { campanha: c, bu, parados, diasParado } = funil.conexao;
+  const LIMITE_PARADOS = 15;
+  return (
+    <CardModulo icone={MdSpeed} cor="bg-iconGray" titulo="Conexão e velocidade de atendimento" className="min-w-0">
+      {c.comConversa === 0 ? (
+        <p className="text-sm text-gray3">Sem conversas do Kommo para os leads desta safra. Elas aparecem depois da sincronização “Kommo · Conversas” em Configurações.</p>
+      ) : (
+        <>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+            <Numero rotulo="Responderam no WhatsApp" valor={pct(c.taxaResposta)} apoio={`BU ${pct(bu.taxaResposta)}`} />
+            <Numero rotulo="1ª mensagem enviada" valor={duracao(c.primeiraMensagemMin)} apoio="mediana · em geral automática" />
+            <Numero rotulo="Time responde o lead em" valor={duracao(c.tempoTimeMin)} apoio={`mediana · BU ${duracao(bu.tempoTimeMin)}`} />
+            <Numero rotulo="Respondidos em até 1 h" valor={pct(c.respondidosAte1h)} apoio={`BU ${pct(bu.respondidosAte1h)}`} />
+          </dl>
+          <ul className="flex flex-col gap-1 text-[13px] text-gray2">
+            {c.naoResponderam > 0 && (
+              <li>
+                {inteiro(c.naoResponderam)} leads não responderam e receberam {c.tentativasMediana ?? "—"} {c.tentativasMediana === 1 ? "mensagem" : "mensagens"} (mediana)
+                {c.soUmaTentativa > 0 && ` — ${inteiro(c.soUmaTentativa)} só a primeira, sem nenhuma nova tentativa`}.
+              </li>
+            )}
+            {c.semRetorno > 0 && <li>{inteiro(c.semRetorno)} leads responderam e não tiveram retorno da Footure no WhatsApp.</li>}
+            {c.semMensagem > 0 && <li>{inteiro(c.semMensagem)} leads sem nenhuma mensagem enviada pelo Kommo.</li>}
+          </ul>
+
+          <h3 className="text-sm font-bold text-darkPurple1">Conversão pelo tempo de resposta do time</h3>
+          <Table minWidth={620}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Depois que o lead respondeu, o time voltou em</TableHead>
+                <TableHead className="text-right">Leads</TableHead>
+                <TableHead className="text-right">Qualificaram</TableHead>
+                <TableHead className="text-right">Vendas</TableHead>
+                <TableHead className="text-right">Conversão em venda</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {c.faixas
+                .filter((f) => f.leads > 0)
+                .map((f) => (
+                  <TableRow key={f.faixa}>
+                    <TableCell className="font-semibold text-darkPurple1">{f.rotulo}</TableCell>
+                    <TableCell className="text-right text-gray2">{inteiro(f.leads)}</TableCell>
+                    <TableCell className="text-right text-gray2">{pct(parte(f.qualificados, f.leads))}</TableCell>
+                    <TableCell className="text-right text-gray2">{inteiro(f.vendas)}</TableCell>
+                    <TableCell className="text-right font-semibold text-darkPurple1">{pct(parte(f.vendas, f.leads))}</TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+          <p className="text-xs text-gray3">Só leads que responderam no WhatsApp. Faixas com poucos leads oscilam muito; compare com a mesma tabela em outras campanhas.</p>
+        </>
+      )}
+
+      <h3 className="text-sm font-bold text-darkPurple1">
+        Leads parados · {inteiro(parados.length)} em andamento sem mensagem nem mudança de etapa há {diasParado}+ dias
+      </h3>
+      {parados.length === 0 ? (
+        <p className="text-sm text-gray3">Nenhum lead parado.</p>
+      ) : (
+        <>
+          <Table minWidth={620}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Lead</TableHead>
+                <TableHead>Etapa atual</TableHead>
+                <TableHead>Responsável</TableHead>
+                <TableHead className="text-right">Parado há</TableHead>
+                <TableHead>Respondeu?</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {parados.slice(0, LIMITE_PARADOS).map((p) => (
+                <TableRow key={p.leadId}>
+                  <TableCell>
+                    <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-darkPurple1 hover:underline">
+                      #{p.leadId}
+                      <MdOpenInNew className="size-3.5 text-gray3" aria-label="abre no Kommo" />
+                    </a>
+                  </TableCell>
+                  <TableCell className="text-gray2">{p.etapa}</TableCell>
+                  <TableCell className="text-gray2">{p.responsavel ?? "—"}</TableCell>
+                  <TableCell className="text-right text-gray2">{p.diasParado} dias</TableCell>
+                  <TableCell className="text-gray2">{p.respondeu ? "Sim" : "Não"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {parados.length > LIMITE_PARADOS && <p className="text-xs text-gray3">E mais {inteiro(parados.length - LIMITE_PARADOS)} — os mais avançados no funil aparecem primeiro.</p>}
+        </>
+      )}
+    </CardModulo>
   );
 }
 

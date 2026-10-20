@@ -84,7 +84,7 @@ export function BlocoMarketing({ status }: { status: Status }) {
               <TableBody>
                 {status.execucoes.map((e) => (
                   <TableRow key={e.id}>
-                    <TableCell className="font-semibold text-darkPurple1">{e.fonte === "kommo" ? (e.conta === "movimentos" ? "Kommo · Etapas" : "Kommo") : `Meta · ${nomeConta.get(e.conta ?? "") ?? e.conta}`}</TableCell>
+                    <TableCell className="font-semibold text-darkPurple1">{e.fonte === "kommo" ? (e.conta === "movimentos" ? "Kommo · Etapas" : e.conta === "mensagens" ? "Kommo · Conversas" : "Kommo") : `Meta · ${nomeConta.get(e.conta ?? "") ?? e.conta}`}</TableCell>
                     <TableCell className="text-gray2">{ROTULO_TIPO[e.tipo]}</TableCell>
                     <TableCell className="max-w-[320px] whitespace-normal">
                       <div className="flex flex-col items-start gap-1">

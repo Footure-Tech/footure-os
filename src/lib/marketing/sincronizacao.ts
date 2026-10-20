@@ -10,9 +10,10 @@
 // • Incremental: Meta reescreve os últimos 7 dias (a Meta revisa conversões na
 //   janela de 7 dias de clique); Kommo pega leads ATUALIZADOS desde a última
 //   execução boa − 1 dia (lead antigo que virou venda também entra).
-// • Movimentos entre etapas do Kommo (visão Funil, 0054): execução própria
-//   (conta = 'movimentos'); a carga do histórico vai semana a semana desde
-//   backfill_desde e o incremental relê desde a última execução boa − 1 dia.
+// • Movimentos entre etapas (0054) e mensagens de chat (0055) do Kommo, para
+//   a visão Funil: uma execução cada (conta = 'movimentos' / 'mensagens'); a
+//   carga do histórico vai janela a janela desde backfill_desde e o
+//   incremental relê desde a última execução boa − 1 dia.
 // • A falha de uma conta/fonte não impede as outras; cada uma tem sua linha de
 //   auditoria (status ok · parcial · erro).
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -34,6 +35,7 @@ import {
   buscarFunisKommo,
   buscarMotivosPerdaKommo,
   buscarPaginaLeadsKommo,
+  buscarPaginaMensagensKommo,
   buscarPaginaMovimentosKommo,
   buscarUsuariosKommo,
   normalizarLead,
@@ -722,52 +724,88 @@ async function sincronizarKommo(
   }
 }
 
-/** Execução dos movimentos entre etapas (fonte kommo, conta própria). */
-const CONTA_MOVIMENTOS = "movimentos";
-const SEMANA_S = 7 * 86_400;
-
-/** Grava todas as páginas de mudanças de etapa da janela [de, ate] (epoch s). */
-async function puxarMovimentos(ctx: Contexto, de: number, ate: number) {
-  let linhas = 0;
-  for (let pagina = 1; ; pagina++) {
-    const movimentos = await buscarPaginaMovimentosKommo(pagina, de, ate);
-    if (!movimentos) break;
-    const agora = new Date().toISOString();
-    await upsertEmLotes(
-      ctx.supabase,
-      "mkt_kommo_movimentos",
-      movimentos.map((m) => ({ ...m, sincronizado_em: agora })),
-    );
-    linhas += movimentos.length;
-    await esperar(200);
-  }
-  return linhas;
+/**
+ * Históricos de eventos do Kommo (visão Funil), cada um com a sua execução
+ * (fonte kommo, conta própria): mudanças de etapa (0054) e mensagens de chat
+ * (0055). A janela de cada fatia acompanha o volume (~500 movimentos por
+ * semana; ~800 mensagens por dia).
+ */
+interface HistoricoKommo {
+  conta: "movimentos" | "mensagens";
+  janelaS: number;
+  /** Grava todas as páginas da janela [de, ate] (epoch s); devolve as linhas. */
+  puxar: (ctx: Contexto, de: number, ate: number) => Promise<number>;
 }
 
+const MOVIMENTOS: HistoricoKommo = {
+  conta: "movimentos",
+  janelaS: 7 * 86_400,
+  async puxar(ctx, de, ate) {
+    let linhas = 0;
+    for (let pagina = 1; ; pagina++) {
+      const movimentos = await buscarPaginaMovimentosKommo(pagina, de, ate);
+      if (!movimentos) break;
+      const agora = new Date().toISOString();
+      await upsertEmLotes(
+        ctx.supabase,
+        "mkt_kommo_movimentos",
+        movimentos.map((m) => ({ ...m, sincronizado_em: agora })),
+      );
+      linhas += movimentos.length;
+      await esperar(200);
+    }
+    return linhas;
+  },
+};
+
+const MENSAGENS: HistoricoKommo = {
+  conta: "mensagens",
+  janelaS: 86_400,
+  async puxar(ctx, de, ate) {
+    let linhas = 0;
+    for (const direcao of ["entrada", "saida"] as const)
+      for (let pagina = 1; ; pagina++) {
+        const mensagens = await buscarPaginaMensagensKommo(pagina, direcao, de, ate);
+        if (!mensagens) break;
+        const agora = new Date().toISOString();
+        await upsertEmLotes(
+          ctx.supabase,
+          "mkt_kommo_mensagens",
+          mensagens.map((m) => ({ ...m, sincronizado_em: agora })),
+        );
+        linhas += mensagens.length;
+        await esperar(200);
+      }
+    return linhas;
+  },
+};
+
 /**
- * Mudanças de etapa dos leads (visão Funil). Carga do histórico semana a
- * semana desde backfill_desde (cada semana inteira numa vez: a paginação do
- * Kommo só é estável com a janela fechada); pronta, o incremental relê desde
- * a última execução boa − 1 dia até o início desta.
+ * Carga do histórico janela a janela desde backfill_desde (cada janela
+ * inteira numa vez: a paginação do Kommo só é estável com a janela fechada);
+ * pronta, o incremental relê desde a última execução boa − 1 dia até o
+ * início desta (o upsert pelo id do evento evita duplicar).
  */
-async function sincronizarMovimentosKommo(
+async function sincronizarHistoricoKommo(
   ctx: Contexto,
   backfillDesde: string,
+  historico: HistoricoKommo,
 ): Promise<ResultadoSincronizacao> {
+  const { conta } = historico;
   const agora = Math.floor(Date.now() / 1000);
-  const anterior = await ultimoBackfill(ctx, "kommo", CONTA_MOVIMENTOS);
+  const anterior = await ultimoBackfill(ctx, "kommo", conta);
   const backfill = !anterior || anterior.status !== "ok";
   let id: string;
   let linhas = 0;
-  let semana = Math.floor(Date.parse(`${backfillDesde}T00:00:00-03:00`) / 1000);
+  let desde = Math.floor(Date.parse(`${backfillDesde}T00:00:00-03:00`) / 1000);
   if (backfill) {
-    semana = (anterior?.cursor as { semana?: number } | null)?.semana ?? semana;
+    desde = (anterior?.cursor as { desde?: number } | null)?.desde ?? desde;
     linhas = anterior?.linhas_gravadas ?? 0;
     id = anterior
       ? anterior.id
       : await abrirExecucao(ctx, {
           fonte: "kommo",
-          conta: CONTA_MOVIMENTOS,
+          conta,
           tipo: "backfill",
           janela_de: backfillDesde,
           janela_ate: hojeBrt(),
@@ -782,19 +820,19 @@ async function sincronizarMovimentosKommo(
       .from("mkt_sync_execucoes")
       .select("iniciado_em")
       .eq("fonte", "kommo")
-      .eq("conta", CONTA_MOVIMENTOS)
+      .eq("conta", conta)
       .eq("status", "ok")
       .order("iniciado_em", { ascending: false })
       .limit(1)
       .maybeSingle();
-    semana = Math.floor(
+    desde = Math.floor(
       ((ultimaOk ? Date.parse(ultimaOk.iniciado_em) : Date.now()) - 86_400_000) / 1000,
     );
     id = await abrirExecucao(ctx, {
       fonte: "kommo",
-      conta: CONTA_MOVIMENTOS,
+      conta,
       tipo: ctx.tipoIncremental,
-      janela_de: new Date(semana * 1000).toISOString().slice(0, 10),
+      janela_de: new Date(desde * 1000).toISOString().slice(0, 10),
       janela_ate: hojeBrt(),
     });
   }
@@ -802,36 +840,36 @@ async function sincronizarMovimentosKommo(
   const tipo = backfill ? "backfill" : ctx.tipoIncremental;
   try {
     if (backfill) {
-      while (semana <= agora && temTempo(ctx)) {
-        const fim = Math.min(semana + SEMANA_S - 1, agora);
-        linhas += await puxarMovimentos(ctx, semana, fim);
-        semana = fim + 1;
+      while (desde <= agora && temTempo(ctx)) {
+        const fim = Math.min(desde + historico.janelaS - 1, agora);
+        linhas += await historico.puxar(ctx, desde, fim);
+        desde = fim + 1;
         await ctx.supabase
           .from("mkt_sync_execucoes")
-          .update({ cursor: { semana }, linhas_gravadas: linhas })
+          .update({ cursor: { desde }, linhas_gravadas: linhas })
           .eq("id", id);
       }
     } else {
-      linhas = await puxarMovimentos(ctx, semana, agora);
-      semana = agora + 1;
+      linhas = await historico.puxar(ctx, desde, agora);
+      desde = agora + 1;
     }
-    const status = semana > agora ? "ok" : "parcial";
+    const status = desde > agora ? "ok" : "parcial";
     await fecharExecucao(ctx, id, {
       status,
       linhas_gravadas: linhas,
-      cursor: { semana },
+      cursor: { desde },
     });
-    return { fonte: "kommo", conta: CONTA_MOVIMENTOS, tipo, status, linhas };
+    return { fonte: "kommo", conta, tipo, status, linhas };
   } catch (e) {
     await fecharExecucao(ctx, id, {
       status: "erro",
       erro: mensagem(e),
       linhas_gravadas: linhas,
-      cursor: { semana },
+      cursor: { desde },
     });
     return {
       fonte: "kommo",
-      conta: CONTA_MOVIMENTOS,
+      conta,
       tipo,
       status: "erro",
       linhas,
@@ -881,11 +919,13 @@ export async function sincronizarMarketing(
       }),
     );
   }
-  // Depois dos números, o caminho dos leads pelas etapas (visão Funil).
-  if (temTempo(ctx))
+  // Depois dos números, o caminho dos leads pelas etapas e as conversas (visão Funil).
+  for (const historico of [MOVIMENTOS, MENSAGENS]) {
+    if (!temTempo(ctx)) break;
     resultados.push(
-      await sincronizarMovimentosKommo(ctx, config.backfill_desde),
+      await sincronizarHistoricoKommo(ctx, config.backfill_desde, historico),
     );
+  }
   // Por último, a ilustração dos criativos (não entra no resultado: não afeta números).
   for (const c of contas ?? []) {
     if (!temTempo(ctx)) break;

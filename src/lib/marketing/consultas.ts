@@ -55,7 +55,7 @@ export const carregarBase = cache(async function carregarBase(supabase: Supa) {
     lerTudo((de, ate) => supabase.from("mkt_meta_campanha_dia").select("account_id, campaign_id, campaign_name, dia, spend, impressions, frequency, leads, link_clicks, landing_page_views, checkouts, video_views").range(de, ate)),
     lerTudo((de, ate) => supabase.from("mkt_meta_anuncio_dia").select("account_id, ad_id, ad_name, campaign_id, adset_id, adset_name, dia, spend, impressions, frequency, leads, link_clicks, landing_page_views").range(de, ate)),
     lerTudo((de, ate) =>
-      supabase.from("mkt_kommo_leads").select("lead_id, pipeline_id, status_id, ad_id, ad_name_raw, campaign_id, ftp_campaign_id, is_mql, is_won, is_lost, loss_reason_id, utm_source, revenue, criado_em, dias_ate_venda")
+      supabase.from("mkt_kommo_leads").select("lead_id, pipeline_id, status_id, ad_id, ad_name_raw, campaign_id, ftp_campaign_id, is_mql, is_won, is_lost, loss_reason_id, responsavel_id, utm_source, revenue, criado_em, dias_ate_venda")
         .range(de, ate),
     ),
     supabase.from("mkt_sync_execucoes").select("fonte, conta, status, erro, terminado_em, iniciado_em").order("iniciado_em", { ascending: false }).limit(20),
