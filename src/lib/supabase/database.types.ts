@@ -15,6 +15,8 @@ export interface KommoCampos {
   utm_campaign_id: number;
   valor_total: number;
   ftp_utm_campaign: number | null;
+  /** URL de entrada do primeiro toque (com as UTMs); descoberto pelo nome, como ftp_utm_campaign. */
+  landing_page?: number | null;
 }
 export interface LimiaresMarketing {
   roas_escalar: number;

@@ -77,7 +77,7 @@ export async function buscarFunisKommo(): Promise<FunilKommo[]> {
   }));
 }
 
-/** Campos personalizados de lead (descoberta do ID de ftp_utm_campaign). */
+/** Campos personalizados de lead (descoberta dos IDs de ftp_utm_campaign e landing_page). */
 export async function buscarCamposLeadKommo(): Promise<Array<{ id: number; nome: string; code: string | null }>> {
   const campos: Array<{ id: number; nome: string; code: string | null }> = [];
   for (let page = 1; page <= 20; page++) {
@@ -121,6 +121,15 @@ export interface LeadNormalizado {
 const campo = (lead: LeadBruto, id: number | null) =>
   id === null ? "" : String(lead.custom_fields_values?.find((c) => c.field_id === id)?.values?.[0]?.value ?? "").trim();
 const numerico = (v: string) => /^\d+$/.test(v);
+
+/** utm_content da URL de entrada (landing_page): o anúncio do primeiro toque. */
+function adDaLandingPage(url: string): string {
+  try {
+    return new URL(url).searchParams.get("utm_content")?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
 const isoDeEpoch = (s: number | null | undefined) => (s ? new Date(s * 1000).toISOString() : null);
 
 /**
@@ -137,7 +146,9 @@ export function normalizarLead(lead: LeadBruto, campos: KommoCampos, sortDe: Map
   const atual = sortDe.get(`${pid}:${status}`) ?? 0;
   const mql = ganho ? true : perdido ? false : limiar !== undefined && atual >= limiar;
 
-  const valoresAd = [campo(lead, campos.utm_ad_id), campo(lead, campos.utm_content)];
+  // Desde ~20/09 a maioria dos leads chega sem as UTMs de último toque; o
+  // anúncio então vem da URL de entrada do primeiro toque (só como último recurso).
+  const valoresAd = [campo(lead, campos.utm_ad_id), campo(lead, campos.utm_content), adDaLandingPage(campo(lead, campos.landing_page ?? null))];
   const campanha = campo(lead, campos.utm_campaign_id);
   const ftp = campo(lead, campos.ftp_utm_campaign);
   let receita = Number(lead.price ?? 0) || 0;

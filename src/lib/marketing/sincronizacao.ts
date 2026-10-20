@@ -459,7 +459,7 @@ async function sincronizarMiniaturas(ctx: Contexto, conta: string) {
 
 // ───────────────────────────── Kommo ─────────────────────────────
 
-/** Funis e etapas (todo run) e a BU de cada funil; descobre o campo de primeiro toque. */
+/** Funis e etapas (todo run) e a BU de cada funil; descobre os campos de primeiro toque. */
 async function sincronizarFunis(ctx: Contexto, campos: KommoCampos) {
   const funis = await buscarFunisKommo();
   const { data: atuais } = await ctx.supabase
@@ -486,14 +486,16 @@ async function sincronizarFunis(ctx: Contexto, campos: KommoCampos) {
     funis.flatMap((f) => f.etapas),
   );
 
-  if (campos.ftp_utm_campaign === null) {
-    const ftp = (await buscarCamposLeadKommo()).find(
-      (c) =>
-        /ftp_utm_campaign/i.test(c.nome) ||
-        /ftp_utm_campaign/i.test(c.code ?? ""),
-    );
-    if (ftp) {
-      campos = { ...campos, ftp_utm_campaign: ftp.id };
+  // ftp_utm_campaign e landing_page: IDs descobertos pelo nome na primeira vez.
+  if (campos.ftp_utm_campaign === null || campos.landing_page == null) {
+    const lista = await buscarCamposLeadKommo();
+    const achar = (re: RegExp) => lista.find((c) => re.test(c.nome) || re.test(c.code ?? ""))?.id ?? null;
+    const descobertos = {
+      ftp_utm_campaign: campos.ftp_utm_campaign ?? achar(/ftp_utm_campaign/i),
+      landing_page: campos.landing_page ?? achar(/^landing_page$/i),
+    };
+    if (descobertos.ftp_utm_campaign !== campos.ftp_utm_campaign || descobertos.landing_page !== (campos.landing_page ?? null)) {
+      campos = { ...campos, ...descobertos };
       await ctx.supabase
         .from("mkt_configuracao")
         .update({ kommo_campos: campos, atualizado_em: agora })
@@ -513,6 +515,9 @@ async function sincronizarFunis(ctx: Contexto, campos: KommoCampos) {
   }
   return { campos, sortDe, sortMql };
 }
+
+/** Versão da normalização dos leads (normalizarLead); subir força um backfill novo. */
+const VERSAO_LEADS_KOMMO = 2;
 
 async function sincronizarKommo(
   ctx: Contexto,
@@ -539,7 +544,11 @@ async function sincronizarKommo(
     };
   }
 
-  const anterior = await ultimoBackfill(ctx, "kommo", null);
+  // Backfill concluído numa versão anterior da normalização é refeito do zero
+  // (v2: anúncio pela landing_page) — os leads antigos não passam no incremental.
+  const ultimo = await ultimoBackfill(ctx, "kommo", null);
+  const versaoAntiga = ultimo?.status === "ok" && ((ultimo.cursor as { versao?: number } | null)?.versao ?? 1) < VERSAO_LEADS_KOMMO;
+  const anterior = versaoAntiga ? null : ultimo;
   const backfill = !anterior || anterior.status !== "ok";
   let filtro: { campo: "created_at" | "updated_at"; desde: number };
   let pagina = 1;
@@ -612,7 +621,7 @@ async function sincronizarKommo(
       if (backfill)
         await ctx.supabase
           .from("mkt_sync_execucoes")
-          .update({ cursor: { pagina }, linhas_gravadas: linhas })
+          .update({ cursor: { pagina, versao: VERSAO_LEADS_KOMMO }, linhas_gravadas: linhas })
           .eq("id", id);
       await esperar(200);
     }
@@ -620,7 +629,7 @@ async function sincronizarKommo(
     await fecharExecucao(ctx, id, {
       status,
       linhas_gravadas: linhas,
-      cursor: { pagina },
+      cursor: { pagina, versao: VERSAO_LEADS_KOMMO },
     });
     return {
       fonte: "kommo",
@@ -634,7 +643,7 @@ async function sincronizarKommo(
       status: "erro",
       erro: mensagem(e),
       linhas_gravadas: linhas,
-      cursor: { pagina },
+      cursor: { pagina, versao: VERSAO_LEADS_KOMMO },
     });
     return {
       fonte: "kommo",
