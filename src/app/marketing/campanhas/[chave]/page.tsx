@@ -7,24 +7,29 @@ import {
 } from "@/lib/marketing/consultas";
 import { carregarSugestoesIa } from "@/lib/marketing/sugestoesIa";
 import { carregarVerificacoes } from "@/lib/marketing/verificacaoRastreio";
-import { TelaCampanha } from "@/components/marketing/tela-campanha";
+import { carregarFunil } from "@/lib/marketing/consultasFunil";
+import { TelaCampanha, type VisaoCampanha } from "@/components/marketing/tela-campanha";
 
 // "Gerar novas sugestões" (Server Action desta página) chama a IA — até ~1 min.
 export const maxDuration = 300;
 
-// Marketing · detalhe da campanha ("conta:campanha"): criativos, recomendações e sugestões por IA.
+// Marketing · detalhe da campanha ("conta:campanha"): criativos, recomendações
+// e sugestões por IA (aba Criativos) ou o funil da impressão à venda (aba Funil).
 export default async function CampanhaMarketingPage({
   params,
   searchParams,
 }: PageProps<"/marketing/campanhas/[chave]">) {
-  const [{ chave }, { periodo: p }] = await Promise.all([params, searchParams]);
+  const [{ chave }, { periodo: p, visao: v }] = await Promise.all([params, searchParams]);
   const periodo: PeriodoMarketing = p === "30d" || p === "tudo" ? p : "90d";
+  const visao: VisaoCampanha = v === "funil" ? "funil" : "criativos";
   const chaveCampanha = decodeURIComponent(chave);
   const supabase = await createClient();
-  const [dados, sugestoes, verificacoes] = await Promise.all([
+  // A base comum (Meta e Kommo) é lida uma vez por requisição (cache em carregarBase).
+  const [dados, sugestoes, verificacoes, funil] = await Promise.all([
     carregarCriativos(supabase, chaveCampanha, periodo),
-    carregarSugestoesIa(supabase, chaveCampanha),
-    carregarVerificacoes(supabase, chaveCampanha),
+    visao === "criativos" ? carregarSugestoesIa(supabase, chaveCampanha) : null,
+    visao === "criativos" ? carregarVerificacoes(supabase, chaveCampanha) : [],
+    visao === "funil" ? carregarFunil(supabase, chaveCampanha, periodo) : null,
   ]);
   if (!dados) notFound();
   // Campanha de outra BU que não a do contexto da AppBar: volta para a lista do contexto.
@@ -34,8 +39,10 @@ export default async function CampanhaMarketingPage({
     <TelaCampanha
       dados={dados}
       periodo={periodo}
+      visao={visao}
       sugestoes={sugestoes}
       verificacoes={verificacoes}
+      funil={funil}
     />
   );
 }

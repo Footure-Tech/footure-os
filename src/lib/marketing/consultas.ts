@@ -7,6 +7,7 @@
 // Por criativo (porte de meta_kommo_join.py): ad_id numérico (forte) → nome
 // do criativo que corresponde a um único anúncio (recuperado) → fora.
 // Leads de funis "fora" (Footure PRO, Insights) não entram em nenhuma BU.
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BuMarketing, Database, LimiaresMarketing } from "@/lib/supabase/database.types";
 import { BUCKET_CRIATIVOS } from "./sincronizacao";
@@ -41,16 +42,21 @@ async function lerTudo<T>(consulta: (de: number, ate: number) => PromiseLike<{ d
   return out;
 }
 
-/** Base comum: configuração, contas, funis, Meta (campanha e anúncio) e leads do Kommo. */
-async function carregarBase(supabase: Supa) {
+/**
+ * Base comum: configuração, contas, funis, Meta (campanha e anúncio) e leads
+ * do Kommo. Em cache por requisição: o detalhe da campanha e a aba Funil leem
+ * a mesma base.
+ */
+export const carregarBase = cache(async function carregarBase(supabase: Supa) {
   const [{ data: config }, { data: contas }, { data: funis }, campanhas, anuncios, leads, { data: ultimas }] = await Promise.all([
     supabase.from("mkt_configuracao").select("*").eq("id", true).maybeSingle(),
     supabase.from("mkt_contas").select("*"),
     supabase.from("mkt_kommo_funis").select("pipeline_id, bu"),
-    lerTudo((de, ate) => supabase.from("mkt_meta_campanha_dia").select("account_id, campaign_id, campaign_name, dia, spend, impressions, frequency, leads").range(de, ate)),
-    lerTudo((de, ate) => supabase.from("mkt_meta_anuncio_dia").select("account_id, ad_id, ad_name, campaign_id, adset_name, dia, spend, impressions, frequency, leads").range(de, ate)),
+    lerTudo((de, ate) => supabase.from("mkt_meta_campanha_dia").select("account_id, campaign_id, campaign_name, dia, spend, impressions, frequency, leads, link_clicks, landing_page_views, checkouts, video_views").range(de, ate)),
+    lerTudo((de, ate) => supabase.from("mkt_meta_anuncio_dia").select("account_id, ad_id, ad_name, campaign_id, adset_id, adset_name, dia, spend, impressions, frequency, leads, link_clicks, landing_page_views").range(de, ate)),
     lerTudo((de, ate) =>
-      supabase.from("mkt_kommo_leads").select("lead_id, pipeline_id, ad_id, ad_name_raw, campaign_id, ftp_campaign_id, is_mql, is_won, revenue, criado_em, dias_ate_venda").range(de, ate),
+      supabase.from("mkt_kommo_leads").select("lead_id, pipeline_id, status_id, ad_id, ad_name_raw, campaign_id, ftp_campaign_id, is_mql, is_won, is_lost, loss_reason_id, utm_source, revenue, criado_em, dias_ate_venda")
+        .range(de, ate),
     ),
     supabase.from("mkt_sync_execucoes").select("fonte, conta, status, erro, terminado_em, iniciado_em").order("iniciado_em", { ascending: false }).limit(20),
   ]);
@@ -105,6 +111,26 @@ async function carregarBase(supabase: Supa) {
     erroSync: erro?.erro ?? null,
     temDados: campanhas.length > 0,
   };
+});
+
+/** Período efetivo da campanha: "Campanha inteira" vai do primeiro ao último dia com gasto (até hoje, se ainda roda). */
+export function periodoDaCampanha(base: Awaited<ReturnType<typeof carregarBase>>, campaignId: string, periodo: PeriodoMarketing) {
+  const diasComGasto = base.campanhas.filter((r) => r.campaign_id === campaignId && Number(r.spend) > 0).map((r) => r.dia).sort();
+  const intervalo = intervaloMarketing(periodo, base.backfillDesde);
+  const ultimoGasto = diasComGasto.at(-1);
+  return periodo === "tudo" && diasComGasto.length
+    ? { de: diasComGasto[0], ate: ultimoGasto! >= somarDias(intervalo.ate, -1) ? intervalo.ate : ultimoGasto! }
+    : intervalo;
+}
+
+/** Nome → anúncio, só quando o nome corresponde a exatamente um anúncio (chave fraca). */
+export function anunciosPorNomeUnico(base: Awaited<ReturnType<typeof carregarBase>>) {
+  const idsPorNome = new Map<string, Set<string>>();
+  for (const a of base.anuncios) {
+    const n = normalizarNome(a.ad_name);
+    if (n) idsPorNome.set(n, (idsPorNome.get(n) ?? new Set()).add(a.ad_id));
+  }
+  return new Map([...idsPorNome].filter(([, ids]) => ids.size === 1).map(([n, ids]) => [n, [...ids][0]]));
 }
 
 export interface FiltroMarketing {
@@ -327,23 +353,10 @@ export async function carregarCriativos(supabase: Supa, chaveCampanha: string, p
   const [accountId, campaignId] = chaveCampanha.split(":");
   const ctx = base.campanha.get(campaignId);
   if (!ctx || ctx.accountId !== accountId) return null;
-  // "Campanha inteira": do primeiro ao último dia com gasto (até hoje, se ainda roda).
-  const diasComGasto = base.campanhas.filter((r) => r.campaign_id === campaignId && Number(r.spend) > 0).map((r) => r.dia).sort();
-  const intervalo = intervaloMarketing(periodo, base.backfillDesde);
-  const ultimoGasto = diasComGasto.at(-1);
-  const { de, ate } =
-    periodo === "tudo" && diasComGasto.length
-      ? { de: diasComGasto[0], ate: ultimoGasto! >= somarDias(intervalo.ate, -1) ? intervalo.ate : ultimoGasto! }
-      : intervalo;
+  const { de, ate } = periodoDaCampanha(base, campaignId, periodo);
   const meio = somarDias(de, Math.floor((Date.parse(ate) - Date.parse(de)) / 86_400_000 / 2));
 
-  // Nome → anúncio, só quando o nome corresponde a exatamente um anúncio (chave fraca).
-  const idsPorNome = new Map<string, Set<string>>();
-  for (const a of base.anuncios) {
-    const n = normalizarNome(a.ad_name);
-    if (n) idsPorNome.set(n, (idsPorNome.get(n) ?? new Set()).add(a.ad_id));
-  }
-  const unico = new Map([...idsPorNome].filter(([, ids]) => ids.size === 1).map(([n, ids]) => [n, [...ids][0]]));
+  const unico = anunciosPorNomeUnico(base);
 
   // Série diária por anúncio (gráfico de leads acumulados): índice do dia na janela.
   const dias: string[] = [];

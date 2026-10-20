@@ -14,7 +14,7 @@ import type { Acao } from "@/lib/marketing/motor";
 import { formatarMoeda, formatarMoedaCompacta } from "@/lib/formatacao";
 import { GradeKpis, KpiCard } from "@/components/ds/kpi-card";
 import { PageHeader } from "@/components/shell/page-header";
-import { SegmentedToggle } from "@/components/ds/alternadores";
+import { AbasFiltro, SegmentedToggle } from "@/components/ds/alternadores";
 import { BadgeTom } from "@/components/ds/badge-tom";
 import { StatusPill } from "@/components/ds/status-pill";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
@@ -34,6 +34,8 @@ import { VerificacaoPontaAPonta } from "@/components/marketing/verificacao-ponta
 import { VISUAL_VERIFICACAO } from "@/lib/marketing/rastreio";
 import type { VerificacaoRastreio } from "@/lib/marketing/verificacaoRastreio";
 import type { carregarSugestoesIa } from "@/lib/marketing/sugestoesIa";
+import type { carregarFunil } from "@/lib/marketing/consultasFunil";
+import { TelaFunil } from "@/components/marketing/tela-funil";
 
 type Dados = NonNullable<Awaited<ReturnType<typeof carregarCriativos>>>;
 type Criativo = Dados["criativos"][number];
@@ -60,24 +62,36 @@ const decimal = (v: number | null, casas = 2) =>
 const dataCurta = (iso: string) =>
   iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : "—";
 
-// Marketing · detalhe da campanha: recomendações de portfólio e ranking por
-// criativo (ação sugerida + por quê), no período escolhido.
+export type VisaoCampanha = "criativos" | "funil";
+
+// Marketing · detalhe da campanha, no período escolhido, em duas abas:
+// Criativos (recomendações de portfólio e ranking por criativo, com ação
+// sugerida + por quê) e Funil (da impressão à venda, com o gargalo).
 export function TelaCampanha({
   dados,
   periodo,
+  visao,
   sugestoes,
   verificacoes,
+  funil,
 }: {
   dados: Dados;
   periodo: PeriodoMarketing;
-  sugestoes: Awaited<ReturnType<typeof carregarSugestoesIa>>;
+  visao: VisaoCampanha;
+  sugestoes: Awaited<ReturnType<typeof carregarSugestoesIa>> | null;
   verificacoes: VerificacaoRastreio[];
+  funil: Awaited<ReturnType<typeof carregarFunil>> | null;
 }) {
   const { campanha } = dados;
   const voltar =
     periodo === "90d" ? "/marketing" : `/marketing?periodo=${periodo}`;
-  const hrefPeriodo = (p: PeriodoMarketing) =>
-    `/marketing/campanhas/${encodeURIComponent(campanha.chave)}${p === "90d" ? "" : `?periodo=${p}`}`;
+  const href = (p: PeriodoMarketing, v: VisaoCampanha) => {
+    const q = new URLSearchParams({
+      ...(p === "90d" ? {} : { periodo: p }),
+      ...(v === "criativos" ? {} : { visao: v }),
+    }).toString();
+    return `/marketing/campanhas/${encodeURIComponent(campanha.chave)}${q ? `?${q}` : ""}`;
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -95,7 +109,7 @@ export function TelaCampanha({
               valor={periodo}
               opcoes={PERIODOS.map((p) => ({
                 ...p,
-                href: hrefPeriodo(p.valor),
+                href: href(p.valor, visao),
               }))}
             />
           </>
@@ -107,115 +121,135 @@ export function TelaCampanha({
         ativos={dados.totais.ativos}
       />
 
-      <CardModulo
-        icone={MdShowChart}
-        cor="bg-iconBlue"
-        titulo="Leads acumulados no período"
-        className="min-w-0"
-      >
-        <GraficoLeadsAcumulados
-          dias={dados.serie.dias}
-          series={dados.serie.anuncios}
-          serieCampanha={dados.serie.campanha}
-          inicioJanelaAnuncio={dados.inicioJanelaAnuncio}
-          criativos={dados.criativos.map((c) => ({
-            adId: c.adId,
-            nome: c.nome,
-            imagemUrl: c.imagemUrl,
-            statusAnuncio: c.statusAnuncio,
-            gasto: c.gasto,
-            leads: c.leads,
-            leadsMeta: c.leadsMeta,
-          }))}
-        />
-      </CardModulo>
+      <AbasFiltro
+        valor={visao}
+        opcoes={[
+          {
+            valor: "criativos",
+            rotulo: "Criativos",
+            href: href(periodo, "criativos"),
+          },
+          { valor: "funil", rotulo: "Funil", href: href(periodo, "funil") },
+        ]}
+      />
 
-      <BlocoRastreio dados={dados} verificacoes={verificacoes}>
-        <InstrucoesRastreio
-          campanhaNome={campanha.nome}
-          campanhaId={campanha.campaignId}
-          destinos={dados.destinos}
-          diagnostico={{
-            leadsMeta: dados.criativos.reduce((s, c) => s + c.leadsMeta, 0),
-            leadsCrm: dados.criativos.reduce((s, c) => s + c.leads, 0),
-            // Só com volume mínimo na Meta (evita apontar amostra de 1–2 leads).
-            semCrm: dados.criativos
-              .filter((c) => c.leadsMeta >= 5 && c.leads === 0)
-              .map((c) => ({ nome: c.nome, leadsMeta: c.leadsMeta })),
-          }}
-        />
-      </BlocoRastreio>
-
-      <CardModulo
-        icone={MdLightbulbOutline}
-        cor="bg-iconYellow"
-        titulo="Recomendações da campanha"
-        className="min-w-0"
-        extra={
-          <SugestoesIa
-            chave={campanha.chave}
-            periodo={periodo === "30d" ? "30d" : "90d"}
-            rodadas={sugestoes.rodadas}
-            recenteId={sugestoes.recenteId}
-            consumo={sugestoes.consumo}
-          />
-        }
-      >
-        <ul className="flex flex-col gap-2.5">
-          {dados.recomendacoes.map((r) => (
-            <li key={r.titulo} className="text-sm text-gray2">
-              <strong className="font-bold text-darkPurple1">
-                {r.titulo}:
-              </strong>{" "}
-              {r.texto}
-            </li>
-          ))}
-        </ul>
-        <p className="text-xs font-semibold text-gray3">
-          Recomendações para validação humana — nada é executado
-          automaticamente.
-        </p>
-      </CardModulo>
-
-      {dados.criativos.length === 0 ? (
-        <div className="rounded-xl border border-gray5 bg-surface shadow-table">
-          <EstadoVazio
-            icone={MdCampaign}
-            titulo="Nenhum criativo com gasto no período"
-            descricao="Sem dados por criativo neste período — confira a sincronização do Marketing."
-          />
-        </div>
+      {visao === "funil" && funil ? (
+        <TelaFunil funil={funil} />
       ) : (
-        <ul className="flex flex-col gap-4">
-          {dados.criativos.map((c) => (
-            <li key={c.adId}>
-              <CartaoCriativo
-                c={c}
-                accountId={campanha.accountId}
-                chave={campanha.chave}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+        <>
+          <CardModulo
+            icone={MdShowChart}
+            cor="bg-iconBlue"
+            titulo="Leads acumulados no período"
+            className="min-w-0"
+          >
+            <GraficoLeadsAcumulados
+              dias={dados.serie.dias}
+              series={dados.serie.anuncios}
+              serieCampanha={dados.serie.campanha}
+              inicioJanelaAnuncio={dados.inicioJanelaAnuncio}
+              criativos={dados.criativos.map((c) => ({
+                adId: c.adId,
+                nome: c.nome,
+                imagemUrl: c.imagemUrl,
+                statusAnuncio: c.statusAnuncio,
+                gasto: c.gasto,
+                leads: c.leads,
+                leadsMeta: c.leadsMeta,
+              }))}
+            />
+          </CardModulo>
 
-      <div className="flex gap-2 rounded-xl border border-gray5 bg-surface p-4 text-xs text-gray3">
-        <MdInfoOutline className="mt-px size-4 shrink-0" />
-        <div className="flex flex-col gap-1">
-          <span>
-            Leads do Kommo por criativo: pelo ID do anúncio (forte) ou, sem ele,
-            pelo nome do criativo quando corresponde a um único anúncio
-            (&ldquo;recuperado por nome&rdquo;). Leads maduros = criados há mais
-            que a mediana de {decimal(dados.medianaDias, 1)} dias entre lead e
-            venda; criativo com mais da metade dos leads ainda imaturos fica em
-            OBSERVAR.
-          </span>
-          <span>
-            Dados por criativo disponíveis desde{" "}
-            {dataCurta(dados.inicioJanelaAnuncio)}.
-          </span>
-        </div>
-      </div>
+          <BlocoRastreio dados={dados} verificacoes={verificacoes}>
+            <InstrucoesRastreio
+              campanhaNome={campanha.nome}
+              campanhaId={campanha.campaignId}
+              destinos={dados.destinos}
+              diagnostico={{
+                leadsMeta: dados.criativos.reduce((s, c) => s + c.leadsMeta, 0),
+                leadsCrm: dados.criativos.reduce((s, c) => s + c.leads, 0),
+                // Só com volume mínimo na Meta (evita apontar amostra de 1–2 leads).
+                semCrm: dados.criativos
+                  .filter((c) => c.leadsMeta >= 5 && c.leads === 0)
+                  .map((c) => ({ nome: c.nome, leadsMeta: c.leadsMeta })),
+              }}
+            />
+          </BlocoRastreio>
+
+          <CardModulo
+            icone={MdLightbulbOutline}
+            cor="bg-iconYellow"
+            titulo="Recomendações da campanha"
+            className="min-w-0"
+            extra={
+              sugestoes && (
+                <SugestoesIa
+                  chave={campanha.chave}
+                  periodo={periodo === "30d" ? "30d" : "90d"}
+                  rodadas={sugestoes.rodadas}
+                  recenteId={sugestoes.recenteId}
+                  consumo={sugestoes.consumo}
+                />
+              )
+            }
+          >
+            <ul className="flex flex-col gap-2.5">
+              {dados.recomendacoes.map((r) => (
+                <li key={r.titulo} className="text-sm text-gray2">
+                  <strong className="font-bold text-darkPurple1">
+                    {r.titulo}:
+                  </strong>{" "}
+                  {r.texto}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs font-semibold text-gray3">
+              Recomendações para validação humana — nada é executado
+              automaticamente.
+            </p>
+          </CardModulo>
+
+          {dados.criativos.length === 0 ? (
+            <div className="rounded-xl border border-gray5 bg-surface shadow-table">
+              <EstadoVazio
+                icone={MdCampaign}
+                titulo="Nenhum criativo com gasto no período"
+                descricao="Sem dados por criativo neste período — confira a sincronização do Marketing."
+              />
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-4">
+              {dados.criativos.map((c) => (
+                <li key={c.adId}>
+                  <CartaoCriativo
+                    c={c}
+                    accountId={campanha.accountId}
+                    chave={campanha.chave}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="flex gap-2 rounded-xl border border-gray5 bg-surface p-4 text-xs text-gray3">
+            <MdInfoOutline className="mt-px size-4 shrink-0" />
+            <div className="flex flex-col gap-1">
+              <span>
+                Leads do Kommo por criativo: pelo ID do anúncio (forte) ou, sem
+                ele, pelo nome do criativo quando corresponde a um único anúncio
+                (&ldquo;recuperado por nome&rdquo;). Leads maduros = criados há
+                mais que a mediana de {decimal(dados.medianaDias, 1)} dias entre
+                lead e venda; criativo com mais da metade dos leads ainda
+                imaturos fica em OBSERVAR.
+              </span>
+              <span>
+                Dados por criativo disponíveis desde{" "}
+                {dataCurta(dados.inicioJanelaAnuncio)}.
+              </span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
