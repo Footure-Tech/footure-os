@@ -161,7 +161,7 @@ export async function salvarPedido(_prev: SalvarPedidoState, formData: FormData)
 
     const imagem = formData.get("imagemNovoCliente") as File | null;
     if (imagem && imagem.size > 0) {
-      const path = `${clienteId}/logo`;
+      const path = `${clienteId}/logo-${Date.now()}`; // versionado como em clientes/serverActions.ts (cache da URL pública)
       const buffer = Buffer.from(await imagem.arrayBuffer());
       const { error: erroUpload } = await supabase.storage
         .from("logos-clientes")

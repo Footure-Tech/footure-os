@@ -127,15 +127,17 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
 
   const imagem = formData.get("imagem") as File | null;
   if (imagem && imagem.size > 0) {
-    const path = `${clienteId}/logo`;
+    const { data: anterior } = await supabase.from("clientes").select("logo_path").eq("id", clienteId).single();
+    // Caminho novo a cada troca: a URL pública fica 1 h em cache (max-age=3600) —
+    // regravar o mesmo caminho fazia o navegador seguir mostrando o logo antigo.
+    const path = `${clienteId}/logo-${Date.now()}`;
     const buffer = Buffer.from(await imagem.arrayBuffer());
-    const { error: erroUpload } = await supabase.storage
-      .from("logos-clientes")
-      .upload(path, buffer, { contentType: imagem.type, upsert: true });
+    const { error: erroUpload } = await supabase.storage.from("logos-clientes").upload(path, buffer, { contentType: imagem.type });
     if (erroUpload) return { erro: `Cliente salvo, mas falhou ao enviar a imagem: ${erroUpload.message}` };
 
     const { error: erroUpdate } = await supabase.from("clientes").update({ logo_path: path }).eq("id", clienteId);
     if (erroUpdate) return { erro: `Cliente salvo, mas falhou ao registrar a imagem: ${erroUpdate.message}` };
+    if (anterior?.logo_path && anterior.logo_path !== path) await supabase.storage.from("logos-clientes").remove([anterior.logo_path]);
   }
 
   revalidatePath("/clientes");
