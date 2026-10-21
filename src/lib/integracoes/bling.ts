@@ -143,9 +143,9 @@ async function chamarApiBling<T>(token: string, caminho: string, tentativa = 0):
   return json as T;
 }
 
-/** Escrita na API (POST/PATCH), pela mesma fila de 3 req/s. Devolve o JSON
+/** Escrita na API (POST/PATCH/PUT/DELETE), pela mesma fila de 3 req/s. Devolve o JSON
  * (ou null em 204); erro HTTP vira Error com a mensagem do Bling. */
-export async function requisicaoBling<T>(token: string, metodo: "POST" | "PATCH" | "PUT", caminho: string, corpo?: unknown, tentativa = 0): Promise<T | null> {
+export async function requisicaoBling<T>(token: string, metodo: "POST" | "PATCH" | "PUT" | "DELETE", caminho: string, corpo?: unknown, tentativa = 0): Promise<T | null> {
   await aguardarVezNaFila();
   const resposta = await fetch(`${API_BASE}${caminho}`, {
     method: metodo,

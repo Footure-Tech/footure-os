@@ -47,7 +47,8 @@ export function AvisoCnpjBling({
   if (verificando) return <p className="text-xs text-gray3">Verificando o CNPJ no Bling…</p>;
   if (!resultado) return null;
   if (resultado.erro) {
-    return <p className="rounded-lg bg-orange3 px-3 py-2 text-xs font-semibold text-[#ce9232]">Não foi possível consultar o Bling agora: {resultado.erro}</p>;
+    // CNPJ/CPF inválido ou falha ao consultar o Bling — a mensagem já diz qual.
+    return <p className="rounded-lg bg-orange3 px-3 py-2 text-xs font-semibold text-[#ce9232]">{resultado.erro}</p>;
   }
 
   if (resultado.clienteLocal) {

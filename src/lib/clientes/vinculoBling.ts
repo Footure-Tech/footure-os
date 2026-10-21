@@ -63,7 +63,29 @@ export function documentoValido(cnpj: string): string {
   if (d.length !== 14 && d.length !== 11) {
     throw new Error("Informe um CNPJ (14 dígitos) ou CPF (11 dígitos) válido. Cliente estrangeiro sem documento: cadastre direto no Bling e sincronize.");
   }
+  if (!digitosVerificadoresOk(d)) {
+    throw new Error(`${d.length === 14 ? "CNPJ" : "CPF"} ${formatarCnpj(d)} inválido (dígitos verificadores não conferem) — confira o número no cartão CNPJ/documento.`);
+  }
   return d;
+}
+
+/** Mesmo cálculo que o Bling (e a Receita) usa — evita mandar um documento que ele vai recusar. */
+function digitosVerificadoresOk(d: string): boolean {
+  if (/^(\d)\1+$/.test(d)) return false;
+  const calcular = (base: string, pesos: number[]) => {
+    const resto = base.split("").reduce((s, n, i) => s + Number(n) * pesos[i], 0) % 11;
+    return d.length === 14 ? (resto < 2 ? 0 : 11 - resto) : ((resto * 10) % 11) % 10;
+  };
+  if (d.length === 14) {
+    const p1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const d1 = calcular(d.slice(0, 12), p1);
+    const d2 = calcular(d.slice(0, 12) + d1, [6, ...p1]);
+    return d.endsWith(`${d1}${d2}`);
+  }
+  // CPF: soma × 10 mod 11 (resto 10 vira 0)
+  const d1 = calcular(d.slice(0, 9), [10, 9, 8, 7, 6, 5, 4, 3, 2]);
+  const d2 = calcular(d.slice(0, 9) + d1, [11, 10, 9, 8, 7, 6, 5, 4, 3, 2]);
+  return d.endsWith(`${d1}${d2}`);
 }
 
 export function cepValido(cep: string): string {

@@ -27,8 +27,7 @@ import { carregarSignatariosExibidos } from "@/lib/contratos/signatariosExibidos
 import { PainelAlertas } from "@/components/pedido/painel-alertas";
 import { AcoesPedido } from "@/components/pedido/acoes-pedido";
 import { CancelarPedidoDialog } from "@/components/pedido/cancelar-pedido-dialog";
-import { TimelineTransicoes, type EventoTimeline } from "@/components/pedido/timeline-transicoes";
-import { ROTULO_STATUS } from "@/components/rotulo-status";
+import { TimelineTransicoes, tituloTransicao, type EventoTimeline } from "@/components/pedido/timeline-transicoes";
 import { ReenviarBlingButton } from "@/components/pedido/reenviar-bling-button";
 import { AnaliseVersaoContrato } from "@/components/contratos/analise-versao";
 import { ChecklistValidacao } from "@/components/contratos/checklist-validacao";
@@ -168,7 +167,7 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
       id: t.id,
       data: t.criado_em,
       nome: (t.profiles as unknown as { nome: string } | null)?.nome ?? "—",
-      titulo: `${t.de ? ROTULO_STATUS[t.de] : "Criado"} → ${ROTULO_STATUS[t.para]}`,
+      titulo: tituloTransicao(t),
       comentario: t.comentario,
     })),
   ].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());

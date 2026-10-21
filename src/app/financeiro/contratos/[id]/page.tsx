@@ -21,10 +21,9 @@ import { StatusPill } from "@/components/ds/status-pill";
 import { GradeKpis, KpiCard } from "@/components/ds/kpi-card";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { CardModulo, LinhaChaveValor } from "@/components/negocio/card-modulo";
-import { TimelineTransicoes, type EventoTimeline } from "@/components/pedido/timeline-transicoes";
+import { TimelineTransicoes, tituloTransicao, type EventoTimeline } from "@/components/pedido/timeline-transicoes";
 import { IndicadorBling } from "@/components/financeiro/tela-contratos";
 import { AnexarContratoBling } from "@/components/financeiro/anexar-contrato-bling";
-import { ROTULO_STATUS } from "@/components/rotulo-status";
 import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 
 const ROTULO_PERFIL_CLIENTE = { clube: "Clube", agente: "Agente" } as const;
@@ -153,7 +152,7 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
             id: t.id,
             data: t.criado_em,
             nome: (t.profiles as unknown as { nome: string } | null)?.nome ?? null,
-            titulo: `${t.de ? ROTULO_STATUS[t.de] : "Criado"} → ${ROTULO_STATUS[t.para]}`,
+            titulo: tituloTransicao(t),
             comentario: t.comentario,
           })),
           ...versoes.map((c) => ({ id: `versao-${c.id}`, data: c.gerado_em, titulo: `Contrato v${c.versao} gerado`, comentario: c.motivo_versao })),

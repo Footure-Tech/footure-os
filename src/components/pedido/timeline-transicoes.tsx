@@ -1,4 +1,6 @@
 import { formatarDataCurta } from "@/lib/formatacao";
+import { ROTULO_STATUS } from "@/components/rotulo-status";
+import type { StatusPedido } from "@/lib/supabase/database.types";
 
 export interface EventoTimeline {
   id: string;
@@ -9,6 +11,12 @@ export interface EventoTimeline {
   comentario?: string | null;
   /** Data sem hora (aaaa-mm-dd, como as do Bling) — exibe só o dia. */
   soData?: boolean;
+}
+
+/** de = para é evento sem mudança de status — hoje só a substituição do PV no Bling (blingPedido.ts). */
+export function tituloTransicao(t: { de: StatusPedido | null; para: StatusPedido }) {
+  if (t.de === t.para) return "Pedido substituído no Bling";
+  return `${t.de ? ROTULO_STATUS[t.de] : "Criado"} → ${ROTULO_STATUS[t.para]}`;
 }
 
 function formatarDataHora(iso: string) {

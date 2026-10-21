@@ -29,7 +29,7 @@ interface Transicao {
 }
 
 function ultimaData(transicoes: Transicao[], para: StatusPedido) {
-  const t = [...transicoes].reverse().find((x) => x.para === para);
+  const t = [...transicoes].reverse().find((x) => x.para === para && x.de !== para);
   return t ? formatarDataCurta(t.criado_em) : null;
 }
 

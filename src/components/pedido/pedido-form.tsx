@@ -131,6 +131,7 @@ const ROTULOS_DIVULGACAO = {
 };
 
 const ESTADO_INICIAL: SalvarPedidoState = {};
+const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function PedidoForm({ clientes, signatariosPorCliente, representantesFooture, usuarios, pedidoId, dadosIniciais: d }: Props) {
   const [estado, formAction, pendente] = useActionState(salvarPedido, ESTADO_INICIAL);
@@ -195,11 +196,26 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
   function adicionarEmail() {
     const email = novoEmail.trim().toLowerCase();
     if (!email) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return setErroEmail("E-mail inválido.");
+    if (!EMAIL_VALIDO.test(email)) return setErroEmail("E-mail inválido.");
     if (emailsFinanceiro.includes(email)) return setErroEmail("Esse e-mail já está na lista.");
     setEmailsFinanceiro([...emailsFinanceiro, email]);
     setNovoEmail("");
     setErroEmail(null);
+  }
+  /** E-mail digitado e não salvo entra no envio do pedido; inválido barra o envio. */
+  function emailsFinanceiroParaEnvio(): string[] | null {
+    const email = novoEmail.trim().toLowerCase();
+    if (!email) return emailsFinanceiro;
+    if (!EMAIL_VALIDO.test(email)) {
+      setErroEmail("E-mail inválido — corrija ou apague antes de salvar o pedido.");
+      document.getElementById("email-financeiro")?.focus();
+      return null;
+    }
+    const emails = emailsFinanceiro.includes(email) ? emailsFinanceiro : [...emailsFinanceiro, email];
+    setEmailsFinanceiro(emails);
+    setNovoEmail("");
+    setErroEmail(null);
+    return emails;
   }
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteId);
@@ -300,6 +316,8 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
   const signatariosDoClienteSelecionado = clienteId ? (signatariosPorCliente[clienteId] ?? []) : [];
 
   function aoEnviar(formData: FormData) {
+    const emailsFinanceiro = emailsFinanceiroParaEnvio();
+    if (!emailsFinanceiro) return;
     const payload = {
       pedidoId,
       clienteId: cadastrandoNovo ? undefined : clienteId || undefined,
@@ -761,7 +779,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                 }}
               />
               <Button type="button" variant="white" onClick={adicionarEmail}>
-                Adicionar
+                Salvar
               </Button>
             </div>
             {erroEmail && <p className="text-xs text-destructive">{erroEmail}</p>}
