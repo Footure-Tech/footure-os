@@ -92,7 +92,7 @@ export async function enviarEmailContratoParaValidacao(
       },
     ],
     botao: { rotulo: "Validar contrato", url: dados.link },
-    observacao: "Você recebe este aviso por ter o perfil Jurídico no Footure OS.",
+    observacao: "Você recebe este aviso como responsável pela validação jurídica dos contratos da Footure.",
   });
 }
 
