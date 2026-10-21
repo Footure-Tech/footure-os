@@ -16,6 +16,8 @@ import { ResumoPedido, type IntencaoEnvio } from "./resumo-pedido";
 import { SignatarioListEditor, type SignatarioForm } from "./signatario-list-editor";
 import { PainelAlertas } from "./painel-alertas";
 import { CamposEndereco } from "@/components/clientes/campos-endereco";
+import { AvisoCnpjBling, DivergenciaBlingDialog, useVerificacaoCnpj } from "@/components/clientes/verificacao-bling";
+import type { DadosEmpresa, DecisaoBling } from "@/lib/clientes/vinculoBling";
 import { salvarPedido, type SalvarPedidoState } from "@/lib/pedidos/serverActions";
 import { gerarAlertas, FORO_DEFAULT } from "@/lib/validacoes/pedido";
 import { normalizePlan, listarPlanosCanonicos } from "@/lib/plans/normalize";
@@ -159,6 +161,27 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
     uf: "",
   });
   const [previewLogoNovoCliente, setPreviewLogoNovoCliente] = useState<string | null>(null);
+  const { resultado: verificacaoCnpj, verificando: verificandoCnpj, verificar: verificarCnpj } = useVerificacaoCnpj();
+  function preencherComBling(dados: DadosEmpresa) {
+    setNovoCliente({ ...novoCliente, ...dados, cnpj: novoCliente.cnpj });
+  }
+  function usarClienteExistente(id: string) {
+    setCadastrandoNovo(false);
+    setClienteId(id);
+  }
+
+  // Cliente novo já existe no Bling com dados diferentes: o servidor devolve a
+  // comparação; a resposta reenvia o MESMO envio (com a logo) + decisaoBling.
+  const ultimoEnvio = useRef<FormData | null>(null);
+  const [divergenciaRespondida, setDivergenciaRespondida] = useState<SalvarPedidoState | null>(null);
+  const divergenciaBling = estado.divergenciaBling && divergenciaRespondida !== estado ? estado.divergenciaBling : null;
+  function decidirDivergencia(decisao: DecisaoBling) {
+    setDivergenciaRespondida(estado);
+    const formData = ultimoEnvio.current;
+    if (!formData) return;
+    formData.set("payload", JSON.stringify({ ...JSON.parse(String(formData.get("payload"))), decisaoBling: decisao }));
+    startTransition(() => formAction(formData));
+  }
 
   const [sdrId, setSdrId] = useState(d?.sdrId ?? "");
   const [closerId, setCloserId] = useState(d?.closerId ?? "");
@@ -323,6 +346,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
     };
     formData.set("payload", JSON.stringify(payload));
     formData.set("intencao", intencaoRef.current);
+    ultimoEnvio.current = formData;
     // Sem representante legal: em vez de alertar desde a abertura da tela,
     // pergunta no envio para aprovação (o rascunho salva sem perguntar).
     if (intencaoRef.current === "enviar" && geraContrato && representantesLegais.length === 0) {
@@ -398,9 +422,19 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label variante="campo">CNPJ</Label>
-                  <Input value={novoCliente.cnpj} onChange={(e) => setNovoCliente({ ...novoCliente, cnpj: e.target.value })} />
+                  <Input
+                    value={novoCliente.cnpj}
+                    onChange={(e) => setNovoCliente({ ...novoCliente, cnpj: e.target.value })}
+                    onBlur={() => verificarCnpj(novoCliente)}
+                  />
                 </div>
               </div>
+              <AvisoCnpjBling
+                resultado={verificacaoCnpj}
+                verificando={verificandoCnpj}
+                aoPreencherComBling={preencherComBling}
+                aoUsarClienteExistente={clientes.some((c) => c.id === verificacaoCnpj?.clienteLocal?.id) ? usarClienteExistente : undefined}
+              />
               <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
                 <div className="flex flex-col gap-2">
                   <Label variante="campo">Razão social</Label>
@@ -989,6 +1023,13 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DivergenciaBlingDialog
+        divergencia={divergenciaBling}
+        pendente={pendente}
+        aoDecidir={decidirDivergencia}
+        aoCancelar={() => setDivergenciaRespondida(estado)}
+      />
     </form>
   );
 }

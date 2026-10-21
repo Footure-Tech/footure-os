@@ -104,22 +104,6 @@ export async function listarClientesComContagemPedidos(supabase: Supa): Promise<
   });
 }
 
-/** Contatos do Bling (cache local) que ainda não têm um cliente local
- * vinculado — candidatos válidos pro seletor de "novo cliente" ou pra religar
- * um cliente legado sem bling_contato_id (ex.: CNPJ cadastrado errado, nunca
- * casou na sincronização automática). */
-export async function listarContatosBlingSemCadastro(supabase: Supa) {
-  const [{ data: contatos, error: erroContatos }, { data: clientesLocais, error: erroClientes }] = await Promise.all([
-    supabase.from("bling_contatos").select("id, nome, cnpj").order("nome", { ascending: true }),
-    supabase.from("clientes").select("bling_contato_id").not("bling_contato_id", "is", null),
-  ]);
-  logSeErro("listarContatosBlingSemCadastro:contatos", erroContatos);
-  logSeErro("listarContatosBlingSemCadastro:clientes", erroClientes);
-
-  const vinculados = new Set((clientesLocais ?? []).map((c) => c.bling_contato_id));
-  return (contatos ?? []).filter((c) => !vinculados.has(c.id));
-}
-
 export async function buscarCliente(supabase: Supa, clienteId: string) {
   const { data, error } = await supabase.from("clientes").select("*").eq("id", clienteId).single();
   logSeErro(`buscarCliente(${clienteId})`, error);

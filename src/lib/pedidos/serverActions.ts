@@ -12,6 +12,7 @@ import * as acoes from "@/lib/pedidos/acoes";
 import { STATUS_EDITAVEIS } from "@/lib/pedidos/statusEditavel";
 import { notificarSignatariosPendentes } from "@/lib/integracoes/clicksign";
 import type { ItemValidacaoContrato } from "@/lib/supabase/database.types";
+import { garantirContatoBling, dadosEmpresaDoPayload, linhaIdentidadeCliente, type ContatoBlingEncontrado } from "@/lib/clientes/vinculoBling";
 
 const SignatarioSchema = z.object({
   id: z.string().uuid().optional(), // já existente em signatarios_cliente
@@ -80,12 +81,16 @@ const PedidoPayloadSchema = z.object({
   geraContrato: z.boolean().default(true),
   emailsFinanceiro: z.array(z.string().trim().email("E-mail financeiro inválido")).max(10).default([]),
   origem: z.enum(["carteira", "inbound", "outbound"]).nullable().optional(),
+  // Resposta à divergência entre o cliente novo informado e o contato do Bling (vinculoBling.ts).
+  decisaoBling: z.enum(["atualizar_bling", "usar_bling"]).optional(),
 });
 
 export type PedidoPayload = z.infer<typeof PedidoPayloadSchema>;
 
 export interface SalvarPedidoState {
   erro?: string;
+  /** Cliente novo já existe no Bling com dados diferentes — o form pergunta e reenvia com decisaoBling. */
+  divergenciaBling?: ContatoBlingEncontrado;
 }
 
 /** Cria (ou atualiza, se pedidoId vier no payload) um pedido em RASCUNHO. */
@@ -123,26 +128,31 @@ export async function salvarPedido(_prev: SalvarPedidoState, formData: FormData)
     vigenciaFim: payload.vigenciaFim,
   });
   if (!gate.ok) return { erro: gate.motivo };
+  if (payload.formaPagamento === "parcelado" && !payload.numeroParcelas) {
+    return { erro: "Informe o número de parcelas para pagamento parcelado." };
+  }
 
   const supabase = await createClient();
 
   let clienteId = payload.clienteId;
   if (!clienteId && payload.novoCliente) {
+    const nc = payload.novoCliente;
+    // Todo cliente novo nasce vinculado a um contato do Bling (conferido ou
+    // cadastrado lá) — sem isso o pedido aprovado não chega ao Bling.
+    let vinculo;
+    try {
+      vinculo = await garantirContatoBling(supabase, dadosEmpresaDoPayload(nc), payload.decisaoBling);
+    } catch (erro) {
+      return { erro: erro instanceof Error ? erro.message : String(erro) };
+    }
+    if (vinculo.status === "divergente") return { divergenciaBling: vinculo.contato };
     const { data: cliente, error } = await supabase
       .from("clientes")
       .insert({
-        tipo: payload.novoCliente.tipo,
-        razao_social: payload.novoCliente.razaoSocial,
-        nome_fantasia: payload.novoCliente.nomeFantasia || null,
-        apelido: payload.novoCliente.tipo === "clube" ? payload.novoCliente.apelido || null : null,
-        cnpj: payload.novoCliente.cnpj,
-        endereco: payload.novoCliente.endereco,
-        numero: payload.novoCliente.numero,
-        complemento: payload.novoCliente.complemento || null,
-        bairro: payload.novoCliente.bairro,
-        cep: payload.novoCliente.cep,
-        municipio: payload.novoCliente.municipio,
-        uf: payload.novoCliente.uf,
+        tipo: nc.tipo,
+        apelido: nc.tipo === "clube" ? nc.apelido || null : null,
+        ...linhaIdentidadeCliente(vinculo.dados),
+        bling_contato_id: vinculo.contatoId,
       })
       .select("id")
       .single();
@@ -162,9 +172,6 @@ export async function salvarPedido(_prev: SalvarPedidoState, formData: FormData)
     }
   }
   if (!clienteId) return { erro: "Selecione um cliente existente ou cadastre um novo." };
-  if (payload.formaPagamento === "parcelado" && !payload.numeroParcelas) {
-    return { erro: "Informe o número de parcelas para pagamento parcelado." };
-  }
 
   const linhaPedido = {
     cliente_id: clienteId,

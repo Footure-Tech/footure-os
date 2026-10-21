@@ -7,10 +7,24 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { exigirPapel } from "@/lib/auth/session";
 import { executarSincronizacaoBling, type ResultadoSincronizacaoBling } from "@/lib/integracoes/blingSincronizacao";
+import {
+  garantirContatoBling,
+  verificarCnpj,
+  dadosEmpresaDoPayload,
+  linhaIdentidadeCliente,
+  type ContatoBlingEncontrado,
+  type DadosEmpresa,
+  type VerificacaoCnpj,
+} from "@/lib/clientes/vinculoBling";
 
 const ClientePayloadSchema = z.object({
   clienteId: z.string().uuid().optional(), // presente = edição
-  blingContatoId: z.number(), // razão social/CNPJ vêm do Bling, nunca digitados aqui
+  // Só para cliente sem vínculo com o Bling (novo ou legado): a identidade
+  // digitada é conferida/cadastrada no Bling (vinculoBling.ts). Cliente já
+  // vinculado ignora esses dois — razão social/CNPJ seguem o Bling.
+  razaoSocial: z.string().optional(),
+  cnpj: z.string().optional(),
+  decisaoBling: z.enum(["atualizar_bling", "usar_bling"]).optional(),
   tipo: z.enum(["clube", "agente"]),
   nomeFantasia: z.string().optional(),
   apelido: z.string().optional(), // só faz sentido pra clube — validado na UI, não aqui
@@ -34,6 +48,8 @@ function erroFootlinkDuplicado(error: { code?: string; message: string }) {
 
 export interface SalvarClienteState {
   erro?: string;
+  /** CNPJ já existe no Bling com dados diferentes — a tela pergunta o que fazer e reenvia com decisaoBling. */
+  divergenciaBling?: ContatoBlingEncontrado;
 }
 
 /** Cria (ou atualiza, se clienteId vier no payload) um cliente, com upload opcional de logo. */
@@ -47,34 +63,57 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
   const payload = parsed.data;
   const supabase = await createClient();
 
-  // Razão social/CNPJ sempre vêm do contato do Bling (fonte única de
-  // identidade) — nunca do que o formulário mandou, pra não confiar em texto
-  // que o cliente do navegador poderia ter alterado e pra sempre gravar a
-  // versão mais atual já que estamos buscando de qualquer forma.
-  const { data: contatoBling, error: erroContato } = await supabase
-    .from("bling_contatos")
-    .select("nome, cnpj")
-    .eq("id", payload.blingContatoId)
-    .single();
-  if (erroContato || !contatoBling) return { erro: "Contato do Bling não encontrado — sincronize novamente e tente de novo." };
-
-  const linha = {
+  const complemento = {
     tipo: payload.tipo,
-    razao_social: contatoBling.nome,
-    cnpj: contatoBling.cnpj,
-    bling_contato_id: payload.blingContatoId,
-    nome_fantasia: payload.nomeFantasia || null,
     apelido: payload.tipo === "clube" ? payload.apelido || null : null,
     footlink_org_id: payload.footlinkOrgId?.trim() || null,
-    endereco: payload.endereco,
-    numero: payload.numero,
-    complemento: payload.complemento || null,
-    bairro: payload.bairro,
-    cep: payload.cep,
-    municipio: payload.municipio,
-    uf: payload.uf,
     foro_preferencial: payload.foroPreferencial,
   };
+
+  const { data: atual } = payload.clienteId
+    ? await supabase.from("clientes").select("bling_contato_id").eq("id", payload.clienteId).single()
+    : { data: null };
+
+  let linha;
+  if (atual?.bling_contato_id != null) {
+    // Já vinculado: razão social/CNPJ sempre do contato do Bling (fonte única
+    // de identidade) — nunca do formulário.
+    const { data: contatoBling, error: erroContato } = await supabase
+      .from("bling_contatos")
+      .select("nome, cnpj")
+      .eq("id", atual.bling_contato_id)
+      .single();
+    if (erroContato || !contatoBling) return { erro: "Contato do Bling não encontrado — sincronize novamente e tente de novo." };
+    linha = {
+      ...complemento,
+      razao_social: contatoBling.nome,
+      cnpj: contatoBling.cnpj,
+      nome_fantasia: payload.nomeFantasia || null,
+      endereco: payload.endereco,
+      numero: payload.numero,
+      complemento: payload.complemento || null,
+      bairro: payload.bairro,
+      cep: payload.cep,
+      municipio: payload.municipio,
+      uf: payload.uf,
+    };
+  } else {
+    // Novo (ou legado sem vínculo): confere o CNPJ no Bling, cadastrando lá se não existir.
+    if (!payload.razaoSocial?.trim() || !payload.cnpj?.trim()) return { erro: "Informe a razão social e o CNPJ." };
+    let resultado;
+    try {
+      resultado = await garantirContatoBling(
+        supabase,
+        dadosEmpresaDoPayload({ ...payload, razaoSocial: payload.razaoSocial, cnpj: payload.cnpj }),
+        payload.decisaoBling,
+        payload.clienteId,
+      );
+    } catch (erro) {
+      return { erro: erro instanceof Error ? erro.message : String(erro) };
+    }
+    if (resultado.status === "divergente") return { divergenciaBling: resultado.contato };
+    linha = { ...complemento, ...linhaIdentidadeCliente(resultado.dados), bling_contato_id: resultado.contatoId };
+  }
 
   let clienteId = payload.clienteId;
   if (clienteId) {
@@ -101,6 +140,18 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
 
   revalidatePath("/clientes");
   redirect("/clientes");
+}
+
+export type ResultadoVerificacaoCnpj = Partial<VerificacaoCnpj> & ResultadoAcao;
+
+/** Ao sair do campo CNPJ (tela de Clientes e cadastro rápido no pedido): já é cliente aqui? já existe no Bling? */
+export async function verificarCnpjAction(dados: DadosEmpresa, ignorarClienteId?: string): Promise<ResultadoVerificacaoCnpj> {
+  let resultado: VerificacaoCnpj | null = null;
+  const r = await executar(async () => {
+    await exigirPapel("vendedor", "admin");
+    resultado = await verificarCnpj(await createClient(), dados.cnpj, dados, ignorarClienteId);
+  });
+  return r.erro || !resultado ? r : resultado;
 }
 
 export async function sincronizarContatosBlingAction(): Promise<Partial<ResultadoSincronizacaoBling> & ResultadoAcao> {

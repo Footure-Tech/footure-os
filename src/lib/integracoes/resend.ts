@@ -95,3 +95,28 @@ export async function enviarEmailContratoParaValidacao(
     observacao: "Você recebe este aviso por ter o perfil Jurídico no Footure OS.",
   });
 }
+
+/** Aviso à diretoria: pedido de venda enviado para aprovação. */
+export async function enviarEmailPedidoParaAprovacao(
+  destinatarios: string[],
+  dados: { cliente: string; plano: string; valorTotal: string; pagamento: string; vendedor: string; link: string },
+) {
+  await enviarEmail(destinatarios, `Pedido para aprovação · ${dados.cliente}`, {
+    preheader: `${dados.vendedor} enviou o pedido de ${dados.cliente} para aprovação.`,
+    titulo: "Há um pedido de venda aguardando sua aprovação",
+    blocos: [
+      { paragrafo: `${dados.vendedor} enviou um pedido de venda para aprovação. Revise as condições e aprove ou devolva ao vendedor.` },
+      {
+        dados: [
+          { rotulo: "Cliente", valor: dados.cliente },
+          { rotulo: "Plano", valor: dados.plano },
+          { rotulo: "Valor total", valor: dados.valorTotal },
+          { rotulo: "Pagamento", valor: dados.pagamento },
+          { rotulo: "Vendedor", valor: dados.vendedor },
+        ],
+      },
+    ],
+    botao: { rotulo: "Revisar pedido", url: dados.link },
+    observacao: "Você recebe este aviso por ter o perfil Diretoria no Footure OS.",
+  });
+}

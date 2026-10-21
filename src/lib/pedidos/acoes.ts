@@ -14,6 +14,7 @@ import { montarDadosContrato } from "@/lib/contratos/montarDados";
 import { podeLiberarParaAssinatura } from "@/lib/validacoes/pedido";
 import { enviarPedidoAoBling } from "@/lib/integracoes/blingPedido";
 import { notificarJuridicoContratoParaValidacao } from "@/lib/contratos/notificarJuridico";
+import { notificarDiretoriaPedidoParaAprovacao } from "@/lib/pedidos/notificarDiretoria";
 import { enviarParaAssinatura } from "@/lib/integracoes/clicksign";
 
 type Supa = SupabaseClient<Database>;
@@ -80,6 +81,7 @@ export async function tentarGerarContrato(supabase: Supa, pedidoId: string, gera
 
 export async function enviarParaAprovacao(supabase: Supa, pedidoId: string) {
   await registrarTransicao(supabase, pedidoId, "em_aprovacao");
+  await notificarDiretoriaPedidoParaAprovacao(pedidoId);
 }
 
 export async function reprovarPedido(supabase: Supa, pedidoId: string, comentario: string) {

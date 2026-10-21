@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { buscarCliente, listarContatosBlingSemCadastro, urlLogoCliente } from "@/lib/clientes/consultas";
+import { buscarCliente, urlLogoCliente } from "@/lib/clientes/consultas";
 import { ClienteForm } from "@/components/clientes/cliente-form";
 import { PageHeader } from "@/components/shell/page-header";
 
@@ -11,9 +11,8 @@ export default async function EditarClientePage({ params }: PageProps<"/clientes
   if (!cliente) notFound();
 
   const logoUrl = urlLogoCliente(supabase, cliente.logo_path);
-  // Legado sem bling_contato_id (nunca casou na sincronização automática,
-  // ex.: CNPJ cadastrado errado) ainda precisa escolher um contato aqui.
-  const contatosBling = cliente.bling_contato_id == null ? await listarContatosBlingSemCadastro(supabase) : [];
+  // Legado sem bling_contato_id (cadastro rápido antigo, CNPJ errado…): o
+  // formulário deixa corrigir razão social/CNPJ e vincula ao Bling ao salvar.
 
   return (
     <div className="flex max-w-[1300px] flex-col gap-6">
@@ -39,7 +38,6 @@ export default async function EditarClientePage({ params }: PageProps<"/clientes
           logoUrl,
           blingContatoId: cliente.bling_contato_id,
         }}
-        contatosBling={contatosBling}
       />
     </div>
   );
