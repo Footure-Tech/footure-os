@@ -16,7 +16,7 @@ export async function notificarDiretoriaPedidoParaAprovacao(pedidoId: string) {
       service.from("profiles").select("user_id").eq("papel", "admin").eq("ativo", true),
       service
         .from("pedidos")
-        .select("plano, perfil, valor_total, valor_mensal, forma_pagamento, meio_pagamento, numero_parcelas, vendedor_id, clientes(razao_social, nome_fantasia)")
+        .select("plano, perfil, valor_total, valor_mensal, forma_pagamento, meio_pagamento, numero_parcelas, vendedor_id, sdr_id, closer_id, clientes(razao_social, nome_fantasia)")
         .eq("id", pedidoId)
         .single(),
     ]);
@@ -27,7 +27,12 @@ export async function notificarDiretoriaPedidoParaAprovacao(pedidoId: string) {
     ).filter((e): e is string => !!e);
     if (!emails.length) return;
 
-    const { data: vendedor } = await service.from("profiles").select("nome").eq("user_id", pedido.vendedor_id).maybeSingle();
+    // Quem cadastrou (vendedor_id) só aparece no texto; quem fez a venda são SDR e Closer.
+    const { data: pessoas } = await service
+      .from("profiles")
+      .select("user_id, nome")
+      .in("user_id", [pedido.vendedor_id, pedido.sdr_id, pedido.closer_id].filter((id): id is string => !!id));
+    const nome = (id: string | null) => pessoas?.find((p) => p.user_id === id)?.nome ?? null;
     const cliente = pedido.clientes as unknown as { razao_social: string; nome_fantasia: string | null } | null;
     const meio = ROTULO_MEIO_PAGAMENTO[pedido.meio_pagamento];
     await enviarEmailPedidoParaAprovacao(emails, {
@@ -38,7 +43,9 @@ export async function notificarDiretoriaPedidoParaAprovacao(pedidoId: string) {
         pedido.forma_pagamento === "parcelado"
           ? `${meio} · ${pedido.numero_parcelas ?? "?"}x de ${formatarMoeda(pedido.valor_mensal)}`
           : `${meio} · à vista`,
-      vendedor: vendedor?.nome ?? "O vendedor",
+      criadoPor: nome(pedido.vendedor_id) ?? "O vendedor",
+      sdr: nome(pedido.sdr_id) ?? "não informado",
+      closer: nome(pedido.closer_id) ?? "não informado",
       link: `${urlDoSistema()}/pedidos/${pedidoId}`,
     });
   } catch (erro) {
