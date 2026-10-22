@@ -15,6 +15,7 @@ export interface SignatarioExibido {
   /** Ex.: "Contratante · representante legal", "Testemunha · Footure". */
   papel: string;
   email?: string | null;
+  cpf?: string | null;
   situacao: SituacaoSignatario;
   assinadoEm?: string | null;
 }
@@ -48,10 +49,27 @@ export async function carregarSignatariosExibidos(
         ? "pendente"
         : "nao_enviado";
 
+  // contrato_signatarios não guarda CPF — vem do cadastro do pedido, casado pelo e-mail.
+  const cpfPorEmail = new Map<string, string>();
+  const guardarCpf = (email: string | null | undefined, cpf: string | null | undefined) => {
+    if (email && cpf) cpfPorEmail.set(email.trim().toLowerCase(), cpf);
+  };
+  for (const s of signatarios) {
+    const sc = s.signatarios_cliente as unknown as { email: string; cpf: string } | null;
+    guardarCpf(sc?.email, sc?.cpf);
+  }
+  for (const r of representantesFooture) {
+    const rf = r.representantes_footure as unknown as { email: string | null; cpf: string | null } | null;
+    guardarCpf(rf?.email, rf?.cpf);
+  }
+  for (const t of testemunhasFooture) guardarCpf(t.email, t.cpf);
+  const cpfDe = (email: string | null | undefined) => (email ? (cpfPorEmail.get(email.trim().toLowerCase()) ?? null) : null);
+
   const lista: SignatarioExibido[] = temStatusPorSignatario
     ? linhas.map((s) => ({
         nome: s.nome,
         email: s.email,
+        cpf: cpfDe(s.email),
         papel: papelSignatario(s.lado, s.papel === "legal_representative"),
         situacao: incompleta && s.status === "pendente" ? "nao_assinou" : s.status,
         assinadoEm: s.assinado_em,
@@ -63,15 +81,16 @@ export async function carregarSignatariosExibidos(
           return {
             nome: sc?.nome_completo ?? "—",
             email: sc?.email,
+            cpf: cpfDe(sc?.email),
             papel: papelSignatario("cliente", s.tipo === "representante_legal"),
             situacao: situacaoGeral,
           };
         }),
         ...representantesFooture.map((r) => {
           const rf = r.representantes_footure as unknown as { nome: string; email: string | null } | null;
-          return { nome: rf?.nome ?? "—", email: rf?.email, papel: papelSignatario("footure", true), situacao: situacaoGeral };
+          return { nome: rf?.nome ?? "—", email: rf?.email, cpf: cpfDe(rf?.email), papel: papelSignatario("footure", true), situacao: situacaoGeral };
         }),
-        ...testemunhasFooture.map((t) => ({ nome: t.nome_completo, email: t.email, papel: papelSignatario("footure", false), situacao: situacaoGeral })),
+        ...testemunhasFooture.map((t) => ({ nome: t.nome_completo, email: t.email, cpf: cpfDe(t.email), papel: papelSignatario("footure", false), situacao: situacaoGeral })),
       ];
 
   return {

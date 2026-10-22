@@ -24,7 +24,7 @@ import { normalizePlan, listarPlanosCanonicos } from "@/lib/plans/normalize";
 import { textoMultaDefault } from "@/lib/contratos/multa";
 import { MEIOS_PAGAMENTO_DISPONIVEIS, ROTULO_MEIO_PAGAMENTO } from "@/lib/contratos/meioPagamento";
 import type { MultaTipo, MeioPagamento, Divulgacao, ApiModelo, OrigemVenda, TipoVenda } from "@/lib/supabase/database.types";
-import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
+import { ROTULO_API_MODELO, ROTULO_CONVENCAO_PARCELAS, ROTULO_DIVULGACAO, ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 
 export interface ClienteOption {
   id: string;
@@ -119,16 +119,6 @@ function somarMeses(dataISO: string, meses: number): string {
 const ROTULOS_PERFIL = { clube: "Clube", agente: "Agente" };
 const NAO_INFORMADO = "nao_informado";
 const ROTULOS_FORMA = { parcelado: "Parcelado", avista: "À vista" };
-const ROTULOS_API_MODELO = {
-  combinado: "Combinado (um boleto só, valor somado)",
-  distintos: "Boletos distintos (API e software separados)",
-};
-const ROTULOS_CONVENCAO = { calendario: "Calendário (padrão)", ciclo: "Ciclo" };
-const ROTULOS_DIVULGACAO = {
-  nenhuma: "Nenhuma",
-  simples: "Simples (cliente autoriza citar como referência)",
-  obrigacao: "Divulgação mútua (desconto opcional)",
-};
 
 const ESTADO_INICIAL: SalvarPedidoState = {};
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -637,7 +627,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
             <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4 rounded-lg border border-gray5 p-4">
               <div className="col-span-full flex flex-col gap-2">
                 <Label variante="campo">Modelo de cobrança da API</Label>
-                <Select items={ROTULOS_API_MODELO} value={apiModelo} onValueChange={(v) => v && setApiModelo(v as ApiModelo)}>
+                <Select items={ROTULO_API_MODELO} value={apiModelo} onValueChange={(v) => v && setApiModelo(v as ApiModelo)}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -743,7 +733,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label variante="campo">Convenção de parcelas</Label>
-                  <Select items={ROTULOS_CONVENCAO} value={convencaoParcelas} onValueChange={(v) => setConvencaoParcelas(v as "calendario" | "ciclo")}>
+                  <Select items={ROTULO_CONVENCAO_PARCELAS} value={convencaoParcelas} onValueChange={(v) => setConvencaoParcelas(v as "calendario" | "ciclo")}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
@@ -847,7 +837,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
         >
           <div className="flex flex-col gap-2">
             <Label variante="campo">Divulgação da parceria</Label>
-            <Select items={ROTULOS_DIVULGACAO} value={divulgacao} onValueChange={(v) => v && setDivulgacao(v as Divulgacao)}>
+            <Select items={ROTULO_DIVULGACAO} value={divulgacao} onValueChange={(v) => v && setDivulgacao(v as Divulgacao)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>

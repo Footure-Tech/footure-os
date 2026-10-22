@@ -1,6 +1,7 @@
 import { MdCancel, MdCheck, MdPriorityHigh, MdRadioButtonUnchecked, MdSchedule } from "react-icons/md";
 import { cn } from "@/lib/utils";
 import { formatarDataCurta } from "@/lib/formatacao";
+import { formatarCnpj } from "@/lib/clientes/formatacao";
 
 import type { SignatarioExibido, SituacaoSignatario } from "@/lib/contratos/signatariosExibidos";
 
@@ -28,9 +29,10 @@ export function ListaSignatarios({ signatarios }: { signatarios: SignatarioExibi
             </span>
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-sm font-semibold text-darkPurple1">{s.nome}</span>
-              <span className="truncate text-xs text-gray3">
+              <span className="text-xs break-words text-gray3">
                 {s.papel}
                 {s.email ? ` · ${s.email}` : ""}
+                {s.cpf ? ` · CPF ${formatarCnpj(s.cpf)}` : ""}
               </span>
             </div>
             <span className={cn("shrink-0 text-xs font-semibold", v.texto)}>

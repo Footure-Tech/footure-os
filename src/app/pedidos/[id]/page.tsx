@@ -33,7 +33,8 @@ import { AnaliseVersaoContrato } from "@/components/contratos/analise-versao";
 import { ChecklistValidacao } from "@/components/contratos/checklist-validacao";
 import { ITENS_VALIDACAO } from "@/lib/contratos/validacao";
 import { carregarAnaliseVersao } from "@/lib/contratos/consultasAnalise";
-import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
+import { ROTULO_API_MODELO, ROTULO_CONVENCAO_PARCELAS, ROTULO_DIVULGACAO, ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
+import { ROTULO_MULTA } from "@/lib/contratos/multa";
 
 // Ações desta página incluem o registro de nova versão do contrato, que roda a
 // análise das mudanças com IA (pode levar ~1 min) — mais tempo que o padrão.
@@ -256,6 +257,7 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
               />
               <LinhaChaveValor rotulo="Emissão" valor={formatarDataCurta(pedido.criado_em)} />
               <LinhaChaveValor rotulo="Plano" valor={`${produtoLabel} · ${planoLabel}`} />
+              {pedido.plano_legado_nome_original && <LinhaChaveValor rotulo="Plano no pedido original" valor={pedido.plano_legado_nome_original} />}
               <LinhaChaveValor
                 rotulo="Licenças"
                 valor={`${pedido.licencas_pagas} pagas${pedido.licencas_gratuitas > 0 ? ` + ${pedido.licencas_gratuitas} gratuita(s)` : ""}`}
@@ -269,10 +271,39 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
               {pedido.produtos.includes("api") && (
                 <LinhaChaveValor rotulo="API / Software" valor={`${formatarMoeda(pedido.valor_mensal_api)} / ${formatarMoeda(pedido.valor_mensal_software)}`} />
               )}
+              {pedido.produtos.includes("api") && pedido.api_modelo && <LinhaChaveValor rotulo="Cobrança da API" valor={ROTULO_API_MODELO[pedido.api_modelo]} />}
               {!!pedido.valor_licenca_adicional && <LinhaChaveValor rotulo="Licença adicional" valor={formatarMoeda(pedido.valor_licenca_adicional)} />}
+              <LinhaChaveValor
+                rotulo={pedido.forma_pagamento === "parcelado" ? "Primeiro pagamento" : "Data do pagamento"}
+                valor={formatarDataCurta(pedido.primeiro_pagamento)}
+              />
+              {pedido.forma_pagamento === "parcelado" && (
+                <>
+                  <LinhaChaveValor rotulo="Dia de vencimento" valor={pedido.dia_vencimento ? `todo dia ${pedido.dia_vencimento}` : <span className="text-gray3">não informado</span>} />
+                  <LinhaChaveValor rotulo="Convenção de parcelas" valor={ROTULO_CONVENCAO_PARCELAS[pedido.convencao_parcelas]} />
+                </>
+              )}
               <LinhaChaveValor rotulo="Vigência" valor={`${formatarDataCurta(pedido.vigencia_inicio)} a ${formatarDataCurta(pedido.vigencia_fim)}`} />
               <LinhaChaveValor rotulo="Tipo de venda" valor={pedido.tipo_venda ? ROTULO_TIPO_VENDA[pedido.tipo_venda] : <span className="text-gray3">não informado</span>} />
               <LinhaChaveValor rotulo="Origem" valor={pedido.origem ? ROTULO_ORIGEM_VENDA[pedido.origem] : <span className="text-gray3">não informada</span>} />
+              <LinhaChaveValor rotulo="Contrato" valor={pedido.gera_contrato ? `Com contrato · linhagem ${pedido.robusta ? "robusta" : "enxuta"}` : "Sem contrato"} />
+              {pedido.gera_contrato && (
+                <>
+                  <LinhaChaveValor rotulo="Foro" valor={pedido.foro} />
+                  <LinhaChaveValor
+                    rotulo="Divulgação da parceria"
+                    valor={`${ROTULO_DIVULGACAO[pedido.divulgacao]}${
+                      pedido.divulgacao === "obrigacao" && pedido.percentual_desconto_divulgacao ? ` · ${pedido.percentual_desconto_divulgacao}% de desconto` : ""
+                    }`}
+                    longo
+                    className="md:col-span-2"
+                  />
+                  {pedido.divulgacao === "obrigacao" && pedido.post_divulgacao && (
+                    <LinhaChaveValor rotulo="Post de divulgação" valor={pedido.post_divulgacao} longo className="md:col-span-2" />
+                  )}
+                  <LinhaChaveValor rotulo={`Multa rescisória · ${ROTULO_MULTA[pedido.multa_tipo]}`} valor={pedido.multa_texto} longo className="md:col-span-2" />
+                </>
+              )}
               <LinhaChaveValor
                 rotulo="E-mails financeiro"
                 valor={pedido.emails_financeiro.length ? pedido.emails_financeiro.join(", ") : <span className="text-gray3">não informados</span>}
