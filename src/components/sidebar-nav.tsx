@@ -147,6 +147,7 @@ const INADIMPLENCIA: SidebarLink = {
 const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
   vendedor: [
     { label: "Gestão", links: [DASHBOARD] },
+    { label: "Marketing", links: [DESEMPENHO_CAMPANHAS, INVESTIMENTO_RETORNO] },
     { label: "Comercial", links: [PEDIDOS_VENDEDOR, VENDAS, CLIENTES] },
     {
       label: "Financeiro",
