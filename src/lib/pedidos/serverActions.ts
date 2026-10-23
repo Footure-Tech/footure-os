@@ -57,7 +57,6 @@ const PedidoPayloadSchema = z.object({
   valorMensalSoftware: z.number().nonnegative().optional(),
   primeiroPagamento: z.string().min(1),
   diaVencimento: z.number().int().min(1).max(31).optional(),
-  convencaoParcelas: z.enum(["calendario", "ciclo"]).default("calendario"),
   vigenciaInicio: z.string().min(1),
   vigenciaFim: z.string().min(1),
   robusta: z.boolean().default(false),
@@ -191,7 +190,8 @@ export async function salvarPedido(_prev: SalvarPedidoState, formData: FormData)
     valor_mensal_software: payload.valorMensalSoftware ?? null,
     primeiro_pagamento: payload.primeiroPagamento,
     dia_vencimento: payload.diaVencimento ?? null,
-    convencao_parcelas: payload.convencaoParcelas,
+    // Coluna legada: o cronograma é sempre contado da ativação (contratos/cronograma.ts) — "ciclo" é o equivalente.
+    convencao_parcelas: "ciclo" as const,
     vigencia_inicio: payload.vigenciaInicio,
     vigencia_fim: payload.vigenciaFim,
     robusta: payload.robusta,
@@ -376,16 +376,6 @@ export async function liberarParaAssinaturaAction(pedidoId: string, comentario?:
     await exigirPapel("juridico", "admin");
     const supabase = await createClient();
     await acoes.liberarParaAssinatura(supabase, pedidoId, comentario);
-    revalidatePath("/juridico");
-    revalidatePath(`/pedidos/${pedidoId}`);
-  });
-}
-
-export async function rejeitarContratoAction(pedidoId: string, comentario: string): Promise<ResultadoAcao> {
-  return executar(async () => {
-    const sessao = await exigirPapel("juridico", "admin");
-    const supabase = await createClient();
-    await acoes.rejeitarContrato(supabase, pedidoId, sessao.id, comentario);
     revalidatePath("/juridico");
     revalidatePath(`/pedidos/${pedidoId}`);
   });

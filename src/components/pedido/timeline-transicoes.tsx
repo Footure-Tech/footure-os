@@ -13,9 +13,13 @@ export interface EventoTimeline {
   soData?: boolean;
 }
 
-/** de = para é evento sem mudança de status — hoje só a substituição do PV no Bling (blingPedido.ts). */
-export function tituloTransicao(t: { de: StatusPedido | null; para: StatusPedido }) {
-  if (t.de === t.para) return "Pedido substituído no Bling";
+/** de = para é registro sem mudança de status: substituição do PV no Bling (blingPedido.ts) ou atualização automática do contrato (pedidos/acoes.ts). */
+export function tituloTransicao(t: { de: StatusPedido | null; para: StatusPedido; comentario?: string | null }) {
+  if (t.de === t.para) {
+    if (t.comentario?.startsWith("Pedido alterado depois do envio ao Bling")) return "Pedido substituído no Bling";
+    if (/nova versão v\d+ gerada/.test(t.comentario ?? "")) return "Nova versão do contrato";
+    return "Aviso sobre o contrato";
+  }
   return `${t.de ? ROTULO_STATUS[t.de] : "Criado"} → ${ROTULO_STATUS[t.para]}`;
 }
 

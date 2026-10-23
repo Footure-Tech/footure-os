@@ -16,6 +16,7 @@ import { enviarPedidoAoBling } from "@/lib/integracoes/blingPedido";
 import { notificarJuridicoContratoParaValidacao } from "@/lib/contratos/notificarJuridico";
 import { notificarDiretoriaPedidoParaAprovacao } from "@/lib/pedidos/notificarDiretoria";
 import { enviarParaAssinatura } from "@/lib/integracoes/clicksign";
+import { createServiceClient } from "@/lib/supabase/service";
 
 type Supa = SupabaseClient<Database>;
 
@@ -69,7 +70,7 @@ async function gerarEArmazenarContrato(supabase: Supa, pedidoId: string, geradoP
  */
 export async function tentarGerarContrato(supabase: Supa, pedidoId: string, geradoPor: string) {
   try {
-    await gerarEArmazenarContrato(supabase, pedidoId, geradoPor, "Geração automática na aprovação.");
+    await gerarEArmazenarContrato(supabase, pedidoId, geradoPor, `${PREFIXO_GERACAO_AUTOMATICA} na aprovação.`);
     await supabase.from("pedidos").update({ geracao_contrato_erro: null }).eq("id", pedidoId);
     await registrarTransicao(supabase, pedidoId, "em_revisao_juridica", "Contrato gerado automaticamente na aprovação.");
     await notificarJuridicoContratoParaValidacao(pedidoId, "Um novo contrato foi gerado e está aguardando a validação do jurídico.");
@@ -170,12 +171,6 @@ export async function liberarParaAssinatura(supabase: Supa, pedidoId: string, co
   await registrarTransicao(supabase, pedidoId, "pronto_para_assinatura", comentario);
 }
 
-/** EM_REVISAO_JURIDICA -> APROVADO -> (regeneração automática) -> EM_REVISAO_JURIDICA. */
-export async function rejeitarContrato(supabase: Supa, pedidoId: string, ator: string, comentario: string) {
-  await registrarTransicao(supabase, pedidoId, "aprovado", comentario);
-  await tentarGerarContrato(supabase, pedidoId, ator);
-}
-
 /** PRONTO_PARA_ASSINATURA -> ENVIADO_PARA_ASSINATURA. Cria o envelope na Clicksign
  * (documento + signatários + requirements) e só then registra a transição — se o
  * envio falhar, o pedido permanece em PRONTO_PARA_ASSINATURA. */
@@ -205,11 +200,104 @@ export async function reabrirParaEdicao(supabase: Supa, pedidoId: string) {
 /** PRONTO_PARA_ASSINATURA|ENVIADO_PARA_ASSINATURA -> EM_REVISAO_JURIDICA. Cancelamento manual
  * (stub Fase 3 — sem Clicksign real ainda) que reabilita a edição do pedido pelo vendedor. */
 export async function cancelarAssinatura(supabase: Supa, pedidoId: string, comentario?: string) {
+  const desatualizado = await contratoEmAssinaturaDesatualizado(supabase, pedidoId);
   await registrarTransicao(supabase, pedidoId, "em_revisao_juridica", comentario ?? "Processo de assinatura cancelado.");
+  // Os dados mudaram durante a assinatura: a nova versão sai já com eles.
+  const { data: usuario } = await supabase.auth.getUser();
+  if (desatualizado && usuario.user) await atualizarContratosPorMudanca([pedidoId], "Assinatura cancelada com dados alterados", usuario.user.id);
 }
 
 /** Qualquer status não-terminal -> CANCELADO. Encerra o pedido de venda (diferente de
  * "cancelar assinatura", que só reabre o processo de assinatura — aqui o pedido morre). */
 export async function cancelarPedido(supabase: Supa, pedidoId: string, comentario: string) {
   await registrarTransicao(supabase, pedidoId, "cancelado", comentario);
+}
+
+// ---------------------------------------------------------------------------
+// Nova versão automática quando os dados do contrato mudam sem edição do
+// pedido (cadastro do cliente, ajuste do modelo). Edição do pedido já gera
+// nova versão pela reaprovação (reabrirParaEdicao → aprovarPedido).
+// ---------------------------------------------------------------------------
+
+/** Motivo das versões geradas pelo sistema — o que não começa assim foi enviado pelo jurídico ("Subir nova versão"). */
+export const PREFIXO_GERACAO_AUTOMATICA = "Geração automática";
+/** Nota na linha do tempo de pedido em assinatura cujos dados mudaram depois do envio. */
+export const MARCA_CONTRATO_DESATUALIZADO = "Contrato em assinatura desatualizado:";
+
+export function versaoGeradaPeloSistema(motivo: string | null | undefined) {
+  return !!motivo?.startsWith(PREFIXO_GERACAO_AUTOMATICA);
+}
+
+/** Houve mudança de dados depois do último envio para assinatura? `transicoes` da mais recente para a mais antiga. */
+export function desatualizadoDesdeOEnvio(transicoes: Array<{ de: string | null; para: string; comentario: string | null }>) {
+  for (const t of transicoes) {
+    if (t.de === t.para && t.comentario?.startsWith(MARCA_CONTRATO_DESATUALIZADO)) return true;
+    if (t.para === "enviado_para_assinatura" && t.de !== t.para) return false;
+  }
+  return false;
+}
+
+async function contratoEmAssinaturaDesatualizado(supabase: Supa, pedidoId: string) {
+  const { data } = await supabase.from("transicoes").select("de, para, comentario").eq("pedido_id", pedidoId).order("criado_em", { ascending: false }).limit(50);
+  return desatualizadoDesdeOEnvio(data ?? []);
+}
+
+const STATUS_COM_CONTRATO_EM_ANDAMENTO = ["em_revisao_juridica", "pronto_para_assinatura", "enviado_para_assinatura"] as const;
+
+/**
+ * Para cada pedido com contrato em andamento:
+ * • em revisão / pronto para assinatura, com versão atual gerada pelo sistema:
+ *   gera a próxima versão (checklist em branco — é por versão) e, se estava
+ *   pronto, volta para revisão jurídica;
+ * • versão atual enviada pelo jurídico: não substitui (perderia as edições
+ *   manuais) — só registra o aviso para ele conferir;
+ * • em assinatura: não troca o documento em assinatura — registra o aviso
+ *   (a tela mostra; cancelar a assinatura gera a versão nova).
+ * Usa o service client: quem dispara pode ser o vendedor (edição do cliente),
+ * que não grava contratos nem muda o status do contrato. Nunca lança.
+ */
+export async function atualizarContratosPorMudanca(pedidoIds: string[], motivo: string, ator: string) {
+  if (pedidoIds.length === 0) return;
+  const service = createServiceClient();
+  const nota = (pedidoId: string, status: Database["public"]["Tables"]["pedidos"]["Row"]["status"], comentario: string) =>
+    service.from("transicoes").insert({ pedido_id: pedidoId, de: status, para: status, ator_id: ator, comentario });
+
+  const { data: pedidos } = await service
+    .from("pedidos")
+    .select("id, status, gera_contrato")
+    .in("id", pedidoIds)
+    .in("status", [...STATUS_COM_CONTRATO_EM_ANDAMENTO]);
+  for (const pedido of pedidos ?? []) {
+    if (!pedido.gera_contrato) continue;
+    try {
+      const { data: atual } = await service
+        .from("contratos")
+        .select("versao, motivo_versao")
+        .eq("pedido_id", pedido.id)
+        .order("versao", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!atual) continue;
+
+      if (pedido.status === "enviado_para_assinatura") {
+        await nota(pedido.id, pedido.status, `${MARCA_CONTRATO_DESATUALIZADO} ${motivo} depois do envio — o documento em assinatura não reflete a mudança. Cancele a assinatura para gerar uma nova versão.`);
+        continue;
+      }
+      if (!versaoGeradaPeloSistema(atual.motivo_versao)) {
+        await nota(pedido.id, pedido.status, `${motivo} depois da v${atual.versao}, enviada pelo jurídico — ela não foi substituída para não perder as edições manuais. Confira se precisa de ajuste.`);
+        continue;
+      }
+
+      const { versao } = await gerarEArmazenarContrato(service, pedido.id, ator, `${PREFIXO_GERACAO_AUTOMATICA} — ${motivo.charAt(0).toLowerCase()}${motivo.slice(1)}.`);
+      if (pedido.status === "pronto_para_assinatura") {
+        await service.from("transicoes").insert({ pedido_id: pedido.id, de: "pronto_para_assinatura", para: "em_revisao_juridica", ator_id: ator, comentario: `${motivo} — nova versão v${versao} gerada; volta para validação jurídica.` });
+        await service.from("pedidos").update({ status: "em_revisao_juridica" }).eq("id", pedido.id);
+      } else {
+        await nota(pedido.id, pedido.status, `${motivo} — nova versão v${versao} gerada automaticamente.`);
+      }
+      await notificarJuridicoContratoParaValidacao(pedido.id, `${motivo}: uma nova versão do contrato (v${versao}) foi gerada e aguarda validação.`);
+    } catch (erro) {
+      console.error(`[contrato] atualização automática do pedido ${pedido.id} falhou:`, erro instanceof Error ? erro.message : erro);
+    }
+  }
 }

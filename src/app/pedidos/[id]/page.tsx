@@ -33,8 +33,45 @@ import { AnaliseVersaoContrato } from "@/components/contratos/analise-versao";
 import { ChecklistValidacao } from "@/components/contratos/checklist-validacao";
 import { ITENS_VALIDACAO } from "@/lib/contratos/validacao";
 import { carregarAnaliseVersao } from "@/lib/contratos/consultasAnalise";
-import { ROTULO_API_MODELO, ROTULO_CONVENCAO_PARCELAS, ROTULO_DIVULGACAO, ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
+import { ROTULO_API_MODELO, ROTULO_DIVULGACAO, ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 import { ROTULO_MULTA } from "@/lib/contratos/multa";
+import { desatualizadoDesdeOEnvio, versaoGeradaPeloSistema } from "@/lib/pedidos/acoes";
+import type { StatusPedido } from "@/lib/supabase/database.types";
+import type { TomStatus } from "@/lib/status/visual";
+
+/** Estado da versão vigente do contrato, pelo status do pedido. */
+const SITUACAO_VERSAO_VIGENTE: Partial<Record<StatusPedido, { tom: TomStatus; rotulo: string }>> = {
+  em_revisao_juridica: { tom: "pending", rotulo: "Em validação jurídica" },
+  pronto_para_assinatura: { tom: "in_progress", rotulo: "Pronta para assinatura" },
+  enviado_para_assinatura: { tom: "in_progress", rotulo: "Em assinatura" },
+  assinado: { tom: "completed", rotulo: "Assinada" },
+  concluido: { tom: "completed", rotulo: "Assinada" },
+  cancelado: { tom: "not_started", rotulo: "Pedido cancelado" },
+};
+
+function origemVersao(motivo: string | null) {
+  if (versaoGeradaPeloSistema(motivo)) return motivo!;
+  return motivo ? `Enviada pelo jurídico — ${motivo}` : "Enviada pelo jurídico";
+}
+
+/** Depois de assinado, só o PDF assinado vale — o .docx original deixa de ser o documento válido. */
+function BotaoDownloadVersao({ url, urlAssinado }: { url: string | null; urlAssinado: string | null }) {
+  if (urlAssinado) {
+    return (
+      <Button variant="secondary" size="sm" nativeButton={false} render={<a href={urlAssinado} target="_blank" rel="noreferrer" />}>
+        <MdDownload className="size-4" />
+        PDF assinado
+      </Button>
+    );
+  }
+  if (!url) return null;
+  return (
+    <Button variant="white" size="sm" nativeButton={false} render={<a href={url} target="_blank" rel="noreferrer" />}>
+      <MdDownload className="size-4" />
+      Baixar
+    </Button>
+  );
+}
 
 // Ações desta página incluem o registro de nova versão do contrato, que roda a
 // análise das mudanças com IA (pode levar ~1 min) — mais tempo que o padrão.
@@ -125,6 +162,8 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
     }),
   );
   const contratoAtual = contratosComUrl[0] ?? null;
+  const situacaoVersaoVigente = SITUACAO_VERSAO_VIGENTE[pedido.status] ?? { tom: "in_progress" as const, rotulo: "Vigente" };
+  const contratoDesatualizado = pedido.status === "enviado_para_assinatura" && desatualizadoDesdeOEnvio([...transicoes].reverse());
   // Mudanças da versão enviada pelo jurídico (0041) — só jurídico/diretoria veem.
   const analiseVersao = contratoAtual && sessao.papel !== "vendedor" ? await carregarAnaliseVersao(supabase, contratoAtual.id) : null;
 
@@ -279,8 +318,14 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
               />
               {pedido.forma_pagamento === "parcelado" && (
                 <>
-                  <LinhaChaveValor rotulo="Dia de vencimento" valor={pedido.dia_vencimento ? `todo dia ${pedido.dia_vencimento}` : <span className="text-gray3">não informado</span>} />
-                  <LinhaChaveValor rotulo="Convenção de parcelas" valor={ROTULO_CONVENCAO_PARCELAS[pedido.convencao_parcelas]} />
+                  <LinhaChaveValor
+                    rotulo="Vencimento"
+                    valor={
+                      pedido.dia_vencimento && pedido.dia_vencimento !== Number(pedido.primeiro_pagamento.slice(8, 10))
+                        ? `dia ${pedido.dia_vencimento} (a 1ª no 1º pagamento)`
+                        : `aniversário — todo dia ${Number(pedido.primeiro_pagamento.slice(8, 10))}`
+                    }
+                  />
                 </>
               )}
               <LinhaChaveValor rotulo="Vigência" valor={`${formatarDataCurta(pedido.vigencia_inicio)} a ${formatarDataCurta(pedido.vigencia_fim)}`} />
@@ -401,38 +446,54 @@ export default async function NegocioPage({ params }: PageProps<"/pedidos/[id]">
                 )}
 
                 <div className="flex flex-col gap-2">
-                  <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">
-                    {contratosComUrl.some((c) => c.urlAssinado) ? "Documento assinado" : "Versões"}
-                  </span>
-                  {contratosComUrl.map((c) => (
-                    <div key={c.id} className="flex items-center justify-between gap-3 border-b border-gray5 pb-2 last:border-0 last:pb-0">
-                      <div className="flex min-w-0 flex-col">
-                        <span className="text-sm font-semibold text-darkPurple1">
-                          Versão {c.versao} · {formatarDataCurta(c.gerado_em)}
+                  <span className="text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase">Versão vigente</span>
+                  <div className="flex items-center justify-between gap-3 rounded-lg border-2 border-darkPurple1 bg-surface px-4 py-3">
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-bold text-darkPurple1">
+                          Versão {contratoAtual.versao} · {formatarDataCurta(contratoAtual.gerado_em)}
                         </span>
-                        {c.motivo_versao && <span className="truncate text-xs text-gray3">{c.motivo_versao}</span>}
+                        <StatusPill tom={situacaoVersaoVigente.tom}>{situacaoVersaoVigente.rotulo}</StatusPill>
                       </div>
-                      {/* Depois de assinado, só o PDF assinado fica disponível — o .docx original deixa de ser o documento válido. */}
-                      {c.urlAssinado ? (
-                        <Button variant="secondary" size="sm" nativeButton={false} render={<a href={c.urlAssinado} target="_blank" rel="noreferrer" />}>
-                          <MdDownload className="size-4" />
-                          PDF assinado
-                        </Button>
-                      ) : (
-                        c.url && (
-                          <Button variant="white" size="sm" nativeButton={false} render={<a href={c.url} target="_blank" rel="noreferrer" />}>
-                            <MdDownload className="size-4" />
-                            Baixar
-                          </Button>
-                        )
-                      )}
+                      <span className="text-xs text-gray2">{origemVersao(contratoAtual.motivo_versao)}</span>
                     </div>
-                  ))}
+                    <BotaoDownloadVersao url={contratoAtual.url} urlAssinado={contratoAtual.urlAssinado} />
+                  </div>
+                  {contratoDesatualizado && (
+                    <p className="rounded-lg border border-red/30 bg-dangerBg px-4 py-3 text-sm text-red">
+                      Os dados do contrato mudaram depois do envio para assinatura — o documento em assinatura não reflete a mudança (veja a linha do
+                      tempo). Cancele a assinatura para gerar uma nova versão.
+                    </p>
+                  )}
                 </div>
+
+                {contratosComUrl.length > 1 && (
+                  <details className="group flex flex-col gap-2">
+                    <summary className="cursor-pointer text-[11px] font-bold tracking-[0.06em] text-gray3 uppercase select-none">
+                      Versões anteriores ({contratosComUrl.length - 1})
+                    </summary>
+                    <div className="mt-2 flex flex-col">
+                      {contratosComUrl.slice(1).map((c) => (
+                        <div key={c.id} className="flex items-center justify-between gap-3 border-b border-gray5 py-2 opacity-70 last:border-0">
+                          <div className="flex min-w-0 flex-col">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-gray2">
+                                Versão {c.versao} · {formatarDataCurta(c.gerado_em)}
+                              </span>
+                              <StatusPill tom="not_started">Substituída</StatusPill>
+                            </div>
+                            <span className="truncate text-xs text-gray3">{origemVersao(c.motivo_versao)}</span>
+                          </div>
+                          <BotaoDownloadVersao url={c.url} urlAssinado={c.urlAssinado} />
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
             )}
 
-            {/* Ações do jurídico sobre o contrato (liberar, regenerar, nova versão, Clicksign) ficam no contexto do contrato. */}
+            {/* Ações do jurídico sobre o contrato (liberar, nova versão, Clicksign) ficam no contexto do contrato. */}
             {!semContrato && (
               <div className="border-t border-gray5 pt-4 empty:hidden">
                 <AcoesPedido pedidoId={pedido.id} status={pedido.status} papel={sessao.papel} donoDoRascunho={donoDoRascunho} escopo="contrato" />

@@ -8,6 +8,13 @@ import { ajustesAplicadosNaUltimaGeracao, gerarContrato, gerarContratoBuffer } f
 import { carregarAjustesModelo } from "@/lib/contratos/ajustesModelo";
 import { extrairParagrafos } from "@/lib/contratos/diffVersoes";
 import { analisarNovaVersao } from "@/lib/contratos/analisarVersao";
+import { atualizarContratosPorMudanca } from "@/lib/pedidos/acoes";
+
+/** Contratos em andamento do perfil ganham a versão com o modelo novo (os de versão enviada pelo jurídico, só aviso). */
+async function propagarMudancaDoModelo(supabase: Awaited<ReturnType<typeof createClient>>, perfil: "clube" | "agente", motivo: string, ator: string, ignorarPedidoId?: string) {
+  const { data } = await supabase.from("pedidos").select("id").eq("perfil", perfil).in("status", ["em_revisao_juridica", "pronto_para_assinatura", "enviado_para_assinatura"]);
+  await atualizarContratosPorMudanca((data ?? []).map((p) => p.id).filter((id) => id !== ignorarPedidoId), motivo, ator);
+}
 
 /**
  * Decisão do jurídico sobre uma mudança da nova versão (0041). "agregar"
@@ -69,6 +76,8 @@ export async function decidirMudancaAction(mudancaId: string, decisao: "agregar"
     if (error) return { erro: `Não foi possível agregar ao modelo: ${error.message}` };
     const { error: erroDecisao } = await registrar("agregar");
     if (erroDecisao) return { erro: erroDecisao.message };
+    // O contrato de origem já tem o trecho (a versão do jurídico) — os demais do perfil são atualizados.
+    await propagarMudancaDoModelo(supabase, pedido.perfil, "Modelo do contrato ajustado pelo jurídico", sessao.id, pedidoId);
   }
 
   revalidatePath("/juridico");
@@ -80,11 +89,14 @@ export async function decidirMudancaAction(mudancaId: string, decisao: "agregar"
 export async function desativarAjusteModeloAction(ajusteId: string): Promise<{ erro?: string }> {
   const sessao = await exigirPapel("juridico", "admin");
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: ajuste, error } = await supabase
     .from("modelo_contrato_ajustes")
     .update({ ativo: false, desativado_por: sessao.id, desativado_em: new Date().toISOString() })
-    .eq("id", ajusteId);
+    .eq("id", ajusteId)
+    .select("perfil")
+    .single();
   if (error) return { erro: error.message };
+  await propagarMudancaDoModelo(supabase, ajuste.perfil, "Ajuste do modelo do contrato desativado", sessao.id);
   revalidatePath("/admin/configuracoes");
   return {};
 }

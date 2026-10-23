@@ -18,7 +18,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { buscarPlanoPorKey } from "@/lib/plans/normalize";
-import { gerarParcelas } from "@/lib/contratos/parcelas";
+import { gerarCronograma } from "@/lib/contratos/cronograma";
 import { formatarMoeda } from "@/lib/formatacao";
 import { ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
 import { consultarBling, obterAccessTokenValido, requisicaoBling } from "./bling";
@@ -116,10 +116,6 @@ async function buscarProduto(token: string, nome: string): Promise<{ id: number;
   }
 }
 
-const paraISO = (ddmmaaaa: string) => {
-  const [d, m, a] = ddmmaaaa.split("/");
-  return `${a}-${m}-${d}`;
-};
 const centavos = (n: number) => Math.round(n * 100) / 100;
 
 function formaPagamento(p: Pedido): number {
@@ -158,10 +154,11 @@ export async function montarPedidoBling(token: string, p: Pedido, contatoId: num
   const parcelado = p.forma_pagamento === "parcelado" && !cartao;
   const forma = { id: formaPagamento(p) };
 
-  // Parcelas: as mesmas datas do contrato (1º pagamento + N meses); à vista e
-  // cartão = uma parcela com o total (no cartão, o parcelamento é da operadora).
+  // Parcelas: as mesmas datas da tabela do contrato (cronograma.ts — aniversário
+  // da ativação ou dia específico); à vista e cartão = uma parcela com o total
+  // (no cartão, o parcelamento é da operadora).
   const datas = parcelado
-    ? gerarParcelas(p.primeiro_pagamento.split("-").reverse().join("/"), p.numero_parcelas ?? 12, p.convencao_parcelas).map((x) => paraISO(x.vencimento))
+    ? gerarCronograma(p.primeiro_pagamento, p.numero_parcelas ?? 12, p.dia_vencimento).map((x) => x.vencimentoISO)
     : [p.primeiro_pagamento];
   const qtd = datas.length;
 

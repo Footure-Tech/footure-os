@@ -24,7 +24,8 @@ import { normalizePlan, listarPlanosCanonicos } from "@/lib/plans/normalize";
 import { textoMultaDefault } from "@/lib/contratos/multa";
 import { MEIOS_PAGAMENTO_DISPONIVEIS, ROTULO_MEIO_PAGAMENTO } from "@/lib/contratos/meioPagamento";
 import type { MultaTipo, MeioPagamento, Divulgacao, ApiModelo, OrigemVenda, TipoVenda } from "@/lib/supabase/database.types";
-import { ROTULO_API_MODELO, ROTULO_CONVENCAO_PARCELAS, ROTULO_DIVULGACAO, ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
+import { ROTULO_API_MODELO, ROTULO_DIVULGACAO, ROTULO_ORIGEM_VENDA, ROTULO_TIPO_VENDA } from "@/lib/vendas/rotulos";
+import { fimVigenciaPadrao, gerarCronograma } from "@/lib/contratos/cronograma";
 
 export interface ClienteOption {
   id: string;
@@ -59,8 +60,8 @@ export interface DadosIniciaisPedido {
   valorMensalApi: number;
   valorMensalSoftware: number;
   primeiroPagamento: string;
-  diaVencimento: number;
-  convencaoParcelas: "calendario" | "ciclo";
+  /** null = vencimento no aniversário da ativação (padrão). */
+  diaVencimento: number | null;
   vigenciaInicio: string;
   vigenciaFim: string;
   robusta: boolean;
@@ -107,10 +108,11 @@ function paraNumero(texto: string): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-function somarMeses(dataISO: string, meses: number): string {
+/** Fim de vigência sugerido pela versão anterior do formulário (início + 12 meses, sem −1 dia) — só para reconhecer valores que ainda são o padrão automático. */
+function fimVigenciaAntigo(dataISO: string): string {
   if (!dataISO) return "";
   const [ano, mes, dia] = dataISO.split("-").map(Number);
-  const d = new Date(ano, mes - 1 + meses, dia);
+  const d = new Date(ano, mes - 1 + 12, dia);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
@@ -119,6 +121,8 @@ function somarMeses(dataISO: string, meses: number): string {
 const ROTULOS_PERFIL = { clube: "Clube", agente: "Agente" };
 const NAO_INFORMADO = "nao_informado";
 const ROTULOS_FORMA = { parcelado: "Parcelado", avista: "À vista" };
+
+const ROTULOS_VENCIMENTO = { aniversario: "No aniversário da ativação (padrão)", especifico: "Em um dia específico" };
 
 const ESTADO_INICIAL: SalvarPedidoState = {};
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -246,10 +250,30 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
   const [valorMensalApi, setValorMensalApi] = useState(d?.valorMensalApi ?? 0);
   const [valorMensalSoftware, setValorMensalSoftware] = useState(d?.valorMensalSoftware ?? 0);
   const [primeiroPagamento, setPrimeiroPagamento] = useState(d?.primeiroPagamento ?? "");
-  const [diaVencimento, setDiaVencimento] = useState(d?.diaVencimento ?? 10);
-  const [convencaoParcelas, setConvencaoParcelas] = useState<"calendario" | "ciclo">(d?.convencaoParcelas ?? "calendario");
+  // Padrão: vencimento no aniversário da ativação. Pedido antigo com dia igual ao do 1º pagamento é o mesmo caso.
+  const diaInicial = d?.diaVencimento != null && d.diaVencimento !== Number(d.primeiroPagamento.slice(8, 10)) ? d.diaVencimento : null;
+  const [vencimentoEspecifico, setVencimentoEspecifico] = useState(diaInicial != null);
+  const [diaVencimento, setDiaVencimento] = useState<number | "">(diaInicial ?? "");
+  // Prévia do cronograma (mesma regra do contrato e do Bling — cronograma.ts).
+  const previaParcelas = useMemo(() => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(primeiroPagamento) || numeroParcelas < 1) return null;
+    if (vencimentoEspecifico && (diaVencimento === "" || diaVencimento < 1 || diaVencimento > 31)) return null;
+    const c = gerarCronograma(primeiroPagamento, numeroParcelas, vencimentoEspecifico ? (diaVencimento as number) : null);
+    const ultima = c[c.length - 1];
+    return [`1ª: ${c[0].vencimento}`, c[1] && `2ª: ${c[1].vencimento}`, c.length > 2 && `${ultima.numero}ª: ${ultima.vencimento}`].filter(Boolean).join(" · ");
+  }, [primeiroPagamento, numeroParcelas, vencimentoEspecifico, diaVencimento]);
   const [vigenciaInicio, setVigenciaInicio] = useState(d?.vigenciaInicio ?? "");
   const [vigenciaFim, setVigenciaFim] = useState(d?.vigenciaFim ?? "");
+  // Fim ainda é o sugerido automaticamente (vazio, padrão atual ou o da versão anterior do formulário)?
+  const fimEhAutomatico = (inicio: string) => !vigenciaFim || vigenciaFim === fimVigenciaPadrao(inicio) || vigenciaFim === fimVigenciaAntigo(inicio);
+  // A vigência começa na ativação (1º pagamento): acompanha enquanto não foi editada à mão.
+  function alterarPrimeiroPagamento(valor: string) {
+    if (!vigenciaInicio || vigenciaInicio === primeiroPagamento) {
+      if (fimEhAutomatico(vigenciaInicio)) setVigenciaFim(fimVigenciaPadrao(valor));
+      setVigenciaInicio(valor);
+    }
+    setPrimeiroPagamento(valor);
+  }
   // Multa, linhagem (enxuta/robusta) e foro não são decisão do vendedor: seguem o
   // padrão do contrato (pedido novo) ou o que já estava salvo (edição) — ajustes
   // ficam com o jurídico, numa nova versão do contrato.
@@ -328,8 +352,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
       valorMensalApi: incluiApi ? valorMensalApi : undefined,
       valorMensalSoftware: incluiApi ? valorMensalSoftware : undefined,
       primeiroPagamento,
-      diaVencimento: formaPagamento === "parcelado" ? diaVencimento : undefined,
-      convencaoParcelas,
+      diaVencimento: formaPagamento === "parcelado" && vencimentoEspecifico && diaVencimento !== "" ? diaVencimento : undefined,
       vigenciaInicio,
       vigenciaFim,
       robusta,
@@ -717,35 +740,48 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
           <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
             <div className="flex flex-col gap-2">
               <Label variante="campo">{formaPagamento === "parcelado" ? "Data do primeiro pagamento" : "Data do pagamento"}</Label>
-              <Input type="date" value={primeiroPagamento} onChange={(e) => setPrimeiroPagamento(e.target.value)} />
+              <Input type="date" value={primeiroPagamento} onChange={(e) => alterarPrimeiroPagamento(e.target.value)} />
             </div>
             {formaPagamento === "parcelado" && (
-              <>
-                <div className="flex flex-col gap-2">
-                  <Label variante="campo">Dia de vencimento recorrente</Label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    value={diaVencimento}
-                    onChange={(e) => setDiaVencimento(paraNumero(e.target.value))}
-                    onFocus={selecionarConteudo}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label variante="campo">Convenção de parcelas</Label>
-                  <Select items={ROTULO_CONVENCAO_PARCELAS} value={convencaoParcelas} onValueChange={(v) => setConvencaoParcelas(v as "calendario" | "ciclo")}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="calendario">Calendário (padrão)</SelectItem>
-                      <SelectItem value="ciclo">Ciclo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
+              <div className="flex flex-col gap-2">
+                <Label variante="campo">Vencimento das parcelas</Label>
+                <Select
+                  items={ROTULOS_VENCIMENTO}
+                  value={vencimentoEspecifico ? "especifico" : "aniversario"}
+                  onValueChange={(v) => setVencimentoEspecifico(v === "especifico")}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="aniversario">{ROTULOS_VENCIMENTO.aniversario}</SelectItem>
+                    <SelectItem value="especifico">{ROTULOS_VENCIMENTO.especifico}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {formaPagamento === "parcelado" && vencimentoEspecifico && (
+              <div className="flex flex-col gap-2">
+                <Label variante="campo">Dia de vencimento</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={31}
+                  required
+                  placeholder="1 a 31"
+                  value={diaVencimento}
+                  onChange={(e) => setDiaVencimento(e.target.value === "" ? "" : paraNumero(e.target.value))}
+                  onFocus={selecionarConteudo}
+                />
+              </div>
             )}
           </div>
+          {formaPagamento === "parcelado" && previaParcelas && (
+            <p className="text-xs text-gray3">
+              {previaParcelas}
+              {vencimentoEspecifico && " — a 1ª vence no 1º pagamento (ativação); as demais no dia escolhido, antes do início de cada mês de serviço."}
+            </p>
+          )}
 
           <div className="flex flex-col gap-2">
             <Label variante="campo" htmlFor="email-financeiro">
@@ -818,9 +854,7 @@ export function PedidoForm({ clientes, signatariosPorCliente, representantesFoot
                 value={vigenciaInicio}
                 onChange={(e) => {
                   setVigenciaInicio(e.target.value);
-                  if (!vigenciaFim || vigenciaFim === somarMeses(vigenciaInicio, 12)) {
-                    setVigenciaFim(somarMeses(e.target.value, 12));
-                  }
+                  if (fimEhAutomatico(vigenciaInicio)) setVigenciaFim(fimVigenciaPadrao(e.target.value));
                 }}
               />
             </div>

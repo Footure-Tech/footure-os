@@ -70,6 +70,8 @@ export interface DadosContrato {
   mensalSoftware?: string;
   licAdicional: string;
   diaVenc?: string;
+  /** Dia de vencimento escolhido ≠ dia do 1º pagamento: a 1ª parcela vence em data própria (cronograma.ts). */
+  diaVencDiferenteDoPrimeiro?: boolean;
   primeiroVenc?: string;
   vencAvista?: string;
   /** Só relevante quando pagamento === "parcelado" — era fixo em 12. */
@@ -441,6 +443,11 @@ function textoRepresentantesContratante(representantes: Signatario[]): string {
   return `, por ${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}`;
 }
 
+/** Dia 29–31 não existe em todo mês — o cronograma usa o último dia (cronograma.ts); o texto avisa. */
+function notaUltimoDia(D: DadosContrato) {
+  return Number.parseInt(D.diaVenc ?? "", 10) > 28 ? " (ou no último dia do mês, nos meses em que esse dia não existir)" : "";
+}
+
 // ---------- bloco de assinaturas (página própria) ----------
 const MESES_MINUSCULO = [
   "",
@@ -465,7 +472,7 @@ function formatarLocalEData(data: Date): string {
   return `Porto Alegre, ${dia} de ${mes} de ${data.getFullYear()}.`;
 }
 
-function blocoAssinatura(nome: string, papel: string, before: number) {
+function blocoAssinatura(nome: string, papel: string, before: number, representante?: string) {
   const linha = "______________________________________";
   return [
     new Paragraph({
@@ -482,16 +489,20 @@ function blocoAssinatura(nome: string, papel: string, before: number) {
       keepLines: true,
       children: [B(nome)],
     }),
+    ...(representante
+      ? [new Paragraph({ spacing: { after: 0 }, alignment: AlignmentType.CENTER, keepNext: true, keepLines: true, children: [R(representante)] })]
+      : []),
     new Paragraph({ spacing: { after: 0 }, alignment: AlignmentType.CENTER, keepLines: true, children: [R(papel)] }),
   ];
 }
 
 function blocosParte(nomeEmpresa: string, representantes: { nome: string }[], papel: string, before: number) {
-  // Sem representantes cadastrados: cai no padrão histórico dos 4 contratos
-  // reais (só a razão social assina, nenhum nome individual). Com
-  // representantes: um bloco por pessoa (necessário pro envelope da Fase 3).
-  if (representantes.length === 0) return blocoAssinatura(nomeEmpresa, papel, before);
-  return representantes.flatMap((r, i) => blocoAssinatura(r.nome, papel, i === 0 ? before : 720));
+  // Quem assina é a parte (razão social), como nos contratos reais e na
+  // revisão jurídica de out/2026 — o representante assina por ela na
+  // Clicksign. Com 2+ representantes, um bloco por pessoa, com o nome dela
+  // abaixo da empresa para distinguir as linhas.
+  if (representantes.length <= 1) return blocoAssinatura(nomeEmpresa, papel, before);
+  return representantes.flatMap((r, i) => blocoAssinatura(nomeEmpresa, papel, i === 0 ? before : 720, r.nome));
 }
 
 function blocoAssinaturas(D: DadosContrato): (Paragraph | Table)[] {
@@ -835,7 +846,7 @@ function montarDocumento(D: DadosContrato): Document {
         P([
           B("CLÁUSULA OITAVA: "),
           R(
-            `Ajustam as partes que os pagamentos se darão através de transferência eletrônica (pix), cabendo ao CONTRATANTE a obrigação de envio imediato do comprovante de pagamento ao e-mail financeiro@footure.com.br, tão logo este seja realizado. O pagamento será realizado até o dia ${D.diaVenc || "25"} de cada mês, com apresentação da nota fiscal, e previsão do primeiro pagamento a partir de ${D.primeiroVenc}, através dos seguintes dados bancários:`,
+            `Ajustam as partes que os pagamentos se darão através de transferência eletrônica (pix), cabendo ao CONTRATANTE a obrigação de envio imediato do comprovante de pagamento ao e-mail financeiro@footure.com.br, tão logo este seja realizado. O pagamento será realizado até o dia ${D.diaVenc || "25"} de cada mês${notaUltimoDia(D)}, com apresentação da nota fiscal, e previsão do primeiro pagamento a partir de ${D.primeiroVenc}${D.diaVencDiferenteDoPrimeiro ? ", conforme cronograma abaixo" : ""}, através dos seguintes dados bancários:`,
           ),
         ]),
       );
@@ -845,7 +856,7 @@ function montarDocumento(D: DadosContrato): Document {
         P([
           B("CLÁUSULA OITAVA: "),
           R(
-            `Em relação à forma e prazo para pagamento, ajustam as partes que o pagamento se dará através de boleto bancário, com vencimento até o dia ${D.diaVenc || "10"} de cada mês, cabendo ao CONTRATANTE a obrigação de efetuar o pagamento no prazo estipulado, sendo o primeiro vencimento pactuado para ${D.primeiroVenc}:`,
+            `Em relação à forma e prazo para pagamento, ajustam as partes que o pagamento se dará através de boleto bancário, com vencimento até o dia ${D.diaVenc || "10"} de cada mês${notaUltimoDia(D)}, cabendo ao CONTRATANTE a obrigação de efetuar o pagamento no prazo estipulado, sendo o primeiro vencimento pactuado para ${D.primeiroVenc}${D.diaVencDiferenteDoPrimeiro ? " e os demais conforme a tabela abaixo" : ""}:`,
           ),
         ]),
       );

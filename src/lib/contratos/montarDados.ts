@@ -6,7 +6,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import type { DadosContrato, Signatario } from "./gerarContrato";
 import { montarFeatures } from "./planos";
 import { buscarPlanoPorKey, tierDaKey } from "@/lib/plans/normalize";
-import { gerarParcelas } from "./parcelas";
+import { gerarCronograma } from "./cronograma";
 import { valorFormatadoComExtenso, formatarMoeda } from "./valorPorExtenso";
 import { FORO_DEFAULT } from "@/lib/validacoes/pedido";
 import { formatarEnderecoCliente } from "@/lib/clientes/formatacao";
@@ -69,10 +69,12 @@ export async function montarDadosContrato(supabase: Supa, pedidoId: string): Pro
     pedido.licencas_gratuitas,
   );
 
+  // Regra única de vencimentos (cronograma.ts) — a mesma das contas a receber no Bling.
   const parcelas =
-    pedido.forma_pagamento === "parcelado"
-      ? gerarParcelas(formatarDDMMAAAA(pedido.primeiro_pagamento), pedido.numero_parcelas ?? 12, pedido.convencao_parcelas)
-      : [];
+    pedido.forma_pagamento === "parcelado" ? gerarCronograma(pedido.primeiro_pagamento, pedido.numero_parcelas ?? 12, pedido.dia_vencimento) : [];
+  // Sem dia específico, o vencimento é o aniversário da ativação.
+  const diaAtivacao = Number(pedido.primeiro_pagamento.slice(8, 10));
+  const diaVencimento = pedido.dia_vencimento ?? diaAtivacao;
 
   return {
     perfil: pedido.perfil,
@@ -95,7 +97,8 @@ export async function montarDadosContrato(supabase: Supa, pedidoId: string): Pro
     mensalSoftware:
       pedido.valor_mensal_software != null ? valorFormatadoComExtenso(pedido.valor_mensal_software) : undefined,
     licAdicional: pedido.valor_licenca_adicional != null ? formatarMoeda(pedido.valor_licenca_adicional) : "a combinar",
-    diaVenc: pedido.dia_vencimento != null ? String(pedido.dia_vencimento) : undefined,
+    diaVenc: String(diaVencimento),
+    diaVencDiferenteDoPrimeiro: diaVencimento !== diaAtivacao,
     numeroParcelas: pedido.numero_parcelas ?? undefined,
     primeiroVenc: formatarDDMMAAAA(pedido.primeiro_pagamento),
     vencAvista: undefined,

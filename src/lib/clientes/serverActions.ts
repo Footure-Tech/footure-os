@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { exigirPapel } from "@/lib/auth/session";
 import { sincronizarAcademyBling, sincronizarFootlinkBling, type ResultadoSincronizacaoBling } from "@/lib/integracoes/blingSincronizacao";
+import { atualizarContratosPorMudanca } from "@/lib/pedidos/acoes";
 import {
   garantirContatoBling,
   verificarCnpj,
@@ -40,6 +41,9 @@ const ClientePayloadSchema = z.object({
   foroPreferencial: z.string().min(1),
 });
 
+/** Colunas de `clientes` que aparecem no contrato (qualificação e assinaturas — montarDados.ts). */
+const CAMPOS_DO_CONTRATO = ["tipo", "razao_social", "cnpj", "endereco", "numero", "complemento", "bairro", "cep", "municipio", "uf"] as const;
+
 /** Índice único de 0037: a mesma organização do Footlink não pode ficar em dois clientes. */
 function erroFootlinkDuplicado(error: { code?: string; message: string }) {
   return error.code === "23505" && error.message.includes("footlink_org_id")
@@ -55,7 +59,7 @@ export interface SalvarClienteState {
 
 /** Cria (ou atualiza, se clienteId vier no payload) um cliente, com upload opcional de logo. */
 export async function salvarClienteAction(_prev: SalvarClienteState, formData: FormData): Promise<SalvarClienteState> {
-  await exigirPapel("vendedor", "admin");
+  const sessao = await exigirPapel("vendedor", "admin");
   const bruto = JSON.parse(String(formData.get("payload") ?? "{}"));
   const parsed = ClientePayloadSchema.safeParse(bruto);
   if (!parsed.success) {
@@ -72,7 +76,7 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
   };
 
   const { data: atual } = payload.clienteId
-    ? await supabase.from("clientes").select("bling_contato_id").eq("id", payload.clienteId).single()
+    ? await supabase.from("clientes").select("bling_contato_id, tipo, razao_social, cnpj, endereco, numero, complemento, bairro, cep, municipio, uf").eq("id", payload.clienteId).single()
     : { data: null };
 
   let linha;
@@ -120,6 +124,13 @@ export async function salvarClienteAction(_prev: SalvarClienteState, formData: F
   if (clienteId) {
     const { error } = await supabase.from("clientes").update(linha).eq("id", clienteId);
     if (error) return { erro: erroFootlinkDuplicado(error) ?? `Falha ao salvar cliente: ${error.message}` };
+    // Dados que entram no contrato mudaram: contratos em andamento ganham nova versão (ou aviso).
+    const antes = atual as unknown as Record<string, unknown> | null;
+    const depois = linha as Record<string, unknown>;
+    if (antes && CAMPOS_DO_CONTRATO.some((c) => (antes[c] ?? null) !== (depois[c] ?? null))) {
+      const { data: pedidos } = await supabase.from("pedidos").select("id").eq("cliente_id", clienteId);
+      await atualizarContratosPorMudanca((pedidos ?? []).map((p) => p.id), "Cadastro do cliente alterado", sessao.id);
+    }
   } else {
     const { data, error } = await supabase.from("clientes").insert(linha).select("id").single();
     if (error || !data) return { erro: (error && erroFootlinkDuplicado(error)) ?? `Falha ao criar cliente: ${error?.message}` };

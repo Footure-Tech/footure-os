@@ -4,7 +4,7 @@ import { exigirSucesso } from "@/lib/resultadoAcao";
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MdAutorenew, MdCancel, MdNotificationsActive, MdRefresh, MdSend, MdTaskAlt, MdUploadFile } from "react-icons/md";
+import { MdCancel, MdNotificationsActive, MdRefresh, MdSend, MdTaskAlt, MdUploadFile } from "react-icons/md";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -23,7 +23,6 @@ import {
   reprovarPedidoAction,
   tentarGerarNovamenteAction,
   liberarParaAssinaturaAction,
-  rejeitarContratoAction,
   enviarParaAssinaturaAction,
   enviarParaAprovacaoAction,
   cancelarAssinaturaAction,
@@ -167,12 +166,7 @@ export function AcoesPedido({
             Liberar para assinatura
           </Button>
         }
-        secundarias={
-          <>
-            <RegenerarContratoDialog pedidoId={pedidoId} />
-            <SubirNovaVersaoDialog pedidoId={pedidoId} />
-          </>
-        }
+        secundarias={<SubirNovaVersaoDialog pedidoId={pedidoId} />}
       />
     );
   }
@@ -273,49 +267,6 @@ function CancelarAssinaturaDialog({ pedidoId }: { pedidoId: string }) {
           <DialogClose render={<Button type="button" variant="white" />}>Voltar</DialogClose>
           <Button type="button" variant="destructive" disabled={pendente} onClick={confirmar}>
             {pendente ? "Cancelando…" : "Confirmar cancelamento"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function RegenerarContratoDialog({ pedidoId }: { pedidoId: string }) {
-  const [aberto, setAberto] = useState(false);
-  const [comentario, setComentario] = useState("");
-  const { pendente, rodar } = useAcao();
-
-  function confirmar() {
-    rodar(async () => {
-      exigirSucesso(await rejeitarContratoAction(pedidoId, comentario));
-      setAberto(false);
-      setComentario("");
-    }, "Contrato em regeneração");
-  }
-
-  return (
-    <Dialog open={aberto} onOpenChange={setAberto}>
-      <DialogTrigger render={<Button type="button" variant="white" />}>
-        <MdAutorenew className="size-[18px]" />
-        Regenerar
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Regenerar contrato</DialogTitle>
-          <DialogDescription>
-            O pedido volta para &quot;aprovado&quot; e o contrato é gerado novamente. Descreva o que precisa mudar.
-          </DialogDescription>
-        </DialogHeader>
-        <Textarea
-          placeholder="O que precisa mudar? (obrigatório)"
-          value={comentario}
-          onChange={(e) => setComentario(e.target.value)}
-          rows={3}
-        />
-        <DialogFooter>
-          <DialogClose render={<Button type="button" variant="white" />}>Cancelar</DialogClose>
-          <Button type="button" disabled={pendente || !comentario.trim()} onClick={confirmar}>
-            {pendente ? "Enviando…" : "Confirmar"}
           </Button>
         </DialogFooter>
       </DialogContent>
