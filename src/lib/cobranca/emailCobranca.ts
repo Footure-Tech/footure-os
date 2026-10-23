@@ -31,6 +31,10 @@ const MARCA_FOOTLINK: MarcaEmail = {
   linkDoSistema: false,
 };
 
+/** Até quantos dias de atraso o e-mail usa o tom leve (o primeiro aviso, em D+3, considerando
+ * que o boleto leva até 2 dias úteis para compensar); daí em diante, o tom firme. */
+const ATRASO_TOM_LEVE_DIAS = 4;
+
 const data = (iso: string) => formatarDataCurta(iso).replace(/\/(\d{2})$/, "/20$1");
 
 function situacao(item: ItemEmailCobranca) {
@@ -81,16 +85,18 @@ export function montarEmailCliente(dados: {
     titulo = varias ? "Suas parcelas do Footlink vencem hoje" : "Sua parcela do Footlink vence hoje";
     abertura = `Olá, ${nomeCliente}! Lembramos que ${varias ? "as parcelas abaixo vencem" : "a parcela abaixo vence"} hoje:`;
     fechamento = "Se o pagamento já foi feito, pode desconsiderar este aviso.";
-  } else if (maiorAtraso <= 1) {
+  } else if (maiorAtraso <= ATRASO_TOM_LEVE_DIAS) {
     assunto = varias ? "Parcelas do Footlink em aberto" : `Parcela do Footlink em aberto (venceu em ${data(primeiro.vencimento)})`;
     titulo = "Não identificamos o seu pagamento";
     abertura = `Olá, ${nomeCliente}! Até o momento não identificamos o pagamento ${varias ? "das parcelas abaixo" : "da parcela abaixo"}:`;
-    fechamento = "Se o pagamento já foi feito, pode desconsiderar este aviso — a confirmação pode levar até 2 dias úteis. Caso contrário, pedimos que regularize assim que possível.";
+    fechamento =
+      "Se o pagamento já foi feito, pode desconsiderar este aviso — a confirmação pode levar até 2 dias úteis. Caso contrário, pedimos que regularize assim que possível. Se não recebeu os dados para pagamento, é só responder este e-mail que enviamos novamente.";
   } else {
     assunto = varias ? "Pendência financeira no seu contrato Footlink" : `Pendência: parcela do Footlink vencida em ${data(primeiro.vencimento)}`;
     titulo = "Há uma pendência no seu contrato Footlink";
     abertura = `Olá, ${nomeCliente}! Não identificamos o pagamento ${varias ? "das parcelas abaixo" : "da parcela abaixo"}:`;
-    fechamento = "Pedimos que regularize o pagamento ou responda este e-mail para combinarmos a melhor forma de quitar. Se o pagamento já foi feito, envie o comprovante respondendo esta mensagem.";
+    fechamento =
+      "Para manter o seu acesso ao Footlink sem interrupções, pedimos que regularize o pagamento. Se não recebeu os dados para pagamento, é só responder este e-mail que enviamos novamente. Se o pagamento já foi feito, envie o comprovante respondendo esta mensagem.";
   }
 
   const conteudo = {

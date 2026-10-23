@@ -418,7 +418,7 @@ export function FormConfiguracaoCobranca({ config }: { config: CobrancaConfigura
         <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
           <div className={campo}>
             <Label variante="campo">Régua padrão (dias)</Label>
-            <Input value={regua} onChange={(e) => setRegua(e.target.value)} placeholder="-3, 0, 1, 5, 10" />
+            <Input value={regua} onChange={(e) => setRegua(e.target.value)} placeholder="-3, 0, 3, 7, 12" />
           </div>
           <div className={campo}>
             <Label variante="campo">Escalonamento (dias de atraso)</Label>

@@ -33,7 +33,7 @@ export async function salvarConfiguracaoCobranca(dados: z.input<typeof Configura
     const sessao = await exigirPapel(...PAPEIS_COBRANCA);
     const d = ConfiguracaoSchema.parse(dados);
     const regua = lerRegua(d.regua);
-    if (!regua) throw new Error("Régua inválida: informe os dias separados por vírgula (ex.: -3, 0, 1, 5, 10).");
+    if (!regua) throw new Error("Régua inválida: informe os dias separados por vírgula (ex.: -3, 0, 3, 7, 12).");
     if (d.modo !== "desligado" && !d.dataCorte) throw new Error("Defina a data de corte antes de ligar a régua.");
     const remetenteEmail = d.remetenteEmail ? normalizarEmails(d.remetenteEmail)[0] : null;
     if (d.remetenteEmail && !remetenteEmail) throw new Error("E-mail do remetente inválido.");
