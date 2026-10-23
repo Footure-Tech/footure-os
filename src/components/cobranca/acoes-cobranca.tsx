@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MdAccountBalance, MdDelete, MdEdit, MdMarkEmailRead, MdPlayArrow, MdRefresh, MdSend, MdTune, MdVisibility, MdWarning } from "react-icons/md";
+import { MdAccountBalance, MdDelete, MdDownload, MdEdit, MdReceiptLong, MdMarkEmailRead, MdPlayArrow, MdRefresh, MdSend, MdTune, MdVisibility, MdWarning } from "react-icons/md";
 import { exigirSucesso } from "@/lib/resultadoAcao";
 import type { CobrancaConfiguracaoRow, ModoCobranca } from "@/lib/supabase/database.types";
 import type { ClienteCobranca, EnvioTela } from "@/lib/cobranca/consultas";
@@ -13,6 +13,7 @@ import {
   cobrarAtrasadosAction,
   descartarEnvio,
   enviarEnviosAprovados,
+  gerarBoletosAction,
   gerarEnviosAgora,
   previaEnvioCobranca,
   registrarWebhookInterAction,
@@ -222,11 +223,22 @@ export function ListaAguardando({ envios, modo, emailTeste }: { envios: EnvioTel
       }
     });
   }
+  function gerarBoleto(id: string) {
+    iniciar(async () => {
+      try {
+        const r = exigirSucesso(await gerarBoletosAction(id));
+        toast.success(`${r.gerados ?? 0} ${r.gerados === 1 ? "boleto gerado" : "boletos gerados"} no Inter`, { description: "Confira em “Ver e-mail” e baixe o PDF. Nada foi enviado ao cliente." });
+        router.refresh();
+      } catch (e) {
+        erroToast(e, "Falha ao gerar o boleto.");
+      }
+    });
+  }
   function descartar(id: string) {
     iniciar(async () => {
       try {
-        exigirSucesso(await descartarEnvio(id));
-        toast.success("Envio descartado.");
+        const r = exigirSucesso(await descartarEnvio(id));
+        toast.success("Envio descartado.", r.boletosCancelados ? { description: `${r.boletosCancelados} ${r.boletosCancelados === 1 ? "boleto cancelado" : "boletos cancelados"} no Inter.` } : undefined);
         router.refresh();
       } catch (e) {
         erroToast(e, "Falha ao descartar.");
@@ -277,6 +289,7 @@ export function ListaAguardando({ envios, modo, emailTeste }: { envios: EnvioTel
                 <span className="font-semibold text-darkPurple1">{i.rotulo}</span>
                 <span>vence {formatarDataCurta(i.vencimento)}</span>
                 <span className="text-gray3">{i.etapa >= 1000 ? "escalonamento" : i.etapa === 500 ? "fora da régua" : rotuloEtapa(i.etapa)}</span>
+                {e.tipo === "cobranca" && <BoletoDaParcela boleto={e.boletos[i.parcela_id]} />}
                 <span className="ml-auto">{formatarMoeda(Number(i.valor))}</span>
               </div>
             ))}
@@ -292,6 +305,12 @@ export function ListaAguardando({ envios, modo, emailTeste }: { envios: EnvioTel
               )}
             </span>
             <PreviaEnvio envioId={e.id} emailTeste={e.tipo !== "escalonamento" ? emailTeste : null} />
+            {e.tipo === "cobranca" && !emailTeste && e.itens.some((i) => !e.boletos[i.parcela_id] || !["A_RECEBER", "ATRASADO", "RECEBIDO", "MARCADO_RECEBIDO"].includes(e.boletos[i.parcela_id].situacao)) && (
+              <Button variant="white" size="sm" disabled={pendente} onClick={() => gerarBoleto(e.id)} title="Emite o boleto no Inter sem enviar o e-mail, para conferir">
+                <MdReceiptLong className="size-4" />
+                Gerar boleto
+              </Button>
+            )}
             <Button variant="white" size="sm" disabled={pendente} onClick={() => descartar(e.id)}>
               <MdDelete className="size-4" />
               Descartar
@@ -307,6 +326,26 @@ export function ListaAguardando({ envios, modo, emailTeste }: { envios: EnvioTel
       ))}
       <ConfirmarEnvio envios={envios.filter((e) => aConfirmar?.includes(e.id))} emailTeste={emailTeste} aberto={aConfirmar !== null} onCancelar={() => setAConfirmar(null)} onConfirmar={() => aConfirmar && enviar(aConfirmar)} />
     </div>
+  );
+}
+
+/** Situação do boleto da parcela num envio de cobrança: ainda não gerado, gerado (com download) ou pago/cancelado. */
+function BoletoDaParcela({ boleto }: { boleto?: { codigo: string; situacao: string; nossoNumero: string | null } }) {
+  if (!boleto) return <span className="text-xs text-gray3">boleto ainda não gerado</span>;
+  const pago = boleto.situacao === "RECEBIDO" || boleto.situacao === "MARCADO_RECEBIDO";
+  const valido = boleto.situacao === "A_RECEBER" || boleto.situacao === "ATRASADO";
+  if (!pago && !valido) return <span className="text-xs text-gray3">boleto {boleto.situacao.toLowerCase().replace("_", " ")}</span>;
+  return (
+    <span className="flex items-center gap-2 text-xs">
+      <span className={pago ? "font-semibold text-green1" : "font-semibold text-darkPurple1"}>
+        {pago ? "boleto pago" : "boleto gerado"}
+        {boleto.nossoNumero ? ` · nº ${boleto.nossoNumero}` : ""}
+      </span>
+      <a href={`/financeiro/cobranca/boleto/${encodeURIComponent(boleto.codigo)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 font-semibold text-purple-text hover:underline">
+        <MdDownload className="size-3.5" />
+        Baixar PDF
+      </a>
+    </span>
   );
 }
 
@@ -344,6 +383,11 @@ function ConfirmarEnvio({
         ) : emailTeste && aClientes.length > 0 ? (
           <p className="rounded-lg border border-orange/40 bg-orange3 px-3 py-2.5 text-sm font-semibold text-[#ce9232]">Modo de teste: nenhum cliente recebe — os e-mails vão só para {emailTeste}.</p>
         ) : null}
+        {!emailTeste && envios.some((e) => e.tipo === "cobranca" && e.itens.some((i) => !e.boletos[i.parcela_id])) && (
+          <p className="rounded-lg border border-gray5 bg-light px-3 py-2 text-xs text-gray2">
+            Há cobrança sem boleto gerado: ele será emitido no Banco Inter agora, no envio. Para conferir antes, cancele e use “Gerar boleto”.
+          </p>
+        )}
         <div className="flex max-h-[40vh] flex-col gap-2 overflow-y-auto">
           {envios.map((e) => (
             <div key={e.id} className="flex flex-col gap-0.5 rounded-lg border border-gray5 px-3 py-2">

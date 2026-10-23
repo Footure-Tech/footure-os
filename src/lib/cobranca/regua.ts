@@ -9,7 +9,7 @@ import { carregarBaseParcelas } from "@/lib/financeiro/carteira";
 import { consultarBling, obterAccessTokenValido, pedidoBlingCancelado } from "@/lib/integracoes/bling";
 import { enderecoRemetentePadrao, enviarEmailResend } from "@/lib/integracoes/resend";
 import { montarEmailCliente, montarEmailEscalonamento, type EmailCobrancaMontado, type ItemEmailCobranca } from "./emailCobranca";
-import { SITUACOES_BOLETO_PAGO, SITUACOES_BOLETO_VALIDO, boletosDasParcelas, conferirBoletosAbertos, garantirBoleto, pdfsDosBoletos, pendenciasEmissaoInter } from "./boletos";
+import { SITUACOES_BOLETO_PAGO, SITUACOES_BOLETO_VALIDO, boletosDasParcelas, cancelarBoletosDasParcelas, conferirBoletosAbertos, garantirBoleto, pdfsDosBoletos, pendenciasEmissaoInter } from "./boletos";
 import { JANELA_RECUPERACAO_DIAS, dataEnvioCobranca, diasDesdeVencimento, etapaDoDia, hojeBrt, normalizarEmails, tipoDoEnvio } from "./regras";
 
 type Supa = SupabaseClient<Database>;
@@ -553,6 +553,33 @@ export async function enviarEnvio(supabase: Supa, envioId: string, decididoPor?:
     await supabase.from("cobranca_envios").update({ status: "erro", erro: e instanceof Error ? e.message : String(e), ...decisao }).eq("id", envioId);
     return "erro";
   }
+}
+
+/**
+ * "Gerar boleto" da tela: emite no Inter os boletos da cobrança SEM enviar o
+ * e-mail — a prévia passa a mostrar a linha digitável e o Pix reais e o PDF
+ * pode ser baixado para conferência. Parcela já paga fica de fora.
+ */
+export async function gerarBoletosDoEnvio(supabase: Supa, envioId: string, emitidoPor?: string): Promise<number> {
+  const [envio, config] = await Promise.all([carregarEnvio(supabase, envioId), carregarConfiguracaoCobranca(supabase)]);
+  if (envio.tipo !== "cobranca") throw new Error("Só a cobrança (boleto) gera boleto.");
+  if (envio.status !== "pendente" && envio.status !== "erro") throw new Error("Este envio já foi decidido.");
+  if (config.email_teste || envio.teste) throw new Error("Em modo de teste nenhum boleto é emitido.");
+  const devidas = await parcelasAindaDevidas(supabase, envio.itens);
+  let gerados = 0;
+  for (const i of envio.itens.filter((x) => devidas.has(x.parcela_id))) {
+    await garantirBoleto(supabase, config, { ...i, contato_id: envio.contato_id, valor: Number(i.valor) }, emitidoPor);
+    gerados++;
+  }
+  return gerados;
+}
+
+/** Descarte de uma cobrança: cancela no Inter os boletos que o sistema já tinha gerado para ela. */
+export async function cancelarBoletosDoEnvio(supabase: Supa, envioId: string): Promise<number> {
+  const envio = await carregarEnvio(supabase, envioId);
+  // Só cobrança ainda não enviada: o boleto de um e-mail que já saiu nunca é cancelado por aqui.
+  if (envio.tipo !== "cobranca" || (envio.status !== "pendente" && envio.status !== "erro")) return 0;
+  return cancelarBoletosDasParcelas(supabase, envio.itens.map((i) => i.parcela_id), "Cobranca descartada no Footure OS");
 }
 
 const ENTREGA_POR_EVENTO: Record<string, EntregaEnvioCobranca> = {

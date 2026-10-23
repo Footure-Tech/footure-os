@@ -7,7 +7,7 @@ import { exigirPapel } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { PAPEIS_COBRANCA } from "./permissoes";
-import { cobrarAtrasadosForaDaRegua, destinatariosDaCobranca, enviarEnvio, gerarEnviosDoDia, previaDoEnvio, type ResumoGeracao } from "./regua";
+import { cancelarBoletosDoEnvio, cobrarAtrasadosForaDaRegua, destinatariosDaCobranca, gerarBoletosDoEnvio, enviarEnvio, gerarEnviosDoDia, previaDoEnvio, type ResumoGeracao } from "./regua";
 import { lerRegua, normalizarEmails } from "./regras";
 import { pendenciasEmissaoInter } from "./boletos";
 import { registrarWebhookInter } from "@/lib/integracoes/inter";
@@ -188,9 +188,12 @@ export async function enviarEnviosAprovados(ids: string[]): Promise<ResultadoAca
   return r.erro ? r : contagem;
 }
 
-export async function descartarEnvio(id: string): Promise<ResultadoAcao> {
-  return executar(async () => {
+export async function descartarEnvio(id: string): Promise<ResultadoAcao & { boletosCancelados?: number }> {
+  let boletosCancelados = 0;
+  const r = await executar(async () => {
     const sessao = await exigirPapel(...PAPEIS_COBRANCA);
+    // Cobrança com boleto já gerado: cancela no Inter antes (não pode ficar boleto pagável sem e-mail).
+    boletosCancelados = await cancelarBoletosDoEnvio(createServiceClient(), z.string().uuid().parse(id));
     const supabase = await createClient();
     const { error } = await supabase
       .from("cobranca_envios")
@@ -200,6 +203,18 @@ export async function descartarEnvio(id: string): Promise<ResultadoAcao> {
     if (error) throw new Error(error.message);
     revalidatePath(TELA);
   });
+  return r.erro ? r : { boletosCancelados };
+}
+
+/** "Gerar boleto": emite no Inter os boletos da cobrança, sem enviar o e-mail. */
+export async function gerarBoletosAction(id: string): Promise<ResultadoAcao & { gerados?: number }> {
+  let gerados = 0;
+  const r = await executar(async () => {
+    const sessao = await exigirPapel(...PAPEIS_COBRANCA);
+    gerados = await gerarBoletosDoEnvio(createServiceClient(), z.string().uuid().parse(id), sessao.id);
+    revalidatePath(TELA);
+  });
+  return r.erro ? r : { gerados };
 }
 
 export async function previaEnvioCobranca(id: string): Promise<ResultadoAcao & { assunto?: string; html?: string; destinatarios?: string[] }> {

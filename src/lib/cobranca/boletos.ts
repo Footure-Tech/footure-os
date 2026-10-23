@@ -7,7 +7,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CobrancaBoletoRow, CobrancaConfiguracaoRow, Database } from "@/lib/supabase/database.types";
 import { buscarDetalheContatoBling } from "@/lib/integracoes/bling";
-import { consultarCobrancaInter, emitirCobrancaInter, interConfigurado, pdfCobrancaInter, type CobrancaInter } from "@/lib/integracoes/inter";
+import { cancelarCobrancaInter, consultarCobrancaInter, emitirCobrancaInter, interConfigurado, pdfCobrancaInter, type CobrancaInter } from "@/lib/integracoes/inter";
 
 type Supa = SupabaseClient<Database>;
 
@@ -145,6 +145,25 @@ export async function conferirBoletosAbertos(supabase: Supa): Promise<{ conferid
     }
   }
   return r;
+}
+
+/**
+ * Cancela no Inter os boletos ainda válidos que o sistema emitiu para as
+ * parcelas (cobrança descartada depois de "Gerar boleto": não pode ficar um
+ * boleto pagável sem e-mail). Boletos manuais e pagos não são tocados.
+ */
+export async function cancelarBoletosDasParcelas(supabase: Supa, parcelaIds: number[], motivo: string): Promise<number> {
+  const boletos = await boletosDasParcelas(supabase, parcelaIds);
+  let cancelados = 0;
+  for (const b of boletos.values()) {
+    if (b.origem !== "sistema" || !SITUACOES_BOLETO_VALIDO.includes(b.situacao)) continue;
+    await cancelarCobrancaInter(b.codigo_solicitacao, motivo);
+    await supabase.from("cobranca_boletos").update({ cancelado_em: new Date().toISOString(), motivo_cancelamento: motivo }).eq("id", b.id);
+    // O Inter processa o cancelamento em segundos; a situação é relida aqui ou na conferência diária.
+    await atualizarBoleto(supabase, b.codigo_solicitacao).catch(() => null);
+    cancelados++;
+  }
+  return cancelados;
 }
 
 /** PDFs dos boletos para anexar ao e-mail de cobrança. */

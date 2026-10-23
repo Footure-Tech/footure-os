@@ -2,16 +2,25 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CobrancaClienteRow, CobrancaEnvioItemRow, CobrancaEnvioRow, Database } from "@/lib/supabase/database.types";
 import { carregarBaseParcelas } from "@/lib/financeiro/carteira";
 import { carregarConfiguracaoCobranca } from "./regua";
+import { boletosDasParcelas } from "./boletos";
 import { diasDesdeVencimento, hojeBrt, normalizarEmails } from "./regras";
 
 type Supa = SupabaseClient<Database>;
 
 export type AbaCobranca = "aprovacao" | "historico" | "clientes" | "configuracao";
 
+export interface BoletoTela {
+  codigo: string;
+  situacao: string;
+  nossoNumero: string | null;
+}
+
 export interface EnvioTela extends CobrancaEnvioRow {
   cliente: string;
   itens: CobrancaEnvioItemRow[];
   total: number;
+  /** F2: boleto do Inter de cada parcela do envio (só nos aguardando aprovação). */
+  boletos: Record<number, BoletoTela>;
 }
 
 export interface ClienteCobranca {
@@ -46,10 +55,17 @@ export async function carregarTelaCobranca(supabase: Supa) {
     cliente: base.nomeDoContato(e.contato_id),
     itens: [...e.itens].sort((a, b) => a.vencimento.localeCompare(b.vencimento)),
     total: e.itens.reduce((s, i) => s + Number(i.valor), 0),
+    boletos: {},
   });
   // Itens aninhados pela FK envio_id (os tipos à mão não descrevem relações).
   const todos = ((envios ?? []) as unknown as (CobrancaEnvioRow & { itens: CobrancaEnvioItemRow[] })[]).map(paraTela);
   const aguardando = todos.filter((e) => e.status === "pendente" || e.status === "erro");
+  const boletos = await boletosDasParcelas(supabase, aguardando.flatMap((e) => e.itens.map((i) => i.parcela_id)));
+  for (const e of aguardando)
+    for (const i of e.itens) {
+      const b = boletos.get(i.parcela_id);
+      if (b) e.boletos[i.parcela_id] = { codigo: b.codigo_solicitacao, situacao: b.situacao, nossoNumero: b.nosso_numero };
+    }
   const historico = todos.filter((e) => e.status !== "pendente");
   const problemasEntrega = historico.filter((e) => e.entrega === "devolvido" || e.entrega === "spam");
 
