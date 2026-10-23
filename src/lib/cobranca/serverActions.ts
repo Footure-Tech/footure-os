@@ -7,7 +7,7 @@ import { exigirPapel } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { PAPEIS_COBRANCA } from "./permissoes";
-import { destinatariosDaCobranca, enviarEnvio, gerarEnviosDoDia, previaDoEnvio, type ResumoGeracao } from "./regua";
+import { cobrarAtrasadosForaDaRegua, destinatariosDaCobranca, enviarEnvio, gerarEnviosDoDia, previaDoEnvio, type ResumoGeracao } from "./regua";
 import { lerRegua, normalizarEmails } from "./regras";
 
 // Gerar, enviar, pré-visualizar e reler e-mails usam o client de serviço depois
@@ -153,6 +153,17 @@ export async function previaEnvioCobranca(id: string): Promise<ResultadoAcao & {
     previa = await previaDoEnvio(createServiceClient(), z.string().uuid().parse(id));
   });
   return r.erro || !previa ? r : previa;
+}
+
+/** "Cobrar atrasados": lista os clientes fora da régua (simular) ou gera os envios, pendentes de aprovação. */
+export async function cobrarAtrasadosAction(simular: boolean): Promise<ResultadoAcao & { clientes?: Awaited<ReturnType<typeof cobrarAtrasadosForaDaRegua>> }> {
+  let clientes: Awaited<ReturnType<typeof cobrarAtrasadosForaDaRegua>> = [];
+  const r = await executar(async () => {
+    await exigirPapel(...PAPEIS_COBRANCA);
+    clientes = await cobrarAtrasadosForaDaRegua(createServiceClient(), { simular });
+    if (!simular) revalidatePath(TELA);
+  });
+  return r.erro ? r : { clientes };
 }
 
 /** Roda a geração do dia agora (a mesma do cron das 9h). */

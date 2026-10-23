@@ -15,6 +15,8 @@ type Supa = SupabaseClient<Database>;
 
 /** O escalonamento usa etapa = 1000 + dias, para não colidir com uma etapa da régua no mesmo dia (chave parcela × etapa). */
 export const ETAPA_ESCALONAMENTO_BASE = 1000;
+/** Cobrança avulsa de parcela fora da régua ("Cobrar atrasados"): uma vez por parcela. */
+export const ETAPA_COBRANCA_AVULSA = 500;
 /** E-mails do contato no Bling são relidos depois disso. */
 const VALIDADE_EMAILS_BLING_MS = 7 * 86_400_000;
 /** Situações de conta a receber no Bling que encerram a cobrança: recebida, devolvida, cancelada. */
@@ -250,6 +252,95 @@ export async function gerarEnviosDoDia(supabase: Supa, hoje = hojeBrt()): Promis
 const pedidosDe = (itens: { bling_pedido_id: number | null }[]) => itens.map((i) => i.bling_pedido_id).filter((id): id is number => id !== null);
 
 type EnvioComItens = CobrancaEnvioRow & { itens: CobrancaEnvioItemRow[] };
+
+export interface ClienteAtrasadoForaDaRegua {
+  contatoId: number;
+  cliente: string;
+  parcelas: number;
+  total: number;
+  maiorAtraso: number;
+}
+
+/**
+ * "Cobrar atrasados": clientes com parcela vencida FORA da régua — depois da
+ * última etapa e da janela de recuperação (D+15 com a régua padrão), que a
+ * régua já não alcança — e com vencimento a partir da data de corte (evita
+ * clientes muito atrasados, sem contrato ativo). Cliente pausado e pedido
+ * cancelado ficam fora; cada parcela recebe essa cobrança uma única vez.
+ * `simular`: só devolve a lista (a janela de confirmação da tela). Senão, cria
+ * os envios sempre pendentes de aprovação, mesmo com a régua no automático.
+ */
+export async function cobrarAtrasadosForaDaRegua(
+  supabase: Supa,
+  opcoes: { simular: boolean; /** Só simulação: outra data de corte, sem alterar a configuração gravada. */ dataCorte?: string },
+  hoje = hojeBrt(),
+): Promise<ClienteAtrasadoForaDaRegua[]> {
+  const gravada = await carregarConfiguracaoCobranca(supabase);
+  const config = opcoes.simular && opcoes.dataCorte ? { ...gravada, data_corte: opcoes.dataCorte } : gravada;
+  if (!config.data_corte) throw new Error("Defina a data de corte antes de cobrar os atrasados.");
+  const limite = Math.max(...config.regua_dias) + JANELA_RECUPERACAO_DIAS;
+  const [base, regras, itens] = await Promise.all([
+    carregarBaseParcelas(supabase),
+    lerTudo((de, ate) => supabase.from("cobranca_clientes").select("contato_id, pausada").range(de, ate)),
+    lerTudo((de, ate) => supabase.from("cobranca_envio_itens").select("parcela_id").eq("etapa", ETAPA_COBRANCA_AVULSA).range(de, ate)),
+  ]);
+  const pausados = new Set(regras.filter((r) => r.pausada).map((r) => r.contato_id));
+  const jaCobradas = new Set(itens.map((i) => i.parcela_id));
+
+  type Item = Omit<CobrancaEnvioItemRow, "envio_id">;
+  const porCliente = new Map<number, { itens: Item[]; maiorAtraso: number }>();
+  for (const p of base.parcelas) {
+    if ((p.situacao !== "em_aberto" && p.situacao !== "atrasada") || base.deCancelado(p)) continue;
+    if (p.vencimento < config.data_corte || pausados.has(p.contatoId) || jaCobradas.has(p.id)) continue;
+    const dias = diasDesdeVencimento(p.vencimento, hoje);
+    if (dias <= limite) continue;
+    const c = porCliente.get(p.contatoId) ?? { itens: [], maiorAtraso: 0 };
+    c.itens.push({
+      parcela_id: p.id,
+      etapa: ETAPA_COBRANCA_AVULSA,
+      vencimento: p.vencimento,
+      valor: p.valor,
+      rotulo: `Parcela ${p.numero}/${p.totalDoPedido}${p.numeroPedidoOrigem ? ` · pedido ${p.numeroPedidoOrigem}` : ""}`,
+      bling_pedido_id: p.numeroPedidoOrigem ? (base.pedidoPorChave.get(`${p.contatoId}:${p.numeroPedidoOrigem}`)?.id ?? null) : null,
+    });
+    c.maiorAtraso = Math.max(c.maiorAtraso, dias);
+    porCliente.set(p.contatoId, c);
+  }
+
+  const lista = [...porCliente].map(([contatoId, c]) => ({
+    contatoId,
+    cliente: base.nomeDoContato(contatoId),
+    parcelas: c.itens.length,
+    total: c.itens.reduce((s, i) => s + i.valor, 0),
+    maiorAtraso: c.maiorAtraso,
+  }));
+  if (opcoes.simular) return lista.sort((a, b) => b.maiorAtraso - a.maiorAtraso);
+
+  const token = porCliente.size ? await tokenBlingSeguro(supabase) : null;
+  for (const [contatoId, c] of porCliente) {
+    const { emails } = await destinatariosDaCobranca(supabase, contatoId, pedidosDe(c.itens), token);
+    const { data: envio, error } = await supabase
+      .from("cobranca_envios")
+      .insert({
+        contato_id: contatoId,
+        tipo: "atraso",
+        data_prevista: hoje,
+        destinatarios: emails,
+        teste: !!config.email_teste,
+        status: emails.length ? "pendente" : "erro",
+        erro: emails.length ? null : "Cliente sem e-mail válido no Bling e sem destinatários extras na régua.",
+      })
+      .select("id")
+      .single();
+    if (error || !envio) throw new Error(`Falha ao registrar a cobrança de ${base.nomeDoContato(contatoId)}: ${error?.message}`);
+    const { error: erroItens } = await supabase.from("cobranca_envio_itens").insert(c.itens.map((i) => ({ ...i, envio_id: envio.id })));
+    if (erroItens) {
+      await supabase.from("cobranca_envios").delete().eq("id", envio.id);
+      if (erroItens.code !== "23505") throw new Error(`Falha ao registrar as parcelas de ${base.nomeDoContato(contatoId)}: ${erroItens.message}`);
+    }
+  }
+  return lista;
+}
 
 async function carregarEnvio(supabase: Supa, envioId: string): Promise<EnvioComItens> {
   const [{ data: envio }, { data: itens }] = await Promise.all([

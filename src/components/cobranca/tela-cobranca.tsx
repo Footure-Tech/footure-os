@@ -7,7 +7,8 @@ import { AbasFiltro } from "@/components/ds/alternadores";
 import { StatusPill } from "@/components/ds/status-pill";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BotaoGerarAgora, DialogRegraCliente, FormConfiguracaoCobranca, ListaAguardando } from "./acoes-cobranca";
+import { BotaoCobrarAtrasados, BotaoGerarAgora, DialogRegraCliente, FormConfiguracaoCobranca, ListaAguardando } from "./acoes-cobranca";
+import { JANELA_RECUPERACAO_DIAS } from "@/lib/cobranca/regras";
 import { ENTREGA_VISUAL, ROTULO_TIPO_ENVIO, STATUS_ENVIO_VISUAL, TOM_TIPO_ENVIO } from "./visual";
 
 type Dados = Awaited<ReturnType<typeof carregarTelaCobranca>>;
@@ -40,6 +41,7 @@ export function TelaCobranca({ dados, aba }: { dados: Dados; aba: AbaCobranca })
         acoes={
           <>
             <StatusPill tom={TOM_MODO[config.modo]}>{ROTULO_MODO[config.modo]}</StatusPill>
+            {!desligada && <BotaoCobrarAtrasados dataCorte={config.data_corte} limiteDias={Math.max(...config.regua_dias) + JANELA_RECUPERACAO_DIAS} />}
             <BotaoGerarAgora desabilitado={desligada || !config.data_corte} />
           </>
         }

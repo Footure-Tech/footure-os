@@ -3,13 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MdDelete, MdEdit, MdMarkEmailRead, MdPlayArrow, MdRefresh, MdSend, MdTune, MdVisibility } from "react-icons/md";
+import { MdDelete, MdEdit, MdMarkEmailRead, MdPlayArrow, MdRefresh, MdSend, MdTune, MdVisibility, MdWarning } from "react-icons/md";
 import { exigirSucesso } from "@/lib/resultadoAcao";
 import type { CobrancaConfiguracaoRow, ModoCobranca } from "@/lib/supabase/database.types";
 import type { ClienteCobranca, EnvioTela } from "@/lib/cobranca/consultas";
 import { rotuloEtapa } from "@/lib/cobranca/regras";
 import {
   atualizarEmailsDoCliente,
+  cobrarAtrasadosAction,
   descartarEnvio,
   enviarEnviosAprovados,
   gerarEnviosAgora,
@@ -63,6 +64,96 @@ export function BotaoGerarAgora({ desabilitado }: { desabilitado: boolean }) {
       <MdPlayArrow className="size-[18px]" />
       {pendente ? "Gerando…" : "Gerar envios de hoje"}
     </Button>
+  );
+}
+
+type ClienteAtrasado = NonNullable<Awaited<ReturnType<typeof cobrarAtrasadosAction>>["clientes"]>[number];
+
+/** "Cobrar atrasados": parcelas vencidas fora da régua (D+15 em diante), desde a data de corte. A janela lista quem entra antes de gerar. */
+export function BotaoCobrarAtrasados({ dataCorte, limiteDias }: { dataCorte: string | null; limiteDias: number }) {
+  const [aberto, setAberto] = useState(false);
+  const [clientes, setClientes] = useState<ClienteAtrasado[] | null>(null);
+  const [carregando, carregar] = useTransition();
+  const [gerando, gerar] = useTransition();
+  const router = useRouter();
+
+  function abrir(valor: boolean) {
+    setAberto(valor);
+    if (!valor) return;
+    setClientes(null);
+    carregar(async () => {
+      try {
+        setClientes(exigirSucesso(await cobrarAtrasadosAction(true)).clientes ?? []);
+      } catch (e) {
+        erroToast(e, "Falha ao listar os atrasados.");
+        setAberto(false);
+      }
+    });
+  }
+  function confirmar() {
+    gerar(async () => {
+      try {
+        const n = exigirSucesso(await cobrarAtrasadosAction(false)).clientes?.length ?? 0;
+        toast.success(`${n} ${n === 1 ? "cobrança gerada" : "cobranças geradas"} para aprovação`, { description: "Confira cada uma em “Aguardando aprovação” antes de enviar." });
+        setAberto(false);
+        router.push("/financeiro/cobranca");
+        router.refresh();
+      } catch (e) {
+        erroToast(e, "Falha ao gerar as cobranças.");
+      }
+    });
+  }
+
+  const total = (clientes ?? []).reduce((s, c) => s + c.total, 0);
+  return (
+    <Dialog open={aberto} onOpenChange={abrir}>
+      <DialogTrigger
+        render={<Button variant="secondary" disabled={!dataCorte} title={dataCorte ? undefined : "Defina a data de corte na aba Configuração."} />}
+      >
+        <MdWarning className="size-[18px]" />
+        Cobrar atrasados
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>Cobrar atrasados fora da régua</DialogTitle>
+          <DialogDescription>
+            Parcelas com vencimento a partir de {dataCorte ? formatarDataCurta(dataCorte) : "—"} (data de corte) e mais de {limiteDias} dias de atraso, que a régua já não alcança. Cada
+            parcela recebe esta cobrança uma única vez; os e-mails vão para “Aguardando aprovação”.
+          </DialogDescription>
+        </DialogHeader>
+        {carregando || !clientes ? (
+          <p className="py-8 text-center text-sm text-gray3">Buscando os atrasados…</p>
+        ) : clientes.length === 0 ? (
+          <p className="py-8 text-center text-sm text-gray3">Nenhum cliente atrasado fora da régua desde a data de corte.</p>
+        ) : (
+          <>
+            <div className="flex max-h-[45vh] flex-col gap-1.5 overflow-y-auto">
+              {clientes.map((c) => (
+                <div key={c.contatoId} className="flex items-center gap-3 rounded-lg border border-gray5 px-3 py-2 text-sm">
+                  <span className="flex-1 font-bold text-darkPurple1">{c.cliente}</span>
+                  <span className="text-xs text-gray3">
+                    {c.parcelas} {c.parcelas === 1 ? "parcela" : "parcelas"} · {c.maiorAtraso} dias
+                  </span>
+                  <span className="font-semibold text-darkPurple1">{formatarMoeda(c.total)}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-right text-sm">
+              {clientes.length} {clientes.length === 1 ? "cliente" : "clientes"} · total <span className="font-bold text-darkPurple1">{formatarMoeda(total)}</span>
+            </p>
+            <p className="rounded-lg border border-orange/40 bg-orange3 px-3 py-2 text-xs font-semibold text-[#ce9232]">
+              Antes de enviar, confira se essas parcelas não foram pagas sem a baixa no Bling — cada envio ainda passa pela aprovação e pela conferência no Bling.
+            </p>
+          </>
+        )}
+        <DialogFooter>
+          <DialogClose render={<Button type="button" variant="white" />}>Cancelar</DialogClose>
+          <Button type="button" disabled={gerando || carregando || !clientes?.length} onClick={confirmar}>
+            {gerando ? "Gerando…" : `Gerar ${clientes?.length ?? 0} ${clientes?.length === 1 ? "cobrança" : "cobranças"} para aprovação`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -182,7 +273,7 @@ export function ListaAguardando({ envios, modo, emailTeste }: { envios: EnvioTel
               <div key={`${i.parcela_id}:${i.etapa}`} className="flex flex-wrap gap-x-3 text-gray2">
                 <span className="font-semibold text-darkPurple1">{i.rotulo}</span>
                 <span>vence {formatarDataCurta(i.vencimento)}</span>
-                <span className="text-gray3">{i.etapa >= 1000 ? "escalonamento" : rotuloEtapa(i.etapa)}</span>
+                <span className="text-gray3">{i.etapa >= 1000 ? "escalonamento" : i.etapa === 500 ? "fora da régua" : rotuloEtapa(i.etapa)}</span>
                 <span className="ml-auto">{formatarMoeda(Number(i.valor))}</span>
               </div>
             ))}
