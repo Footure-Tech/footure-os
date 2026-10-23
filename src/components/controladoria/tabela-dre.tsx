@@ -42,8 +42,8 @@ export function TabelaDre({ meses, linhas, receitaTotal }: { meses: string[]; li
           const subtotal = l.tipo === "subtotal";
           return (
             <Fragment key={l.chave}>
-              <TableRow className={cn(subtotal && "bg-light/60")}>
-                <TableCell className={cn("sticky left-0 z-10 bg-card", subtotal && "bg-light/60")}>
+              <TableRow className={cn(subtotal && "bg-light")}>
+                <TableCell className={cn("sticky left-0 z-10 bg-card", subtotal && "bg-light")}>
                   {l.detalhes.length ? (
                     <button type="button" onClick={() => alternar(l.chave)} className="flex items-center gap-1 text-left font-bold text-darkPurple1 hover:text-purple-text">
                       <MdChevronRight className={cn("size-4 shrink-0 transition-transform", aberto && "rotate-90")} />

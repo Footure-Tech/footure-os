@@ -17,8 +17,8 @@ const valor = (v: number | null) => (v === null ? "" : Math.abs(v) < 0.5 ? "—"
 
 function Linha({ rotulo, valores, destaque, detalhe, cor }: { rotulo: string; valores: (number | null)[]; destaque?: boolean; detalhe?: boolean; cor?: (v: number) => string }) {
   return (
-    <TableRow className={cn(destaque && "bg-light/60")}>
-      <TableCell className={cn("sticky left-0 z-10 bg-card whitespace-normal", destaque && "bg-light/60", detalhe ? "pl-9 text-[13px] text-gray2" : "font-bold text-darkPurple1")}>{rotulo}</TableCell>
+    <TableRow className={cn(destaque && "bg-light")}>
+      <TableCell className={cn("sticky left-0 z-10 bg-card whitespace-normal", destaque && "bg-light", detalhe ? "pl-9 text-[13px] text-gray2" : "font-bold text-darkPurple1")}>{rotulo}</TableCell>
       {valores.map((v, i) => (
         <TableCell key={i} className={cn("text-right whitespace-nowrap", detalhe ? "text-[13px] text-gray2" : "font-semibold", v !== null && cor ? cor(v) : !detalhe && "text-darkPurple1")}>
           {valor(v)}
