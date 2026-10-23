@@ -63,9 +63,13 @@ export function montarEmailCliente(dados: {
   chavePix: string | null;
 }): EmailCobrancaMontado {
   const { nomeCliente, itens, chavePix } = dados;
+  // Lembrete (ou vencimento) de quem também tem parcela vencida: dois blocos — o lembrete e as pendências.
+  const aVencer = itens.filter((i) => i.dias <= 0);
+  const vencidas = itens.filter((i) => i.dias > 0);
+  if (dados.tipo !== "atraso" && aVencer.length && vencidas.length) return montarEmailLembreteComPendencias({ tipo: dados.tipo, nomeCliente, aVencer, vencidas, chavePix });
   const varias = itens.length > 1;
-  // Com alguma parcela já vencida na lista, o e-mail é de atraso mesmo que a etapa do dia seja um lembrete.
-  const tipo = itens.some((i) => i.dias > 0) ? "atraso" : dados.tipo;
+  // Só vencidas na lista: o e-mail é de atraso mesmo que a etapa do dia seja um lembrete.
+  const tipo = vencidas.length ? "atraso" : dados.tipo;
   const total = itens.reduce((s, i) => s + i.valor, 0);
   const primeiro = itens[0];
   const maiorAtraso = Math.max(...itens.map((i) => i.dias));
@@ -112,6 +116,65 @@ export function montarEmailCliente(dados: {
   };
   const { html, texto } = montarEmail(conteudo);
   return { assunto, html, texto, anexos: [{ nome: "footlink-logo.png", base64: LOGO_FOOTLINK_BASE64, contentId: LOGO_FOOTLINK_CID }] };
+}
+
+/**
+ * Lembrete (D-3) ou vencimento (D0) para cliente que também tem parcela vencida
+ * desde a data de corte: primeiro o que vai vencer, depois "além desta(s)…" as
+ * pendências, e o pedido de regularização (leve ou firme, pelo maior atraso).
+ */
+function montarEmailLembreteComPendencias(dados: {
+  tipo: "lembrete" | "vencimento";
+  nomeCliente: string;
+  aVencer: ItemEmailCobranca[];
+  vencidas: ItemEmailCobranca[];
+  chavePix: string | null;
+}): EmailCobrancaMontado {
+  const { tipo, nomeCliente, aVencer, vencidas, chavePix } = dados;
+  const variasAVencer = aVencer.length > 1;
+  const variasVencidas = vencidas.length > 1;
+  const primeira = aVencer[0];
+  const maiorAtraso = Math.max(...vencidas.map((i) => i.dias));
+  const pix = chavePix ? [{ paragrafo: "Se preferir pagar por Pix, use a chave abaixo e informe o valor da parcela:" }, { dados: [{ rotulo: "Chave Pix", valor: chavePix, mono: true }] }] : [];
+
+  const lembrete =
+    tipo === "lembrete"
+      ? {
+          assunto: variasAVencer ? "Lembrete: parcelas do Footlink a vencer" : `Lembrete: parcela do Footlink vence em ${data(primeira.vencimento)}`,
+          titulo: variasAVencer ? "Suas parcelas do Footlink vão vencer" : `Sua parcela do Footlink vence em ${data(primeira.vencimento)}`,
+          abertura: `Olá, ${nomeCliente}! Este é um lembrete ${variasAVencer ? "das próximas parcelas" : "da próxima parcela"} do seu contrato Footlink:`,
+        }
+      : {
+          assunto: variasAVencer ? "Parcelas do Footlink vencem hoje" : "Sua parcela do Footlink vence hoje",
+          titulo: variasAVencer ? "Suas parcelas do Footlink vencem hoje" : "Sua parcela do Footlink vence hoje",
+          abertura: `Olá, ${nomeCliente}! Lembramos que ${variasAVencer ? "as parcelas abaixo vencem" : "a parcela abaixo vence"} hoje:`,
+        };
+  const pendencias = `Além ${variasAVencer ? "destas parcelas" : "desta parcela"}, não identificamos o pagamento ${variasVencidas ? "das parcelas abaixo" : "da parcela abaixo"}:`;
+  const fechamento =
+    maiorAtraso <= ATRASO_TOM_LEVE_DIAS
+      ? "Se o pagamento já foi feito, pode desconsiderar este aviso — a confirmação pode levar até 2 dias úteis. Caso contrário, pedimos que regularize assim que possível. Se não recebeu os dados para pagamento, é só responder este e-mail que enviamos novamente."
+      : "Para manter o seu acesso ao Footlink sem interrupções, pedimos que regularize o pagamento das parcelas em aberto. Se não recebeu os dados para pagamento, é só responder este e-mail que enviamos novamente. Se o pagamento já foi feito, envie o comprovante respondendo esta mensagem.";
+
+  const totalVencido = vencidas.reduce((s, i) => s + i.valor, 0);
+  const { html, texto } = montarEmail({
+    preheader: `${variasAVencer ? `${aVencer.length} parcelas` : primeira.rotulo} ${tipo === "lembrete" ? "a vencer" : "vencem hoje"} · ${formatarMoeda(totalVencido)} em aberto`,
+    titulo: lembrete.titulo,
+    blocos: [
+      { paragrafo: lembrete.abertura },
+      { tabela: tabelaParcelas(aVencer, false) },
+      { paragrafo: pendencias },
+      { tabela: tabelaParcelas(vencidas, true, "Total em aberto") },
+      ...pix,
+      { paragrafo: fechamento },
+    ],
+    marca: MARCA_FOOTLINK,
+  });
+  return {
+    assunto: `${lembrete.assunto} · há ${variasVencidas ? "parcelas" : "parcela"} em aberto`,
+    html,
+    texto,
+    anexos: [{ nome: "footlink-logo.png", base64: LOGO_FOOTLINK_BASE64, contentId: LOGO_FOOTLINK_CID }],
+  };
 }
 
 /** Aviso interno: cliente chegou ao escalonamento (D+15 por padrão). */

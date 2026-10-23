@@ -253,6 +253,9 @@ const pedidosDe = (itens: { bling_pedido_id: number | null }[]) => itens.map((i)
 
 type EnvioComItens = CobrancaEnvioRow & { itens: CobrancaEnvioItemRow[] };
 
+/** Lembrete e aviso de vencimento: cliente com parcela a vencer — as pendências entram sem a data de corte. */
+const temParcelaAVencer = (envio: Pick<CobrancaEnvioRow, "tipo">) => envio.tipo === "lembrete" || envio.tipo === "vencimento";
+
 export interface ClienteAtrasadoForaDaRegua {
   contatoId: number;
   cliente: string;
@@ -360,12 +363,21 @@ export interface ParcelaVencida {
 }
 
 /**
- * Outras parcelas do cliente vencidas e não pagas (vencimento entre a data de
- * corte e ontem), que o e-mail lista junto com as da etapa do dia. Numeração
+ * Outras parcelas do cliente vencidas e não pagas, que o e-mail lista junto com
+ * as da etapa do dia. Vencimento entre a data de corte e ontem — exceto no
+ * lembrete e no aviso de vencimento (cliente com parcela a vencer, logo com
+ * contrato ativo), que trazem TODAS as vencidas, sem o corte. Numeração
  * n/N como na carteira: ordem de vencimento dentro de cada pedido. Parcelas de
  * pedido cancelado no Bling ficam fora.
  */
-export async function parcelasVencidasDoCliente(supabase: Supa, contatoId: number, config: CobrancaConfiguracaoRow, excluir: Set<number>, hoje = hojeBrt()): Promise<ParcelaVencida[]> {
+export async function parcelasVencidasDoCliente(
+  supabase: Supa,
+  contatoId: number,
+  config: CobrancaConfiguracaoRow,
+  excluir: Set<number>,
+  hoje = hojeBrt(),
+  semCorte = false,
+): Promise<ParcelaVencida[]> {
   const [{ data: parcelas }, { data: pedidos }] = await Promise.all([
     supabase.from("bling_parcelas").select("id, numero_pedido_origem, vencimento, valor, situacao").eq("contato_id", contatoId).order("vencimento"),
     supabase.from("bling_pedidos").select("numero, situacao_id, situacao_valor").eq("contato_id", contatoId),
@@ -381,7 +393,7 @@ export async function parcelasVencidasDoCliente(supabase: Supa, contatoId: numbe
     if (cancelados.has(pedido)) continue;
     grupo.forEach((p, i) => {
       if (excluir.has(p.id) || SITUACOES_ENCERRADAS.has(p.situacao) || p.situacao === 3) return;
-      if (p.vencimento >= hoje || (config.data_corte && p.vencimento < config.data_corte)) return;
+      if (p.vencimento >= hoje || (!semCorte && config.data_corte && p.vencimento < config.data_corte)) return;
       vencidas.push({ parcela_id: p.id, vencimento: p.vencimento, valor: Number(p.valor), rotulo: `Parcela ${i + 1}/${grupo.length}${pedido !== "avulsa" ? ` · pedido ${pedido}` : ""}` });
     });
   }
@@ -397,7 +409,7 @@ export async function montarEmailDoEnvio(
   vencidas?: ParcelaVencida[],
 ): Promise<EmailCobrancaMontado> {
   const nomeCliente = await nomeDoCliente(supabase, envio.contato_id);
-  const outras = vencidas ?? (await parcelasVencidasDoCliente(supabase, envio.contato_id, config, new Set(envio.itens.map((i) => i.parcela_id)), hoje));
+  const outras = vencidas ?? (await parcelasVencidasDoCliente(supabase, envio.contato_id, config, new Set(envio.itens.map((i) => i.parcela_id)), hoje, temParcelaAVencer(envio)));
   const itens = [...envio.itens, ...outras]
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento))
     .map((i) => ({ rotulo: i.rotulo, vencimento: i.vencimento, valor: Number(i.valor), dias: diasDesdeVencimento(i.vencimento, hoje) }));
@@ -445,7 +457,7 @@ export async function enviarEnvio(supabase: Supa, envioId: string, decididoPor?:
   const decisao = decididoPor ? { decidido_por: decididoPor, decidido_em: new Date().toISOString() } : {};
 
   // As parcelas da etapa e as demais vencidas do cliente (listadas juntas no e-mail), conferidas no Bling.
-  const vencidasCache = await parcelasVencidasDoCliente(supabase, envio.contato_id, config, new Set(envio.itens.map((i) => i.parcela_id)));
+  const vencidasCache = await parcelasVencidasDoCliente(supabase, envio.contato_id, config, new Set(envio.itens.map((i) => i.parcela_id)), hojeBrt(), temParcelaAVencer(envio));
   const devidas = await parcelasAindaDevidas(supabase, [...envio.itens, ...vencidasCache]);
   const itens = envio.itens.filter((i) => devidas.has(i.parcela_id));
   const vencidas = vencidasCache.filter((p) => devidas.has(p.parcela_id));
