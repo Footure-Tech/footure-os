@@ -97,14 +97,48 @@ export interface DiaProjecao {
   saldo: number;
 }
 
+/** Data dos saldos informados (a mais recente entre as contas de caixa). */
+export function dataBaseDosSaldos(contas: BaseControladoria["contas"]) {
+  const informadas = contas.filter((c) => CAMADAS_CAIXA.includes(c.camada) && c.saldo_informado !== null && c.saldo_informado_em);
+  return informadas.length ? informadas.map((c) => c.saldo_informado_em!).sort().at(-1)! : null;
+}
+
+/**
+ * Projeção diária do caixa disponível (contas + liquidez em 1 dia) a partir dos
+ * saldos informados: o que venceu desde a data dos saldos e já foi baixado
+ * aconteceu; o que está em aberto entra no vencimento — pagar vencido entra
+ * hoje, receber vencido fica de fora (prudência). `fatorEntradas` < 1 aplica
+ * a inadimplência esperada (cenário conservador).
+ */
+export function projetarSaldo(base: BaseControladoria, dataBase: string | null, hoje: string, dias: number, fatorEntradas = 1) {
+  if (!dataBase) return { saldoHoje: null as number | null, projecao: [] as DiaProjecao[] };
+  const { lancamentos, contas } = base;
+  const base0 = soma(contas.filter((c) => CAMADAS_CAIXA.includes(c.camada)), (c) => c.saldo_informado ?? 0);
+  // Só o que venceu DEPOIS do dia dos saldos e até hoje: o extrato daquele dia já
+  // inclui o que venceu nele e o que foi pago adiantado (vencimento futuro).
+  const desdeBase = lancamentos.filter((l) => l.vencimento > dataBase && l.vencimento <= hoje && realizado(l));
+  const saldoHoje = base0 + soma(desdeBase, (l) => (l.tipo === "receber" ? valorRealizado(l) : -valorRealizado(l)));
+  const abertos = lancamentos.filter((l) => emAberto(l.situacao));
+  const projecao: DiaProjecao[] = [];
+  let saldo = saldoHoje;
+  for (let i = 0; i <= dias; i++) {
+    const data = somarDias(hoje, i);
+    const doDia = abertos.filter((l) => (l.tipo === "pagar" && i === 0 ? l.vencimento <= data : l.vencimento === data));
+    const entradas = soma(doDia.filter((l) => l.tipo === "receber"), (l) => l.aberto) * fatorEntradas;
+    const saidas = soma(doDia.filter((l) => l.tipo === "pagar"), (l) => l.aberto);
+    saldo += entradas - saidas;
+    projecao.push({ data, entradas, saidas, saldo });
+  }
+  return { saldoHoje, projecao };
+}
+
 /** Posição de caixa, projeção de 30 dias, queima e colchão. */
 export function calcularCaixa(base: BaseControladoria, hoje = hojeLocal()) {
   const { lancamentos, contas, premissas } = base;
   const caixaContas = contas.filter((c) => c.camada !== "ignorar" && c.camada !== "cartao");
   const saldoDa = (camada: FinContaFinanceiraRow["camada"]) => soma(contas.filter((c) => c.camada === camada), (c) => c.saldo_informado ?? 0);
   const contasDeCaixa = contas.filter((c) => CAMADAS_CAIXA.includes(c.camada));
-  const informadas = contasDeCaixa.filter((c) => c.saldo_informado !== null && c.saldo_informado_em);
-  const dataBase = informadas.length ? informadas.map((c) => c.saldo_informado_em!).sort().at(-1)! : null;
+  const dataBase = dataBaseDosSaldos(contas);
 
   // Médias dos 3 meses fechados (por vencimento): saídas sem distribuição de lucros; entradas sem empréstimos.
   const mesAtual = hoje.slice(0, 7);
@@ -124,28 +158,7 @@ export function calcularCaixa(base: BaseControladoria, hoje = hojeLocal()) {
   const totalComAplicacoes = disponivel + liquidez + aplicacao;
   const runwayMeses = queima > 0 ? totalComAplicacoes / queima : null;
 
-  // Projeção: parte do saldo informado; o que venceu desde então e foi baixado
-  // já aconteceu; o que está em aberto entra no vencimento (pagar vencido: hoje;
-  // receber vencido: fora, por prudência).
-  let projecao: DiaProjecao[] = [];
-  let saldoHoje: number | null = null;
-  if (dataBase) {
-    const base0 = disponivel + liquidez;
-    const desdeBase = lancamentos.filter((l) => l.vencimento >= dataBase && realizado(l));
-    saldoHoje = base0 + soma(desdeBase, (l) => (l.tipo === "receber" ? valorRealizado(l) : -valorRealizado(l)));
-    const abertos = lancamentos.filter((l) => emAberto(l.situacao));
-    let saldo = saldoHoje;
-    for (let i = 0; i <= 30; i++) {
-      const data = somarDias(hoje, i);
-      const doDia = abertos.filter((l) => (l.tipo === "pagar" && i === 0 ? l.vencimento <= data : l.vencimento === data));
-      const entradas = soma(doDia.filter((l) => l.tipo === "receber"), (l) => l.aberto);
-      const saidas = soma(doDia.filter((l) => l.tipo === "pagar"), (l) => l.aberto);
-      saldo += entradas - saidas;
-      projecao.push({ data, entradas, saidas, saldo });
-    }
-  } else {
-    projecao = [];
-  }
+  const { saldoHoje, projecao } = projetarSaldo(base, dataBase, hoje, 30);
   const minimo = projecao.length ? projecao.reduce((m, d) => (d.saldo < m.saldo ? d : m), projecao[0]) : null;
   const semanas = Array.from({ length: 4 }, (_, i) => {
     const dias = projecao.slice(i * 7 + (i === 0 ? 0 : 1), (i + 1) * 7 + 1);

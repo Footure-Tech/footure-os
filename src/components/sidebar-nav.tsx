@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { emGestao } from "@/lib/contexto/gestao";
 import type { IconType } from "react-icons";
 import {
   MdBusiness,
@@ -12,6 +13,8 @@ import {
   MdGavel,
   MdHistoryEdu,
   MdInsights,
+  MdAccountBalanceWallet,
+  MdTableChart,
   MdNotificationsActive,
   MdPayments,
   MdRequestQuote,
@@ -159,6 +162,20 @@ const PAINEL_CFO: SidebarLink = {
   cor: "bg-iconPurple",
   exact: true,
 };
+const CAIXA: SidebarLink = {
+  href: "/controladoria/caixa",
+  label: "Caixa",
+  icon: MdAccountBalanceWallet,
+  cor: "bg-iconGreen",
+  exact: true,
+};
+const DRE: SidebarLink = {
+  href: "/controladoria/dre",
+  label: "DRE",
+  icon: MdTableChart,
+  cor: "bg-iconBlue",
+  exact: true,
+};
 const CONTAS_A_PAGAR: SidebarLink = {
   href: "/controladoria/pagar",
   label: "Contas a pagar",
@@ -223,31 +240,35 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
       label: "Financeiro",
       links: [CONTRATOS_FINANCEIRO, PAGAMENTOS, INADIMPLENCIA, REGUA_COBRANCA],
     },
-    {
-      label: "Controladoria",
-      links: [PAINEL_CFO, ALERTAS_FINANCEIROS, CONTAS_A_PAGAR, PREMISSAS_FINANCEIRAS],
-    },
-    {
-      label: "Administração",
-      links: [
-        {
-          href: "/admin/usuarios",
-          label: "Usuários",
-          icon: MdManageAccounts,
-          cor: "bg-iconGray",
-          exact: true,
-        },
-        {
-          href: "/admin/configuracoes",
-          label: "Configurações",
-          icon: MdSettings,
-          cor: "bg-iconGray",
-          exact: true,
-        },
-      ],
-    },
   ],
 };
+
+// Aba Gestão (só Diretoria, ver lib/contexto/gestao.ts): telas exclusivas da Diretoria.
+const GRUPOS_GESTAO: SidebarGroup[] = [
+  {
+    label: "Controladoria",
+    links: [PAINEL_CFO, CAIXA, DRE, CONTAS_A_PAGAR, ALERTAS_FINANCEIROS, PREMISSAS_FINANCEIRAS],
+  },
+  {
+    label: "Administração",
+    links: [
+      {
+        href: "/admin/usuarios",
+        label: "Usuários",
+        icon: MdManageAccounts,
+        cor: "bg-iconGray",
+        exact: true,
+      },
+      {
+        href: "/admin/configuracoes",
+        label: "Configurações",
+        icon: MdSettings,
+        cor: "bg-iconGray",
+        exact: true,
+      },
+    ],
+  },
+];
 
 /** Contexto Academy: sem as telas que só existem para o Footlink (pedido → contrato → assinatura → parcelas). */
 const SO_FOOTLINK = new Set([
@@ -296,7 +317,7 @@ export function SidebarNav({
   blingSincronizando?: boolean;
 }) {
   const pathname = usePathname();
-  const groups = gruposDoContexto(GRUPOS_POR_PAPEL[papel], contexto);
+  const groups = papel === "admin" && emGestao(pathname) ? GRUPOS_GESTAO : gruposDoContexto(GRUPOS_POR_PAPEL[papel], contexto);
   // Mesmos papéis da action de sincronização (sincronizarContatosBlingAction).
   const podeSincronizar = papel === "vendedor" || papel === "admin" || papel === "financeiro";
 

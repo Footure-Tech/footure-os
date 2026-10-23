@@ -2,6 +2,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, FinAlertaEventoRow, FinAlertaRow } from "@/lib/supabase/database.types";
 import { hojeLocal } from "@/lib/financeiro/carteira";
+import { calcularDre, type RegimeDre } from "./dre";
+import { calcularFluxoCaixa, type CenarioCaixa } from "./fluxoCaixa";
 import { calcularAgenda, calcularCaixa, calcularContasAPagar, calcularMes, calcularMrr, calcularRecebiveis, calcularSaude, carregarBaseControladoria } from "./indicadores";
 
 type Supa = SupabaseClient<Database>;
@@ -92,4 +94,14 @@ export async function carregarTelaPremissas(supabase: Supa) {
     premissas: base.premissas,
     contas: base.contas.map((c) => ({ ...c, usoRecente: uso.get(c.id) ?? 0 })).sort((a, b) => b.usoRecente - a.usoRecente || a.descricao.localeCompare(b.descricao)),
   };
+}
+
+export async function carregarTelaDre(supabase: Supa, regime: RegimeDre) {
+  const base = await carregarBaseControladoria(supabase);
+  return { ...calcularDre(base, regime), pendentesDetalhe: base.pendentesDetalhe };
+}
+
+export async function carregarTelaCaixa(supabase: Supa, cenario: CenarioCaixa) {
+  const base = await carregarBaseControladoria(supabase);
+  return calcularFluxoCaixa(base, cenario);
 }

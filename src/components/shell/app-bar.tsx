@@ -9,7 +9,8 @@ import { SeletorContexto } from "@/components/shell/seletor-contexto";
 // com o logotipo Footure em branco (public/brand). Sem campo de
 // busca e sem sino de notificações (não há backend pra nenhum dos dois) e
 // sem seletor de perfil — o perfil é o papel do usuário logado. O seletor
-// Footlink | Academy define o contexto dos dados das telas.
+// Footlink | Academy define o contexto dos dados das telas; a Diretoria
+// tem também a aba Gestão (Controladoria e Administração).
 export function AppBar({ sessao, contexto }: { sessao: SessaoUsuario; /** null = papel sem seletor (jurídico). */ contexto: ContextoDados | null }) {
   return (
     <header className="sticky top-0 z-40 flex h-[60px] shrink-0 items-center gap-5 bg-appbar pr-6 text-white">
@@ -24,7 +25,7 @@ export function AppBar({ sessao, contexto }: { sessao: SessaoUsuario; /** null =
         </div>
         {contexto && (
           <div className="ml-5 lg:ml-[30px]">
-            <SeletorContexto contexto={contexto} />
+            <SeletorContexto contexto={contexto} comGestao={sessao.papel === "admin"} />
           </div>
         )}
       </div>

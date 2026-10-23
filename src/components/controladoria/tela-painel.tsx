@@ -76,14 +76,18 @@ export function TelaPainel({ dados }: { dados: Dados }) {
         <KpiCard
           rotulo="Caixa disponível"
           valor={caixa.saldoHoje === null ? "—" : formatarMoedaCompacta(caixa.saldoHoje)}
-          apoio={caixa.dataBase ? `saldos de ${formatarDataCurta(caixa.dataBase)} + o que já foi baixado` : "informe os saldos"}
+          apoio={caixa.dataBase ? `contas + liquidez 1 dia, saldos de ${formatarDataCurta(caixa.dataBase)}` : "informe os saldos"}
           rodape={
             caixa.dataBase ? (
               <DivisaoValores
                 partes={[
                   { rotulo: "Contas", valor: caixa.disponivel },
                   { rotulo: "Liquidez 1 dia", valor: caixa.liquidez },
-                  { rotulo: "Aplicações", valor: caixa.aplicacao },
+                  ...(caixa.saldoHoje !== null && Math.abs(caixa.saldoHoje - caixa.caixa) >= 0.5
+                    ? [{ rotulo: `Baixas depois de ${formatarDataCurta(caixa.dataBase)}`, valor: caixa.saldoHoje - caixa.caixa }]
+                    : []),
+                  { rotulo: "Fora: aplicações", valor: caixa.aplicacao },
+                  { rotulo: "Fora: gateways a liquidar", valor: caixa.gateway },
                 ]}
               />
             ) : undefined
@@ -178,7 +182,16 @@ export function TelaPainel({ dados }: { dados: Dados }) {
           )}
         </CardModulo>
 
-        <CardModulo icone={MdShowChart} cor="bg-iconBlue" titulo="Próximas 4 semanas">
+        <CardModulo
+          icone={MdShowChart}
+          cor="bg-iconBlue"
+          titulo="Próximas 4 semanas"
+          extra={
+            <Link href="/controladoria/caixa" className="text-sm font-semibold text-purple-text hover:underline">
+              Fluxo de caixa
+            </Link>
+          }
+        >
           {caixa.semanas.length === 0 ? (
             <EstadoVazio compacto titulo="Sem projeção" descricao="Informe os saldos das contas para projetar o caixa." />
           ) : (
