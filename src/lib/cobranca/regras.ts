@@ -53,6 +53,19 @@ export function lerRegua(texto: string): number[] | null {
   return [...new Set(dias)].sort((a, b) => a - b);
 }
 
+/**
+ * Dia de enviar a cobrança (boleto + Pix) de uma parcela. Padrão: `antecedencia`
+ * dias antes do vencimento. Com `diaMes` (cliente que pede "até o dia X do
+ * mês"): o último dia X antes do vencimento — vencimento 10/12 com X = 20 sai em
+ * 20/11; vencimento 25/12 sai em 20/12.
+ */
+export function dataEnvioCobranca(vencimento: string, antecedencia: number, diaMes: number | null): string {
+  if (!diaMes) return new Date(Date.parse(`${vencimento}T00:00:00Z`) - antecedencia * 86_400_000).toISOString().slice(0, 10);
+  const [ano, mes, dia] = vencimento.split("-").map(Number);
+  const noMes = dia > diaMes ? new Date(Date.UTC(ano, mes - 1, diaMes)) : new Date(Date.UTC(ano, mes - 2, diaMes));
+  return noMes.toISOString().slice(0, 10);
+}
+
 /** "D-3" / "D0" / "D+5". */
 export function rotuloEtapa(etapa: number): string {
   return etapa === 0 ? "D0" : etapa < 0 ? `D${etapa}` : `D+${etapa}`;

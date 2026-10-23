@@ -2,12 +2,14 @@ import type { EntregaEnvioCobranca, StatusEnvioCobranca, TipoEnvioCobranca } fro
 import type { TomStatus } from "@/lib/status/visual";
 
 export const ROTULO_TIPO_ENVIO: Record<TipoEnvioCobranca, string> = {
+  cobranca: "Cobrança (boleto)",
   lembrete: "Lembrete",
   vencimento: "Vence hoje",
   atraso: "Atraso",
   escalonamento: "Escalonamento",
 };
 export const TOM_TIPO_ENVIO: Record<TipoEnvioCobranca, TomStatus> = {
+  cobranca: "completed",
   lembrete: "in_progress",
   vencimento: "pending",
   atraso: "inactive",

@@ -7,11 +7,20 @@ import { AbasFiltro } from "@/components/ds/alternadores";
 import { StatusPill } from "@/components/ds/status-pill";
 import { EstadoVazio } from "@/components/ds/estado-vazio";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BotaoCobrarAtrasados, BotaoGerarAgora, DialogRegraCliente, FormConfiguracaoCobranca, ListaAguardando } from "./acoes-cobranca";
+import { BotaoCobrarAtrasados, BotaoGerarAgora, DialogRegraCliente, FormConfiguracaoCobranca, FormConfiguracaoInter, ListaAguardando } from "./acoes-cobranca";
 import { JANELA_RECUPERACAO_DIAS } from "@/lib/cobranca/regras";
 import { ENTREGA_VISUAL, ROTULO_TIPO_ENVIO, STATUS_ENVIO_VISUAL, TOM_TIPO_ENVIO } from "./visual";
 
 type Dados = Awaited<ReturnType<typeof carregarTelaCobranca>>;
+
+export interface StatusInter {
+  configurado: boolean;
+  pendencias: string[];
+  /** Endereço registrado no Inter (chave mascarada); null = nenhum. */
+  webhook: string | null;
+  erroWebhook: string | null;
+  segredoWebhook: boolean;
+}
 
 const ROTULO_MODO = { desligado: "Régua desligada", aprovacao: "Com aprovação", automatico: "Automática" } as const;
 const TOM_MODO = { desligado: "not_started", aprovacao: "pending", automatico: "active" } as const;
@@ -27,7 +36,7 @@ function Aviso({ children, tom = "atencao" }: { children: React.ReactNode; tom?:
 
 // Financeiro · Régua de cobrança (F1): aprovação dos e-mails do dia, histórico,
 // regras por cliente e configuração.
-export function TelaCobranca({ dados, aba }: { dados: Dados; aba: AbaCobranca }) {
+export function TelaCobranca({ dados, aba, statusInter }: { dados: Dados; aba: AbaCobranca; statusInter?: StatusInter }) {
   const { config, aguardando, historico, problemasEntrega, clientes } = dados;
   const desligada = config.modo === "desligado";
   const reguaTexto = config.regua_dias.map(rotuloEtapa).join(", ");
@@ -168,14 +177,15 @@ export function TelaCobranca({ dados, aba }: { dados: Dados; aba: AbaCobranca })
                       <span title={c.regra.motivo_pausa ?? undefined}>
                         <StatusPill tom="pending">Pausada</StatusPill>
                       </span>
-                    ) : c.regra?.regua_dias ? (
-                      <span className="text-xs text-gray2">{c.regra.regua_dias.map(rotuloEtapa).join(", ")}</span>
                     ) : (
-                      <span className="text-xs text-gray3">padrão</span>
+                      <span className="text-xs text-gray2">
+                        {c.regra?.regua_dias ? c.regra.regua_dias.map(rotuloEtapa).join(", ") : <span className="text-gray3">padrão</span>}
+                        {c.regra?.cobranca_dia_mes ? ` · boleto até dia ${c.regra.cobranca_dia_mes}` : c.regra?.cobranca_antecedencia_dias ? ` · boleto D-${c.regra.cobranca_antecedencia_dias}` : ""}
+                      </span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <DialogRegraCliente cliente={c} reguaPadrao={config.regua_dias} />
+                    <DialogRegraCliente cliente={c} reguaPadrao={config.regua_dias} antecedenciaPadrao={config.inter_antecedencia_dias} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -183,7 +193,12 @@ export function TelaCobranca({ dados, aba }: { dados: Dados; aba: AbaCobranca })
           </Table>
         ))}
 
-      {aba === "configuracao" && <FormConfiguracaoCobranca config={config} />}
+      {aba === "configuracao" && (
+        <>
+          <FormConfiguracaoCobranca config={config} />
+          {statusInter && <FormConfiguracaoInter config={config} status={statusInter} />}
+        </>
+      )}
     </div>
   );
 }

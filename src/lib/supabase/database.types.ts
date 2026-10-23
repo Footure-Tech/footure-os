@@ -160,7 +160,8 @@ export type SyncExecucaoRow = {
 };
 /** 0058: régua de cobrança do Footlink (F1). */
 export type ModoCobranca = "desligado" | "aprovacao" | "automatico";
-export type TipoEnvioCobranca = "lembrete" | "vencimento" | "atraso" | "escalonamento";
+/** "cobranca" (0063): envio do boleto + Pix do Inter, na antecedência configurada (F2). */
+export type TipoEnvioCobranca = "cobranca" | "lembrete" | "vencimento" | "atraso" | "escalonamento";
 export type StatusEnvioCobranca = "pendente" | "enviado" | "erro" | "descartado" | "cancelado";
 export type EntregaEnvioCobranca = "entregue" | "atrasada" | "devolvido" | "spam";
 export type CobrancaConfiguracaoRow = {
@@ -175,6 +176,15 @@ export type CobrancaConfiguracaoRow = {
   emails_escalonamento: string[];
   chave_pix: string | null;
   email_teste: string | null;
+  // 0062 · F2 (Banco Inter)
+  inter_emissao_ativa: boolean;
+  inter_antecedencia_dias: number;
+  inter_multa_percentual: number | null;
+  inter_juros_mensal_percentual: number | null;
+  inter_dias_validade: number;
+  inter_data_corte: string | null;
+  bling_baixa_portador_id: number | null;
+  bling_baixa_categoria_id: number | null;
   atualizado_em: string;
   atualizado_por: string | null;
 };
@@ -187,6 +197,9 @@ export type CobrancaClienteRow = {
   email_bling: string | null;
   email_nf_bling: string | null;
   emails_buscados_em: string | null;
+  /** 0064: janela própria do envio da cobrança (boleto): antecedência em dias ou "até o dia X do mês". */
+  cobranca_antecedencia_dias: number | null;
+  cobranca_dia_mes: number | null;
   atualizado_em: string;
   atualizado_por: string | null;
 };
@@ -208,6 +221,35 @@ export type CobrancaEnvioRow = {
   decidido_em: string | null;
   enviado_em: string | null;
   /** 0059: gerado em modo de teste — apagado ao sair do teste. */
+  teste: boolean;
+};
+/** 0062: cobrança do Banco Inter (boleto + Pix) ligada a uma parcela do Bling. */
+export type CobrancaBoletoRow = {
+  id: string;
+  parcela_id: number;
+  contato_id: number;
+  bling_pedido_id: number | null;
+  origem: "sistema" | "manual";
+  codigo_solicitacao: string;
+  seu_numero: string | null;
+  valor: number;
+  vencimento: string;
+  situacao: string;
+  nosso_numero: string | null;
+  linha_digitavel: string | null;
+  codigo_barras: string | null;
+  pix_copia_e_cola: string | null;
+  txid: string | null;
+  valor_recebido: number | null;
+  recebido_em: string | null;
+  origem_recebimento: string | null;
+  baixa_bling_em: string | null;
+  baixa_bling_erro: string | null;
+  emitido_em: string;
+  emitido_por: string | null;
+  cancelado_em: string | null;
+  motivo_cancelamento: string | null;
+  atualizado_em: string;
   teste: boolean;
 };
 export type CobrancaEnvioItemRow = {
@@ -815,6 +857,17 @@ export interface Database {
         Partial<CobrancaEnvioRow>
       >;
       cobranca_envio_itens: TableDef<CobrancaEnvioItemRow, CobrancaEnvioItemRow, Partial<CobrancaEnvioItemRow>>;
+      // supabase/migrations/0062_cobranca_inter.sql
+      cobranca_boletos: TableDef<
+        CobrancaBoletoRow,
+        Partial<CobrancaBoletoRow> & Pick<CobrancaBoletoRow, "parcela_id" | "contato_id" | "origem" | "codigo_solicitacao" | "valor" | "vencimento" | "situacao">,
+        Partial<CobrancaBoletoRow>
+      >;
+      cobranca_inter_eventos: TableDef<
+        { id: string; recebido_em: string; payload: unknown; processado: boolean; erro: string | null },
+        { payload: unknown; processado?: boolean; erro?: string | null },
+        Partial<{ processado: boolean; erro: string | null }>
+      >;
       // supabase/migrations/0060_cobranca_emails_pedido.sql
       cobranca_pedidos_emails: TableDef<
         { bling_pedido_id: number; emails: string[]; buscados_em: string },

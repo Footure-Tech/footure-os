@@ -9,6 +9,9 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { PAPEIS_COBRANCA } from "./permissoes";
 import { cobrarAtrasadosForaDaRegua, destinatariosDaCobranca, enviarEnvio, gerarEnviosDoDia, previaDoEnvio, type ResumoGeracao } from "./regua";
 import { lerRegua, normalizarEmails } from "./regras";
+import { pendenciasEmissaoInter } from "./boletos";
+import { registrarWebhookInter } from "@/lib/integracoes/inter";
+import { urlDoSistema } from "@/lib/email/layout";
 
 // Gerar, enviar, pré-visualizar e reler e-mails usam o client de serviço depois
 // de exigirPapel: leem os pedidos (e-mails do financeiro, que a RLS só mostra ao
@@ -67,12 +70,63 @@ export async function salvarConfiguracaoCobranca(dados: z.input<typeof Configura
   });
 }
 
+const ConfiguracaoInterSchema = z.object({
+  emissaoAtiva: z.boolean(),
+  antecedenciaDias: z.number().int().min(1).max(30),
+  multaPercentual: z.number().min(0).max(10).nullable(),
+  jurosMensalPercentual: z.number().min(0).max(10).nullable(),
+  diasValidade: z.number().int().min(0).max(60),
+  dataCorte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+});
+
+/** Parâmetros da F2 (boleto + Pix do Inter). Só liga a emissão com tudo definido. */
+export async function salvarConfiguracaoInter(dados: z.input<typeof ConfiguracaoInterSchema>): Promise<ResultadoAcao> {
+  return executar(async () => {
+    const sessao = await exigirPapel(...PAPEIS_COBRANCA);
+    const d = ConfiguracaoInterSchema.parse(dados);
+    const supabase = await createClient();
+    const { data: atual, error: erroLeitura } = await supabase.from("cobranca_configuracao").select("*").eq("id", true).single();
+    if (erroLeitura || !atual) throw new Error("Configuração da régua não encontrada.");
+    const nova = {
+      inter_emissao_ativa: d.emissaoAtiva,
+      inter_antecedencia_dias: d.antecedenciaDias,
+      inter_multa_percentual: d.multaPercentual,
+      inter_juros_mensal_percentual: d.jurosMensalPercentual,
+      inter_dias_validade: d.diasValidade,
+      inter_data_corte: d.dataCorte,
+    };
+    if (d.emissaoAtiva) {
+      const faltam = pendenciasEmissaoInter({ ...atual, ...nova });
+      if (faltam.length) throw new Error(`Para ligar a emissão, falta: ${faltam.join("; ")}.`);
+    }
+    const { error } = await supabase.from("cobranca_configuracao").update({ ...nova, atualizado_em: new Date().toISOString(), atualizado_por: sessao.id }).eq("id", true);
+    if (error) throw new Error(error.message);
+    revalidatePath(TELA);
+  });
+}
+
+/** Registra no Inter o endereço que recebe os avisos de pagamento (com a chave secreta). */
+export async function registrarWebhookInterAction(): Promise<ResultadoAcao> {
+  return executar(async () => {
+    await exigirPapel(...PAPEIS_COBRANCA);
+    const segredo = process.env.INTER_WEBHOOK_SEGREDO;
+    if (!segredo) throw new Error("Cadastre INTER_WEBHOOK_SEGREDO nas variáveis de ambiente antes de registrar o webhook.");
+    const url = urlDoSistema();
+    if (!url.startsWith("https://")) throw new Error(`O Inter só aceita endereço https — o sistema está em ${url}. Registre a partir da produção.`);
+    await registrarWebhookInter(`${url}/api/webhooks/inter?chave=${encodeURIComponent(segredo)}`);
+    revalidatePath(TELA);
+  });
+}
+
 const RegraSchema = z.object({
   contatoId: z.number().int(),
   pausada: z.boolean(),
   motivoPausa: z.string().trim(),
   regua: z.string().trim(),
   destinatariosExtra: z.string(),
+  /** Janela própria do envio da cobrança (boleto): antecedência em dias ou "até o dia X do mês" (0064). */
+  cobrancaAntecedenciaDias: z.number().int().min(1).max(45).nullable(),
+  cobrancaDiaMes: z.number().int().min(1).max(28).nullable(),
 });
 
 export async function salvarRegraCliente(dados: z.input<typeof RegraSchema>): Promise<ResultadoAcao> {
@@ -89,6 +143,8 @@ export async function salvarRegraCliente(dados: z.input<typeof RegraSchema>): Pr
       motivo_pausa: d.pausada ? d.motivoPausa : null,
       regua_dias: regua,
       destinatarios_extra: normalizarEmails(d.destinatariosExtra),
+      cobranca_antecedencia_dias: d.cobrancaAntecedenciaDias,
+      cobranca_dia_mes: d.cobrancaDiaMes,
       atualizado_em: new Date().toISOString(),
       atualizado_por: sessao.id,
     });

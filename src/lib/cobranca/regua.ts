@@ -8,8 +8,9 @@ import type { CobrancaConfiguracaoRow, CobrancaEnvioItemRow, CobrancaEnvioRow, D
 import { carregarBaseParcelas } from "@/lib/financeiro/carteira";
 import { consultarBling, obterAccessTokenValido, pedidoBlingCancelado } from "@/lib/integracoes/bling";
 import { enderecoRemetentePadrao, enviarEmailResend } from "@/lib/integracoes/resend";
-import { montarEmailCliente, montarEmailEscalonamento, type EmailCobrancaMontado } from "./emailCobranca";
-import { JANELA_RECUPERACAO_DIAS, diasDesdeVencimento, etapaDoDia, hojeBrt, normalizarEmails, tipoDoEnvio } from "./regras";
+import { montarEmailCliente, montarEmailEscalonamento, type EmailCobrancaMontado, type ItemEmailCobranca } from "./emailCobranca";
+import { SITUACOES_BOLETO_PAGO, SITUACOES_BOLETO_VALIDO, boletosDasParcelas, conferirBoletosAbertos, garantirBoleto, pdfsDosBoletos, pendenciasEmissaoInter } from "./boletos";
+import { JANELA_RECUPERACAO_DIAS, dataEnvioCobranca, diasDesdeVencimento, etapaDoDia, hojeBrt, normalizarEmails, tipoDoEnvio } from "./regras";
 
 type Supa = SupabaseClient<Database>;
 
@@ -17,6 +18,8 @@ type Supa = SupabaseClient<Database>;
 export const ETAPA_ESCALONAMENTO_BASE = 1000;
 /** Cobrança avulsa de parcela fora da régua ("Cobrar atrasados"): uma vez por parcela. */
 export const ETAPA_COBRANCA_AVULSA = 500;
+/** Envio do boleto + Pix do Inter (F2), na antecedência configurada: uma vez por parcela. */
+export const ETAPA_COBRANCA_BOLETO = 700;
 /** E-mails do contato no Bling são relidos depois disso. */
 const VALIDADE_EMAILS_BLING_MS = 7 * 86_400_000;
 /** Situações de conta a receber no Bling que encerram a cobrança: recebida, devolvida, cancelada. */
@@ -133,7 +136,10 @@ export async function destinatariosDaCobranca(
       const { data } = await consultarBling<{ data: { email?: string; emailNotaFiscal?: string } }>(token, `/contatos/${contatoId}`);
       const atualizado = { contato_id: contatoId, email_bling: data.email?.trim() || null, email_nf_bling: data.emailNotaFiscal?.trim() || null, emails_buscados_em: new Date().toISOString() };
       await supabase.from("cobranca_clientes").upsert(atualizado);
-      regra = { ...(regra ?? { pausada: false, motivo_pausa: null, regua_dias: null, destinatarios_extra: [], atualizado_em: "", atualizado_por: null }), ...atualizado };
+      regra = {
+        ...(regra ?? { pausada: false, motivo_pausa: null, regua_dias: null, destinatarios_extra: [], cobranca_antecedencia_dias: null, cobranca_dia_mes: null, atualizado_em: "", atualizado_por: null }),
+        ...atualizado,
+      };
     } catch (e) {
       console.error(`[cobranca] e-mails do contato ${contatoId} no Bling:`, e instanceof Error ? e.message : e);
     }
@@ -168,21 +174,30 @@ export async function gerarEnviosDoDia(supabase: Supa, hoje = hojeBrt()): Promis
 
   const [base, regras, itens] = await Promise.all([
     carregarBaseParcelas(supabase),
-    lerTudo((de, ate) => supabase.from("cobranca_clientes").select("contato_id, pausada, regua_dias").range(de, ate)),
+    lerTudo((de, ate) => supabase.from("cobranca_clientes").select("contato_id, pausada, regua_dias, cobranca_antecedencia_dias, cobranca_dia_mes").range(de, ate)),
     lerTudo((de, ate) => supabase.from("cobranca_envio_itens").select("parcela_id, etapa").range(de, ate)),
   ]);
   const regraDe = new Map(regras.map((r) => [r.contato_id, r]));
   const enviadas = new Map<number, Set<number>>();
   for (const i of itens) enviadas.set(i.parcela_id, (enviadas.get(i.parcela_id) ?? new Set()).add(i.etapa));
 
+  // F2: situação dos boletos do Inter (webhook pode ter falhado) e parcelas já pagas pelo boleto — a régua não cobra
+  // essas, mesmo antes da baixa no Bling.
+  await conferirBoletosAbertos(supabase);
+  const pagasNoBoleto = new Set(
+    (await lerTudo((de, ate) => supabase.from("cobranca_boletos").select("parcela_id").in("situacao", SITUACOES_BOLETO_PAGO).range(de, ate))).map((b) => b.parcela_id),
+  );
+  const emissaoInter = config.inter_emissao_ativa && pendenciasEmissaoInter(config).length === 0 ? config.inter_data_corte : null;
+
   type Item = Omit<CobrancaEnvioItemRow, "envio_id">;
+  const paraCobrar = new Map<number, Item[]>();
   const paraCliente = new Map<number, Item[]>();
   const paraEscalonar = new Map<number, Item[]>();
   const etapaEscalonamento = ETAPA_ESCALONAMENTO_BASE + config.escalonamento_dias;
   for (const p of base.parcelas) {
     if ((p.situacao !== "em_aberto" && p.situacao !== "atrasada") || base.deCancelado(p) || p.vencimento < config.data_corte) continue;
     const regra = regraDe.get(p.contatoId);
-    if (regra?.pausada) continue;
+    if (regra?.pausada || pagasNoBoleto.has(p.id)) continue;
     const dias = diasDesdeVencimento(p.vencimento, hoje);
     const jaEnviadas = enviadas.get(p.id) ?? new Set<number>();
     const item = (etapa: number): Item => ({
@@ -193,6 +208,13 @@ export async function gerarEnviosDoDia(supabase: Supa, hoje = hojeBrt()): Promis
       valor: p.valor,
       rotulo: `Parcela ${p.numero}/${p.totalDoPedido}${p.numeroPedidoOrigem ? ` · pedido ${p.numeroPedidoOrigem}` : ""}`,
     });
+    // Boleto + Pix na janela do cliente (padrão: D-10; ou antecedência própria; ou "até o dia X do mês"),
+    // a partir da data de corte da F2 e sempre antes do vencimento.
+    const envioCobranca = dataEnvioCobranca(p.vencimento, regra?.cobranca_antecedencia_dias ?? config.inter_antecedencia_dias, regra?.cobranca_dia_mes ?? null);
+    const diasCobranca = diasDesdeVencimento(envioCobranca, hoje);
+    if (emissaoInter && p.vencimento >= emissaoInter && dias < 0 && diasCobranca >= 0 && diasCobranca <= JANELA_RECUPERACAO_DIAS && !jaEnviadas.has(ETAPA_COBRANCA_BOLETO)) {
+      paraCobrar.set(p.contatoId, [...(paraCobrar.get(p.contatoId) ?? []), item(ETAPA_COBRANCA_BOLETO)]);
+    }
     const etapa = etapaDoDia(regra?.regua_dias ?? config.regua_dias, dias, jaEnviadas);
     if (etapa !== null) paraCliente.set(p.contatoId, [...(paraCliente.get(p.contatoId) ?? []), item(etapa)]);
     const diasEsc = dias - config.escalonamento_dias;
@@ -201,7 +223,7 @@ export async function gerarEnviosDoDia(supabase: Supa, hoje = hojeBrt()): Promis
     }
   }
 
-  const token = paraCliente.size ? await tokenBlingSeguro(supabase) : null;
+  const token = paraCliente.size || paraCobrar.size ? await tokenBlingSeguro(supabase) : null;
   const criados: { id: string; interno: boolean }[] = [];
   async function criar(contatoId: number, tipo: CobrancaEnvioRow["tipo"], itensEnvio: Item[], destinatarios: string[]) {
     const { data: envio, error } = await supabase
@@ -229,6 +251,11 @@ export async function gerarEnviosDoDia(supabase: Supa, hoje = hojeBrt()): Promis
     else resumo.semEmail++;
   }
 
+  for (const [contatoId, itensCobranca] of paraCobrar) {
+    const { emails } = await destinatariosDaCobranca(supabase, contatoId, pedidosDe(itensCobranca), token);
+    await criar(contatoId, "cobranca", itensCobranca, emails);
+    resumo.clientes++;
+  }
   for (const [contatoId, itensCliente] of paraCliente) {
     const { emails } = await destinatariosDaCobranca(supabase, contatoId, pedidosDe(itensCliente), token);
     await criar(contatoId, tipoDoEnvio(itensCliente.map((i) => i.etapa)), itensCliente, emails);
@@ -254,7 +281,7 @@ const pedidosDe = (itens: { bling_pedido_id: number | null }[]) => itens.map((i)
 type EnvioComItens = CobrancaEnvioRow & { itens: CobrancaEnvioItemRow[] };
 
 /** Lembrete e aviso de vencimento: cliente com parcela a vencer — as pendências entram sem a data de corte. */
-const temParcelaAVencer = (envio: Pick<CobrancaEnvioRow, "tipo">) => envio.tipo === "lembrete" || envio.tipo === "vencimento";
+const temParcelaAVencer = (envio: Pick<CobrancaEnvioRow, "tipo">) => envio.tipo === "cobranca" || envio.tipo === "lembrete" || envio.tipo === "vencimento";
 
 export interface ClienteAtrasadoForaDaRegua {
   contatoId: number;
@@ -288,13 +315,16 @@ export async function cobrarAtrasadosForaDaRegua(
     lerTudo((de, ate) => supabase.from("cobranca_envio_itens").select("parcela_id").eq("etapa", ETAPA_COBRANCA_AVULSA).range(de, ate)),
   ]);
   const pausados = new Set(regras.filter((r) => r.pausada).map((r) => r.contato_id));
+  const pagasNoBoleto = new Set(
+    (await lerTudo((de, ate) => supabase.from("cobranca_boletos").select("parcela_id").in("situacao", SITUACOES_BOLETO_PAGO).range(de, ate))).map((b) => b.parcela_id),
+  );
   const jaCobradas = new Set(itens.map((i) => i.parcela_id));
 
   type Item = Omit<CobrancaEnvioItemRow, "envio_id">;
   const porCliente = new Map<number, { itens: Item[]; maiorAtraso: number }>();
   for (const p of base.parcelas) {
     if ((p.situacao !== "em_aberto" && p.situacao !== "atrasada") || base.deCancelado(p)) continue;
-    if (p.vencimento < config.data_corte || pausados.has(p.contatoId) || jaCobradas.has(p.id)) continue;
+    if (p.vencimento < config.data_corte || pausados.has(p.contatoId) || jaCobradas.has(p.id) || pagasNoBoleto.has(p.id)) continue;
     const dias = diasDesdeVencimento(p.vencimento, hoje);
     if (dias <= limite) continue;
     const c = porCliente.get(p.contatoId) ?? { itens: [], maiorAtraso: 0 };
@@ -407,14 +437,30 @@ export async function montarEmailDoEnvio(
   config: CobrancaConfiguracaoRow,
   hoje = hojeBrt(),
   vencidas?: ParcelaVencida[],
+  /** Dados de pagamento por parcela; sem, vêm dos boletos válidos já emitidos (a cobrança sem boleto mostra o lugar dele). */
+  pagamentos?: Map<number, ItemEmailCobranca["pagamento"]>,
 ): Promise<EmailCobrancaMontado> {
   const nomeCliente = await nomeDoCliente(supabase, envio.contato_id);
   const outras = vencidas ?? (await parcelasVencidasDoCliente(supabase, envio.contato_id, config, new Set(envio.itens.map((i) => i.parcela_id)), hoje, temParcelaAVencer(envio)));
-  const itens = [...envio.itens, ...outras]
+  const todas = [...envio.itens, ...outras];
+  const pagamentoDe = pagamentos ?? (await pagamentosDosBoletos(supabase, todas.map((i) => i.parcela_id), envio.tipo === "cobranca" ? envio.itens.map((i) => i.parcela_id) : []));
+  const itens = todas
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento))
-    .map((i) => ({ rotulo: i.rotulo, vencimento: i.vencimento, valor: Number(i.valor), dias: diasDesdeVencimento(i.vencimento, hoje) }));
+    .map((i) => ({ rotulo: i.rotulo, vencimento: i.vencimento, valor: Number(i.valor), dias: diasDesdeVencimento(i.vencimento, hoje), pagamento: pagamentoDe.get(i.parcela_id) ?? null }));
   if (envio.tipo === "escalonamento") return montarEmailEscalonamento({ nomeCliente, itens, contatoId: envio.contato_id });
   return montarEmailCliente({ tipo: envio.tipo, nomeCliente, itens, chavePix: config.chave_pix });
+}
+
+/** Linha digitável e Pix dos boletos válidos das parcelas; `aEmitir` (cobrança ainda sem boleto) mostra o lugar do boleto. */
+async function pagamentosDosBoletos(supabase: Supa, parcelaIds: number[], aEmitir: number[]): Promise<Map<number, ItemEmailCobranca["pagamento"]>> {
+  const boletos = await boletosDasParcelas(supabase, parcelaIds);
+  const mapa = new Map<number, ItemEmailCobranca["pagamento"]>();
+  for (const id of parcelaIds) {
+    const b = boletos.get(id);
+    if (b && SITUACOES_BOLETO_VALIDO.includes(b.situacao) && (b.linha_digitavel || b.pix_copia_e_cola)) mapa.set(id, { linhaDigitavel: b.linha_digitavel, pixCopiaECola: b.pix_copia_e_cola });
+    else if (aEmitir.includes(id)) mapa.set(id, "previa");
+  }
+  return mapa;
 }
 
 export async function previaDoEnvio(supabase: Supa, envioId: string) {
@@ -426,7 +472,9 @@ export async function previaDoEnvio(supabase: Supa, envioId: string) {
 
 /** Parcelas do envio ainda devidas: confere no Bling ao vivo (ou, sem token, no cache). */
 async function parcelasAindaDevidas(supabase: Supa, itens: { parcela_id: number }[]): Promise<Set<number>> {
-  const ids = [...new Set(itens.map((i) => i.parcela_id))];
+  // Paga pelo boleto do Inter (F2): fora, mesmo antes da baixa no Bling.
+  const boletos = await boletosDasParcelas(supabase, [...new Set(itens.map((i) => i.parcela_id))]);
+  const ids = [...new Set(itens.map((i) => i.parcela_id))].filter((id) => !SITUACOES_BOLETO_PAGO.includes(boletos.get(id)?.situacao ?? ""));
   const token = await tokenBlingSeguro(supabase);
   if (token) {
     const devidas = new Set<number>();
@@ -472,7 +520,16 @@ export async function enviarEnvio(supabase: Supa, envioId: string, decididoPor?:
       ? normalizarEmails(config.emails_escalonamento)
       : (await destinatariosDaCobranca(supabase, envio.contato_id, pedidosDe(itens), await tokenBlingSeguro(supabase))).emails;
     if (!destinatarios.length) throw new Error(interno ? "Lista de escalonamento vazia." : "Cliente sem e-mail válido no Bling e sem destinatários extras na régua.");
-    const email = await montarEmailDoEnvio(supabase, { ...envio, itens }, config, hojeBrt(), vencidas);
+    // Cobrança (F2): emite (ou reaproveita) o boleto de cada parcela no Inter e anexa os PDFs. Em teste, nada é emitido.
+    let pagamentos: Map<number, ItemEmailCobranca["pagamento"]> | undefined;
+    const anexosBoleto: { nome: string; base64: string }[] = [];
+    if (envio.tipo === "cobranca" && !config.email_teste) {
+      const boletos = [];
+      for (const i of itens) boletos.push(await garantirBoleto(supabase, config, { ...i, contato_id: envio.contato_id, valor: Number(i.valor) }, decididoPor));
+      pagamentos = await pagamentosDosBoletos(supabase, [...itens, ...vencidas].map((i) => i.parcela_id), []);
+      anexosBoleto.push(...(await pdfsDosBoletos(boletos)));
+    }
+    const email = await montarEmailDoEnvio(supabase, { ...envio, itens }, config, hojeBrt(), vencidas, pagamentos);
     // Homologação: o e-mail ao cliente vai só para o endereço de teste. A marca vai no FIM do
     // assunto, com o nome do cliente: o Gmail ignora prefixos entre colchetes ao agrupar
     // conversas, e cobranças de clientes diferentes com o mesmo assunto viravam uma só.
@@ -485,7 +542,7 @@ export async function enviarEnvio(supabase: Supa, envioId: string, decididoPor?:
       assunto,
       html: email.html,
       texto: email.texto,
-      anexos: email.anexos,
+      anexos: [...email.anexos, ...anexosBoleto],
     });
     await supabase
       .from("cobranca_envios")

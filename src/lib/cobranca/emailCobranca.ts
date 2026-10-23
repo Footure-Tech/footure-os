@@ -13,6 +13,8 @@ export interface ItemEmailCobranca {
   valor: number;
   /** Dias desde o vencimento na data do envio (negativo = a vencer). */
   dias: number;
+  /** Boleto do Inter da parcela (F2). "previa" = será emitido no envio (prévia e modo de teste mostram o lugar). */
+  pagamento?: { linhaDigitavel: string | null; pixCopiaECola: string | null } | "previa" | null;
 }
 
 export interface EmailCobrancaMontado {
@@ -55,7 +57,28 @@ function tabelaParcelas(itens: ItemEmailCobranca[], comSituacao: boolean, rotulo
   };
 }
 
-/** E-mail ao cliente (lembrete, vencimento ou atraso). */
+/** "Como pagar": linha digitável e Pix copia e cola de cada parcela com boleto (F2). */
+function blocosComoPagar(itens: ItemEmailCobranca[]) {
+  const comBoleto = itens.filter((i) => i.pagamento);
+  if (!comBoleto.length) return [];
+  const varias = comBoleto.length > 1;
+  return [
+    { paragrafo: `Para pagar, use a linha digitável do boleto ou o Pix copia e cola${varias ? " de cada parcela" : ""}:` },
+    ...comBoleto.map((i) =>
+      i.pagamento === "previa"
+        ? { dados: [...(varias ? [{ rotulo: "Parcela", valor: i.rotulo }] : []), { rotulo: "Boleto e Pix", valor: "emitidos no Banco Inter no momento do envio" }] }
+        : {
+            dados: [
+              ...(varias ? [{ rotulo: "Parcela", valor: i.rotulo }] : []),
+              ...(i.pagamento?.linhaDigitavel ? [{ rotulo: "Linha digitável", valor: i.pagamento.linhaDigitavel, mono: true }] : []),
+              ...(i.pagamento?.pixCopiaECola ? [{ rotulo: "Pix copia e cola", valor: i.pagamento.pixCopiaECola, mono: true }] : []),
+            ],
+          },
+    ),
+  ];
+}
+
+/** E-mail ao cliente (cobrança, lembrete, vencimento ou atraso). */
 export function montarEmailCliente(dados: {
   tipo: Exclude<TipoEnvioCobranca, "escalonamento">;
   nomeCliente: string;
@@ -63,7 +86,7 @@ export function montarEmailCliente(dados: {
   chavePix: string | null;
 }): EmailCobrancaMontado {
   const { nomeCliente, itens, chavePix } = dados;
-  // Lembrete (ou vencimento) de quem também tem parcela vencida: dois blocos — o lembrete e as pendências.
+  // Cobrança, lembrete ou vencimento de quem também tem parcela vencida: dois blocos — o que vai vencer e as pendências.
   const aVencer = itens.filter((i) => i.dias <= 0);
   const vencidas = itens.filter((i) => i.dias > 0);
   if (dados.tipo !== "atraso" && aVencer.length && vencidas.length) return montarEmailLembreteComPendencias({ tipo: dados.tipo, nomeCliente, aVencer, vencidas, chavePix });
@@ -79,11 +102,19 @@ export function montarEmailCliente(dados: {
   let titulo: string;
   let abertura: string;
   let fechamento: string;
-  if (tipo === "lembrete") {
+  const comBoleto = itens.some((i) => i.pagamento);
+  if (tipo === "cobranca") {
+    assunto = varias ? "Cobrança Footlink: parcelas a vencer" : `Cobrança Footlink: parcela com vencimento em ${data(primeiro.vencimento)}`;
+    titulo = varias ? "Suas cobranças do Footlink" : "Sua cobrança do Footlink";
+    abertura = `Olá, ${nomeCliente}! Segue a cobrança ${varias ? "das próximas parcelas" : "da próxima parcela"} do seu contrato Footlink:`;
+    fechamento = `O boleto em PDF segue anexo${varias ? " (um por parcela)" : ""} — o QR Code do Pix está no próprio boleto. Se o pagamento já foi feito, pode desconsiderar este e-mail.`;
+  } else if (tipo === "lembrete") {
     assunto = varias ? "Lembrete: parcelas do Footlink a vencer" : `Lembrete: parcela do Footlink vence em ${data(primeiro.vencimento)}`;
     titulo = varias ? "Suas parcelas do Footlink vão vencer" : `Sua parcela do Footlink vence em ${data(primeiro.vencimento)}`;
     abertura = `Olá, ${nomeCliente}! Este é um lembrete ${varias ? "das próximas parcelas" : "da próxima parcela"} do seu contrato Footlink:`;
-    fechamento = "O boleto ou os dados para pagamento foram enviados pelo nosso financeiro. Se o pagamento já foi feito, pode desconsiderar este aviso.";
+    fechamento = comBoleto
+      ? "Se o pagamento já foi feito, pode desconsiderar este aviso."
+      : "O boleto ou os dados para pagamento foram enviados pelo nosso financeiro. Se o pagamento já foi feito, pode desconsiderar este aviso.";
   } else if (tipo === "vencimento") {
     assunto = varias ? "Parcelas do Footlink vencem hoje" : "Sua parcela do Footlink vence hoje";
     titulo = varias ? "Suas parcelas do Footlink vencem hoje" : "Sua parcela do Footlink vence hoje";
@@ -109,6 +140,7 @@ export function montarEmailCliente(dados: {
     blocos: [
       { paragrafo: abertura },
       { tabela: tabelaParcelas(itens, varias) },
+      ...blocosComoPagar(itens),
       ...pix,
       { paragrafo: fechamento },
     ],
@@ -124,7 +156,7 @@ export function montarEmailCliente(dados: {
  * pendências, e o pedido de regularização (leve ou firme, pelo maior atraso).
  */
 function montarEmailLembreteComPendencias(dados: {
-  tipo: "lembrete" | "vencimento";
+  tipo: "cobranca" | "lembrete" | "vencimento";
   nomeCliente: string;
   aVencer: ItemEmailCobranca[];
   vencidas: ItemEmailCobranca[];
@@ -138,7 +170,13 @@ function montarEmailLembreteComPendencias(dados: {
   const pix = chavePix ? [{ paragrafo: "Se preferir pagar por Pix, use a chave abaixo e informe o valor da parcela:" }, { dados: [{ rotulo: "Chave Pix", valor: chavePix, mono: true }] }] : [];
 
   const lembrete =
-    tipo === "lembrete"
+    tipo === "cobranca"
+      ? {
+          assunto: variasAVencer ? "Cobrança Footlink: parcelas a vencer" : `Cobrança Footlink: parcela com vencimento em ${data(primeira.vencimento)}`,
+          titulo: variasAVencer ? "Suas cobranças do Footlink" : "Sua cobrança do Footlink",
+          abertura: `Olá, ${nomeCliente}! Segue a cobrança ${variasAVencer ? "das próximas parcelas" : "da próxima parcela"} do seu contrato Footlink:`,
+        }
+      : tipo === "lembrete"
       ? {
           assunto: variasAVencer ? "Lembrete: parcelas do Footlink a vencer" : `Lembrete: parcela do Footlink vence em ${data(primeira.vencimento)}`,
           titulo: variasAVencer ? "Suas parcelas do Footlink vão vencer" : `Sua parcela do Footlink vence em ${data(primeira.vencimento)}`,
@@ -157,13 +195,14 @@ function montarEmailLembreteComPendencias(dados: {
 
   const totalVencido = vencidas.reduce((s, i) => s + i.valor, 0);
   const { html, texto } = montarEmail({
-    preheader: `${variasAVencer ? `${aVencer.length} parcelas` : primeira.rotulo} ${tipo === "lembrete" ? "a vencer" : "vencem hoje"} · ${formatarMoeda(totalVencido)} em aberto`,
+    preheader: `${variasAVencer ? `${aVencer.length} parcelas` : primeira.rotulo} ${tipo === "vencimento" ? "vencem hoje" : "a vencer"} · ${formatarMoeda(totalVencido)} em aberto`,
     titulo: lembrete.titulo,
     blocos: [
       { paragrafo: lembrete.abertura },
       { tabela: tabelaParcelas(aVencer, false) },
       { paragrafo: pendencias },
       { tabela: tabelaParcelas(vencidas, true, "Total em aberto") },
+      ...blocosComoPagar([...aVencer, ...vencidas]),
       ...pix,
       { paragrafo: fechamento },
     ],

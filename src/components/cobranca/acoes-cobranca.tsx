@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MdDelete, MdEdit, MdMarkEmailRead, MdPlayArrow, MdRefresh, MdSend, MdTune, MdVisibility, MdWarning } from "react-icons/md";
+import { MdAccountBalance, MdDelete, MdEdit, MdMarkEmailRead, MdPlayArrow, MdRefresh, MdSend, MdTune, MdVisibility, MdWarning } from "react-icons/md";
 import { exigirSucesso } from "@/lib/resultadoAcao";
 import type { CobrancaConfiguracaoRow, ModoCobranca } from "@/lib/supabase/database.types";
 import type { ClienteCobranca, EnvioTela } from "@/lib/cobranca/consultas";
@@ -15,7 +15,9 @@ import {
   enviarEnviosAprovados,
   gerarEnviosAgora,
   previaEnvioCobranca,
+  registrarWebhookInterAction,
   salvarConfiguracaoCobranca,
+  salvarConfiguracaoInter,
   salvarRegraCliente,
 } from "@/lib/cobranca/serverActions";
 import { formatarDataCurta, formatarMoeda } from "@/lib/formatacao";
@@ -30,6 +32,7 @@ import { CardModulo } from "@/components/negocio/card-modulo";
 import { StatusPill } from "@/components/ds/status-pill";
 import { SegmentedToggle } from "@/components/ds/alternadores";
 import { ROTULO_TIPO_ENVIO, TOM_TIPO_ENVIO } from "./visual";
+import type { StatusInter } from "./tela-cobranca";
 
 function erroToast(erro: unknown, padrao: string) {
   toast.error(erro instanceof Error ? erro.message : padrao);
@@ -371,13 +374,15 @@ function ConfirmarEnvio({
 }
 
 /** Regras da régua para um cliente: pausa, régua própria, destinatários extras. */
-export function DialogRegraCliente({ cliente, reguaPadrao }: { cliente: ClienteCobranca; reguaPadrao: number[] }) {
+export function DialogRegraCliente({ cliente, reguaPadrao, antecedenciaPadrao }: { cliente: ClienteCobranca; reguaPadrao: number[]; antecedenciaPadrao: number }) {
   const r = cliente.regra;
   const [aberto, setAberto] = useState(false);
   const [pausada, setPausada] = useState(r?.pausada ?? false);
   const [motivo, setMotivo] = useState(r?.motivo_pausa ?? "");
   const [regua, setRegua] = useState(r?.regua_dias?.join(", ") ?? "");
   const [extras, setExtras] = useState(r?.destinatarios_extra.join(", ") ?? "");
+  const [antecedencia, setAntecedencia] = useState(r?.cobranca_antecedencia_dias ? String(r.cobranca_antecedencia_dias) : "");
+  const [diaMes, setDiaMes] = useState(r?.cobranca_dia_mes ? String(r.cobranca_dia_mes) : "");
   const [emails, setEmails] = useState(cliente.emails);
   const [pendente, iniciar] = useTransition();
   const router = useRouter();
@@ -385,7 +390,17 @@ export function DialogRegraCliente({ cliente, reguaPadrao }: { cliente: ClienteC
   function salvar() {
     iniciar(async () => {
       try {
-        exigirSucesso(await salvarRegraCliente({ contatoId: cliente.contatoId, pausada, motivoPausa: motivo, regua, destinatariosExtra: extras }));
+        exigirSucesso(
+          await salvarRegraCliente({
+            contatoId: cliente.contatoId,
+            pausada,
+            motivoPausa: motivo,
+            regua,
+            destinatariosExtra: extras,
+            cobrancaAntecedenciaDias: antecedencia ? Number(antecedencia) : null,
+            cobrancaDiaMes: diaMes ? Number(diaMes) : null,
+          }),
+        );
         toast.success("Regras do cliente salvas.");
         setAberto(false);
         router.refresh();
@@ -436,6 +451,17 @@ export function DialogRegraCliente({ cliente, reguaPadrao }: { cliente: ClienteC
           <div className="flex flex-col gap-2">
             <Label variante="campo">Régua própria (dias em relação ao vencimento)</Label>
             <Input value={regua} onChange={(e) => setRegua(e.target.value)} placeholder={`Padrão: ${reguaPadrao.map(rotuloEtapa).join(", ")}`} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label variante="campo">Envio da cobrança (boleto e Pix)</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Input inputMode="numeric" value={antecedencia} onChange={(e) => setAntecedencia(e.target.value.replace(/\D/g, ""))} placeholder={`${antecedenciaPadrao} dias antes (padrão)`} />
+              <Input inputMode="numeric" value={diaMes} onChange={(e) => setDiaMes(e.target.value.replace(/\D/g, ""))} placeholder="ou: até o dia X do mês" />
+            </div>
+            <p className="text-xs text-gray3">
+              Dias de antecedência próprios, ou o dia do mês combinado com o cliente: a cobrança sai no último dia X antes do vencimento (com X = 20, o vencimento de 10/12 sai em 20/11). Com os
+              dois preenchidos, vale o dia do mês.
+            </p>
           </div>
           <label className="flex items-center gap-2.5 text-sm font-semibold text-darkPurple1">
             <Checkbox checked={pausada} onCheckedChange={(v) => setPausada(!!v)} />
@@ -558,6 +584,115 @@ export function FormConfiguracaoCobranca({ config }: { config: CobrancaConfigura
         </div>
         <Button className="self-end" disabled={pendente} onClick={salvar}>
           {pendente ? "Salvando…" : "Salvar configuração"}
+        </Button>
+      </div>
+    </CardModulo>
+  );
+}
+
+/** Fase 2 — boleto + Pix do Banco Inter: parâmetros, o que falta para ligar e o webhook. */
+export function FormConfiguracaoInter({ config, status }: { config: CobrancaConfiguracaoRow; status: StatusInter }) {
+  const [ativa, setAtiva] = useState(config.inter_emissao_ativa);
+  const [antecedencia, setAntecedencia] = useState(String(config.inter_antecedencia_dias));
+  const [multa, setMulta] = useState(config.inter_multa_percentual === null ? "" : String(config.inter_multa_percentual));
+  const [juros, setJuros] = useState(config.inter_juros_mensal_percentual === null ? "" : String(config.inter_juros_mensal_percentual));
+  const [validade, setValidade] = useState(String(config.inter_dias_validade));
+  const [dataCorte, setDataCorte] = useState(config.inter_data_corte ?? "");
+  const [pendente, iniciar] = useTransition();
+  const router = useRouter();
+  const numero = (t: string) => (t.trim() === "" ? null : Number(t.replace(",", ".")));
+
+  function salvar() {
+    iniciar(async () => {
+      try {
+        exigirSucesso(
+          await salvarConfiguracaoInter({
+            emissaoAtiva: ativa,
+            antecedenciaDias: Number(antecedencia),
+            multaPercentual: numero(multa),
+            jurosMensalPercentual: numero(juros),
+            diasValidade: Number(validade),
+            dataCorte: dataCorte || null,
+          }),
+        );
+        toast.success("Configuração do boleto e Pix salva.");
+        router.refresh();
+      } catch (e) {
+        erroToast(e, "Falha ao salvar.");
+      }
+    });
+  }
+  function registrarWebhook() {
+    iniciar(async () => {
+      try {
+        exigirSucesso(await registrarWebhookInterAction());
+        toast.success("Webhook registrado no Inter.");
+        router.refresh();
+      } catch (e) {
+        erroToast(e, "Falha ao registrar o webhook.");
+      }
+    });
+  }
+
+  const campo = "flex flex-col gap-2";
+  return (
+    <CardModulo icone={MdAccountBalance} cor="bg-iconYellow" titulo="Boleto e Pix (Banco Inter)">
+      <div className="flex flex-col gap-5">
+        <p className="-mt-1 text-sm text-gray">
+          Com a emissão ligada, a régua envia a cobrança {antecedencia || "N"} dias antes do vencimento, com o boleto em PDF, a linha digitável e o Pix copia e cola. O boleto é emitido no
+          Inter na hora do envio. Lembretes e avisos de atraso passam a trazer os dados do boleto. Em modo de teste nenhum boleto é emitido.
+        </p>
+        {status.pendencias.length > 0 && (
+          <p className="rounded-lg border border-orange/40 bg-orange3 px-3 py-2 text-sm font-semibold text-[#ce9232]">Para ligar a emissão, falta: {status.pendencias.join("; ")}.</p>
+        )}
+        <label className="flex items-center gap-2.5 text-sm font-semibold text-darkPurple1">
+          <Checkbox checked={ativa} onCheckedChange={(v) => setAtiva(!!v)} />
+          Emitir boleto e Pix pelo Banco Inter
+        </label>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
+          <div className={campo}>
+            <Label variante="campo">Enviar a cobrança (dias antes)</Label>
+            <Input inputMode="numeric" value={antecedencia} onChange={(e) => setAntecedencia(e.target.value.replace(/\D/g, ""))} />
+          </div>
+          <div className={campo}>
+            <Label variante="campo">Multa (%)</Label>
+            <Input inputMode="decimal" value={multa} onChange={(e) => setMulta(e.target.value)} placeholder="ex.: 2" />
+          </div>
+          <div className={campo}>
+            <Label variante="campo">Juros ao mês (%)</Label>
+            <Input inputMode="decimal" value={juros} onChange={(e) => setJuros(e.target.value)} placeholder="ex.: 1" />
+          </div>
+          <div className={campo}>
+            <Label variante="campo">Boleto vale até (dias após o vencimento)</Label>
+            <Input inputMode="numeric" value={validade} onChange={(e) => setValidade(e.target.value.replace(/\D/g, ""))} />
+          </div>
+          <div className={campo}>
+            <Label variante="campo">Emitir para vencimentos a partir de</Label>
+            <Input type="date" value={dataCorte} onChange={(e) => setDataCorte(e.target.value)} />
+          </div>
+        </div>
+        <p className="-mt-2 text-xs text-gray3">
+          Multa e juros vão no boleto (o Inter calcula no pagamento). Correção pelo IGP-M não é suportada no boleto. A partir da data de corte, a emissão manual no Inter deve parar para não haver
+          cobrança em duplicidade.
+        </p>
+        <div className="flex flex-col gap-2 rounded-lg border border-gray5 p-4">
+          <span className="text-sm font-bold text-darkPurple1">Aviso de pagamento (webhook)</span>
+          <span className="text-xs text-gray2">
+            {!status.configurado
+              ? "Credenciais do Inter não configuradas neste ambiente."
+              : status.erroWebhook
+                ? `Não foi possível consultar: ${status.erroWebhook}`
+                : status.webhook
+                  ? `Registrado: ${status.webhook}`
+                  : "Nenhum endereço registrado no Inter — sem ele, os pagamentos são lidos só na conferência diária das 9h."}
+          </span>
+          <Button type="button" variant="white" size="sm" className="self-start" disabled={pendente || !status.configurado || !status.segredoWebhook} onClick={registrarWebhook}>
+            {status.webhook ? "Registrar de novo" : "Registrar webhook no Inter"}
+          </Button>
+          {!status.segredoWebhook && <span className="text-xs text-gray3">Cadastre INTER_WEBHOOK_SEGREDO nas variáveis de ambiente para habilitar.</span>}
+        </div>
+        <Button className="self-end" disabled={pendente} onClick={salvar}>
+          {pendente ? "Salvando…" : "Salvar boleto e Pix"}
         </Button>
       </div>
     </CardModulo>
