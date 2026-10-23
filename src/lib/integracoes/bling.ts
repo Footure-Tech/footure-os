@@ -121,6 +121,10 @@ const API_BASE = "https://api.bling.com.br/Api/v3";
 // GET passa por essa fila, que serializa com um intervalo mínimo entre
 // chamadas (processo único do servidor Next, suficiente pro volume atual).
 const INTERVALO_MIN_MS = 350;
+/** Contatos processados ao mesmo tempo na sincronização (a fila acima segura o ritmo). */
+const CONTATOS_EM_PARALELO = 3;
+/** Contato PJ fora do cache só é consultado se teve pedido de venda nesta janela (ver sincronizarContatosBling). */
+const JANELA_VENDAS_RECENTES_DIAS = 45;
 let proximoHorarioLivre = 0;
 
 function aguardarVezNaFila(): Promise<void> {
@@ -302,8 +306,10 @@ export async function sincronizarContatosBling(
   // pedidos — é exibido na lista de clientes, que antes só contava pedido
   // LOCAL (nosso processo de venda) e ficava zerada pra quase todo cliente
   // real, já que a maioria nunca passou pelo nosso fluxo. Checagem
-  // sequencial (não paralela) pelo mesmo motivo do resto do arquivo: evita
-  // saturar o limite de 3 req/s do Bling.
+  // com 3 contatos em paralelo: a fila (aguardarVezNaFila) espaça o INÍCIO das
+  // chamadas em 350 ms, então o limite de 3 req/s do Bling continua garantido —
+  // em sequência, cada chamada esperava a resposta da anterior (~0,8 s) e a
+  // sincronização passava do limite de 5 min da função na Vercel.
   const contatosPessoaJuridica: Array<
     (typeof candidatosPessoaJuridica)[number] & {
       totalPedidosVenda: number;
@@ -318,11 +324,11 @@ export async function sincronizarContatosBling(
   const pedidosParaCache: Array<{ id: number; contato_id: number; numero: string; data: string | null; total: number; situacao_id: number | null; situacao_valor: number | null }> = [];
   const parcelasParaCache: Array<{ id: number; contato_id: number; numero_pedido_origem: string | null; vencimento: string; valor: number; situacao: number }> = [];
   const hoje = new Date().toISOString().slice(0, 10);
-  for (const candidato of candidatosPessoaJuridica) {
+  async function processarCandidato(candidato: (typeof candidatosPessoaJuridica)[number]) {
     const pf = contatosPf.has(candidato.id);
     const pedidosVenda = (await buscarPedidosVenda(token, candidato.id)).filter((p) => !pf || pedidosFootlinkPf.has(p.id));
     const totalPedidosVenda = pedidosVenda.length;
-    if (totalPedidosVenda === 0) continue;
+    if (totalPedidosVenda === 0) return;
     for (const p of pedidosVenda) {
       pedidosParaCache.push({
         id: p.id,
@@ -369,6 +375,31 @@ export async function sincronizarContatosBling(
       parcelasAtrasadas,
     });
   }
+  // Só consulta os pedidos de quem já é cliente (está no cache de contatos) ou
+  // teve venda nos últimos dias — a lista de contatos PJ inclui fornecedores que
+  // nunca terão pedido de venda, e consultar todos a cada rodada era metade das
+  // chamadas ao Bling. Cliente novo entra pela listagem de vendas recentes
+  // (1–2 chamadas); com o cache vazio (primeira sincronização), consulta todos.
+  const { data: jaNoCache } = await supabase.from("bling_contatos").select("id");
+  const clientesConhecidos = new Set((jaNoCache ?? []).map((c) => c.id));
+  const comVendaRecente = new Set<number>();
+  const desdeVendas = somarDias(new Date().toISOString().slice(0, 10), -JANELA_VENDAS_RECENTES_DIAS);
+  for (let pagina = 1; pagina <= 20; pagina++) {
+    const resp = await chamarApiBling<{ data: Array<{ contato?: { id?: number } }> }>(
+      token,
+      `/pedidos/vendas?dataInicial=${desdeVendas}&dataFinal=${new Date().toISOString().slice(0, 10)}&limite=100&pagina=${pagina}`,
+    );
+    const lista = resp.data ?? [];
+    for (const p of lista) if (p.contato?.id) comVendaRecente.add(p.contato.id);
+    if (lista.length < 100) break;
+  }
+  const consultarTodos = clientesConhecidos.size === 0;
+  const fila = candidatosPessoaJuridica.filter((c) => consultarTodos || contatosPf.has(c.id) || clientesConhecidos.has(c.id) || comVendaRecente.has(c.id));
+  await Promise.all(
+    Array.from({ length: CONTATOS_EM_PARALELO }, async () => {
+      for (let c = fila.shift(); c; c = fila.shift()) await processarCandidato(c);
+    }),
+  );
 
   if (contatosPessoaJuridica.length > 0) {
     const { error } = await supabase.from("bling_contatos").upsert(

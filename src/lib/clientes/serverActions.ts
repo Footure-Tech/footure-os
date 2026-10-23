@@ -7,7 +7,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { exigirPapel } from "@/lib/auth/session";
-import { executarSincronizacaoBling, type ResultadoSincronizacaoBling } from "@/lib/integracoes/blingSincronizacao";
+import { sincronizarAcademyBling, sincronizarFootlinkBling, type ResultadoSincronizacaoBling } from "@/lib/integracoes/blingSincronizacao";
 import {
   garantirContatoBling,
   verificarCnpj,
@@ -157,15 +157,27 @@ export async function verificarCnpjAction(dados: DadosEmpresa, ignorarClienteId?
   return r.erro || !resultado ? r : resultado;
 }
 
+// Botão "Sincronizar Bling": duas actions chamadas em sequência pelo navegador —
+// cada uma é uma requisição com o seu próprio limite de 5 min na Vercel (juntas
+// passavam do limite). Client de serviço: as credenciais do Bling
+// (integracoes_bling) só a Diretoria lê pela RLS — os demais perfis autorizados
+// sincronizam sem ver o token.
+const PAPEIS_SINCRONIZACAO = ["vendedor", "admin", "financeiro"] as const;
+
 export async function sincronizarContatosBlingAction(): Promise<Partial<ResultadoSincronizacaoBling> & ResultadoAcao> {
   let resultado: ResultadoSincronizacaoBling | null = null;
   const r = await executar(async () => {
-    const sessao = await exigirPapel("vendedor", "admin", "financeiro");
-    // Client de serviço: as credenciais do Bling (integracoes_bling) só a Diretoria lê
-    // pela RLS — os demais perfis autorizados sincronizam sem ver o token.
-    resultado = await executarSincronizacaoBling(createServiceClient(), { origem: "manual", disparadoPor: sessao.id });
+    const sessao = await exigirPapel(...PAPEIS_SINCRONIZACAO);
+    resultado = await sincronizarFootlinkBling(createServiceClient(), { origem: "manual", disparadoPor: sessao.id });
   });
   return r.erro || !resultado ? r : resultado;
+}
+
+export async function sincronizarAcademyBlingAction(): Promise<ResultadoAcao> {
+  return executar(async () => {
+    const sessao = await exigirPapel(...PAPEIS_SINCRONIZACAO);
+    await sincronizarAcademyBling(createServiceClient(), { origem: "manual", disparadoPor: sessao.id });
+  });
 }
 
 /** Só remove clientes sem pedido vinculado — a FK (sem cascade) é o backstop caso essa checagem seja pulada. */

@@ -28,6 +28,15 @@ async function contar(consulta: PromiseLike<{ count: number | null; error: { mes
   return count ?? 0;
 }
 
+/** "Rodando" há mais de 10 min é execução morta (a função tem limite de 5 min):
+ * aparece como interrompida em vez de "Sincronizando…" até a próxima rodada corrigir o registro. */
+function situacaoDaExecucao(e: { status: "rodando" | "ok" | "erro"; erro: string | null; iniciado_em: string }): StatusIntegracoes["blingUltimaExecucao"] {
+  const morta = e.status === "rodando" && Date.now() - Date.parse(e.iniciado_em) > 10 * 60_000;
+  return morta
+    ? { status: "erro", erro: "Interrompida (excedeu o tempo da função).", iniciadoEm: e.iniciado_em }
+    : { status: e.status, erro: e.erro, iniciadoEm: e.iniciado_em };
+}
+
 /**
  * Contadores da sidebar e status das integrações, consultados com o client da
  * sessão (RLS vale — o vendedor só conta os próprios pedidos). Só busca os
@@ -97,7 +106,7 @@ export async function obterDadosShell(supabase: Supa, papel: PapelUsuario, usuar
     integracoes: {
       clicksignConfigurada: !!process.env.CLICKSIGN_API_URL && !!process.env.CLICKSIGN_ACCESS_TOKEN,
       blingSincronizadoEm: sincronizacao?.sincronizado_em ?? null,
-      blingUltimaExecucao: execucao ? { status: execucao.status, erro: execucao.erro, iniciadoEm: execucao.iniciado_em } : null,
+      blingUltimaExecucao: execucao ? situacaoDaExecucao(execucao) : null,
     },
   };
 }

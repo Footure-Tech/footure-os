@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { MdSync } from "react-icons/md";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { sincronizarContatosBlingAction } from "@/lib/clientes/serverActions";
+import { sincronizarAcademyBlingAction, sincronizarContatosBlingAction } from "@/lib/clientes/serverActions";
 import { cn } from "@/lib/utils";
 
 // Sincronização sob demanda com o Bling (contatos + parcelas em cache). Além
@@ -42,6 +42,12 @@ export function SincronizarBlingButton({
               }
             : undefined,
         );
+        // Segunda etapa (Academy) em outra requisição; falha aqui não desfaz o Footlink.
+        try {
+          exigirSucesso(await sincronizarAcademyBlingAction());
+        } catch (erro) {
+          toast.error("Vendas do Academy não sincronizadas", { description: erro instanceof Error ? erro.message : undefined });
+        }
         if (baixas.escopoBorderosAusente) {
           toast.error("O app do Bling não tem o escopo “Borderôs”", {
             description: "Sem ele, a data de baixa das parcelas não é importada. Reconecte o Bling em Administração · Configurações.",

@@ -30,43 +30,30 @@ async function iniciarExecucao(supabase: Supa, origem: "cron" | "manual", dispar
   return data.id;
 }
 
+export type EtapaSincronizacaoBling = "footlink" | "academy";
+type OpcoesSincronizacao = { origem: "cron" | "manual"; disparadoPor?: string | null };
+
 /**
- * Sincronização completa com o Bling — contatos/pedidos/parcelas/baixas do
- * Footlink e vendas do Footure Academy. Ponto único para o botão da sidebar e
- * o cron (/api/cron/bling): registra a execução em bling_sync_execucoes e
- * recusa se outra estiver em andamento (ver 0053).
+ * Roda uma etapa registrando a execução em bling_sync_execucoes (resumo.etapa)
+ * e recusando se outra estiver em andamento (trava de 0053). As etapas são
+ * execuções separadas porque juntas passavam do limite de 5 min da função na
+ * Vercel (Footlink ~2 min com contatos em paralelo; Academy ~1 min).
  */
-export async function executarSincronizacaoBling(
-  supabase: Supa,
-  opcoes: { origem: "cron" | "manual"; disparadoPor?: string | null },
-): Promise<ResultadoSincronizacaoBling> {
+async function comExecucao<T extends object>(supabase: Supa, opcoes: OpcoesSincronizacao, etapa: EtapaSincronizacaoBling, executar: () => Promise<T>): Promise<T> {
   const id = await iniciarExecucao(supabase, opcoes.origem, opcoes.disparadoPor ?? null);
   if (!id) throw new Error("Já há uma sincronização com o Bling em andamento — aguarde alguns minutos.");
-
   try {
-    const resultado = await sincronizarContatosBling(supabase);
-    // Vendas do Footure Academy (0042) — falha aqui não derruba a sincronização do Footlink.
-    let erroAcademy: string | null = null;
-    try {
-      await sincronizarVendasAcademy(supabase, await obterAccessTokenValido(supabase));
-    } catch (erro) {
-      erroAcademy = erro instanceof Error ? erro.message : String(erro);
-      console.error("[academy] sincronização das vendas:", erroAcademy);
-    }
+    const resultado = await executar();
     await supabase
       .from("bling_sync_execucoes")
-      .update({
-        status: erroAcademy ? "erro" : "ok",
-        erro: erroAcademy ? `Vendas do Academy: ${erroAcademy}` : null,
-        resumo: { ...resultado },
-        terminado_em: new Date().toISOString(),
-      })
+      .update({ status: "ok", erro: null, resumo: { etapa, ...resultado }, terminado_em: new Date().toISOString() })
       .eq("id", id);
     return resultado;
   } catch (erro) {
+    const mensagem = erro instanceof Error ? erro.message : String(erro);
     await supabase
       .from("bling_sync_execucoes")
-      .update({ status: "erro", erro: erro instanceof Error ? erro.message : String(erro), terminado_em: new Date().toISOString() })
+      .update({ status: "erro", erro: etapa === "academy" ? `Vendas do Academy: ${mensagem}` : mensagem, resumo: { etapa }, terminado_em: new Date().toISOString() })
       .eq("id", id);
     throw erro;
   } finally {
@@ -77,4 +64,14 @@ export async function executarSincronizacaoBling(
     revalidatePath("/inadimplencia");
     revalidatePath("/vendas");
   }
+}
+
+/** Footlink: contatos, pedidos, parcelas e baixas (o que a régua de cobrança e a inadimplência usam). */
+export function sincronizarFootlinkBling(supabase: Supa, opcoes: OpcoesSincronizacao): Promise<ResultadoSincronizacaoBling> {
+  return comExecucao(supabase, opcoes, "footlink", () => sincronizarContatosBling(supabase));
+}
+
+/** Footure Academy: vendas, parcelas e baixas (0042). */
+export function sincronizarAcademyBling(supabase: Supa, opcoes: OpcoesSincronizacao) {
+  return comExecucao(supabase, opcoes, "academy", async () => sincronizarVendasAcademy(supabase, await obterAccessTokenValido(supabase)));
 }
