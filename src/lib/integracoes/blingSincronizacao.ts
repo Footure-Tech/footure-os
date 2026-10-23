@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import type { Database } from "@/lib/supabase/database.types";
 import { obterAccessTokenValido, sincronizarContatosBling } from "@/lib/integracoes/bling";
 import { sincronizarVendasAcademy } from "@/lib/academy/vendas";
+import { sincronizarFinanceiroBling } from "@/lib/controladoria/sincronizacao";
 
 type Supa = SupabaseClient<Database>;
 
@@ -30,7 +31,7 @@ async function iniciarExecucao(supabase: Supa, origem: "cron" | "manual", dispar
   return data.id;
 }
 
-export type EtapaSincronizacaoBling = "footlink" | "academy";
+export type EtapaSincronizacaoBling = "footlink" | "academy" | "controladoria";
 type OpcoesSincronizacao = { origem: "cron" | "manual"; disparadoPor?: string | null };
 
 /**
@@ -63,6 +64,7 @@ async function comExecucao<T extends object>(supabase: Supa, opcoes: OpcoesSincr
     revalidatePath("/financeiro/pagamentos");
     revalidatePath("/inadimplencia");
     revalidatePath("/vendas");
+    revalidatePath("/controladoria", "layout");
   }
 }
 
@@ -74,4 +76,9 @@ export function sincronizarFootlinkBling(supabase: Supa, opcoes: OpcoesSincroniz
 /** Footure Academy: vendas, parcelas e baixas (0042). */
 export function sincronizarAcademyBling(supabase: Supa, opcoes: OpcoesSincronizacao) {
   return comExecucao(supabase, opcoes, "academy", async () => sincronizarVendasAcademy(supabase, await obterAccessTokenValido(supabase)));
+}
+
+/** Controladoria: contas a pagar e a receber de toda a empresa, categorias e contas financeiras (0061). */
+export function sincronizarControladoriaBling(supabase: Supa, opcoes: OpcoesSincronizacao) {
+  return comExecucao(supabase, opcoes, "controladoria", () => sincronizarFinanceiroBling(supabase));
 }

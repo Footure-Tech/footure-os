@@ -4,7 +4,7 @@ import type { Database, PapelUsuario, StatusPedido } from "@/lib/supabase/databa
 type Supa = SupabaseClient<Database>;
 
 /** Chaves dos contadores da sidebar — cada link aponta pra no máximo uma. */
-export type ChaveContador = "pedidosRascunho" | "aprovacao" | "contratos" | "inadimplentes";
+export type ChaveContador = "pedidosRascunho" | "aprovacao" | "contratos" | "inadimplentes" | "alertasFinanceiros";
 
 export interface StatusIntegracoes {
   clicksignConfigurada: boolean;
@@ -64,6 +64,16 @@ export async function obterDadosShell(supabase: Supa, papel: PapelUsuario, usuar
           "aprovadosComErro",
         ),
       ]).then(([emAprovacao, comErro]) => void (contadores.aprovacao = emAprovacao + comErro)),
+    );
+  }
+
+  if (papel === "admin") {
+    // Controladoria (0061): alertas críticos e de atenção em aberto (os informativos não contam).
+    tarefas.push(
+      contar(
+        supabase.from("fin_alertas").select("id", { count: "exact", head: true }).in("status", ["novo", "em_tratamento"]).in("severidade", ["critico", "atencao"]),
+        "alertasFinanceiros",
+      ).then((n) => void (contadores.alertasFinanceiros = n)),
     );
   }
 

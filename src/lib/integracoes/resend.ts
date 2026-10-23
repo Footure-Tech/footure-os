@@ -66,6 +66,19 @@ async function enviarEmail(para: string | string[], assunto: string, conteudo: P
   });
 }
 
+/** Resumo diário da Controladoria para a Diretoria (conteúdo montado em lib/controladoria/resumoDiario.ts). Devolve o id do Resend. */
+export async function enviarEmailResumoControladoria(destinatarios: string[], assunto: string, conteudo: Parameters<typeof montarEmail>[0]) {
+  const { html, texto } = montarEmail(conteudo);
+  return enviarEmailResend({
+    de: comNomeDoSistema(enderecoRemetentePadrao()),
+    para: destinatarios,
+    assunto,
+    html,
+    texto,
+    anexos: [{ nome: "footure-logo.png", base64: LOGO_EMAIL_BASE64, contentId: LOGO_EMAIL_CID }],
+  });
+}
+
 /** Cadastro de usuário novo (criado = true) ou reenvio de acesso (criado = false). */
 export async function enviarEmailSenhaTemporaria(destinatario: string, nome: string, senhaTemporaria: string, criado = true) {
   const url = urlDoSistema();

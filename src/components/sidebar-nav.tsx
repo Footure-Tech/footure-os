@@ -11,12 +11,16 @@ import {
   MdDescription,
   MdGavel,
   MdHistoryEdu,
+  MdInsights,
+  MdNotificationsActive,
   MdPayments,
+  MdRequestQuote,
   MdManageAccounts,
   MdMarkEmailUnread,
   MdReceipt,
   MdSettings,
   MdTrendingUp,
+  MdTune,
   MdWarning,
 } from "react-icons/md";
 import { cn } from "@/lib/utils";
@@ -148,6 +152,36 @@ const INADIMPLENCIA: SidebarLink = {
   exact: true,
 };
 
+const PAINEL_CFO: SidebarLink = {
+  href: "/controladoria",
+  label: "Painel do CFO",
+  icon: MdInsights,
+  cor: "bg-iconPurple",
+  exact: true,
+};
+const CONTAS_A_PAGAR: SidebarLink = {
+  href: "/controladoria/pagar",
+  label: "Contas a pagar",
+  icon: MdRequestQuote,
+  cor: "bg-iconRed",
+  exact: true,
+};
+const ALERTAS_FINANCEIROS: SidebarLink = {
+  href: "/controladoria/alertas",
+  label: "Alertas",
+  icon: MdNotificationsActive,
+  cor: "bg-iconYellow",
+  contador: "alertasFinanceiros",
+  exact: true,
+};
+const PREMISSAS_FINANCEIRAS: SidebarLink = {
+  href: "/controladoria/premissas",
+  label: "Premissas",
+  icon: MdTune,
+  cor: "bg-iconGray",
+  exact: true,
+};
+
 // Seções por módulo (handoff), limitadas às rotas que cada papel já acessa
 // hoje (layouts com exigirPapel). Componentes de ícone não são serializáveis
 // pela fronteira Server->Client — por isso a config mora no client component
@@ -188,6 +222,10 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
     {
       label: "Financeiro",
       links: [CONTRATOS_FINANCEIRO, PAGAMENTOS, INADIMPLENCIA, REGUA_COBRANCA],
+    },
+    {
+      label: "Controladoria",
+      links: [PAINEL_CFO, ALERTAS_FINANCEIROS, CONTAS_A_PAGAR, PREMISSAS_FINANCEIRAS],
     },
     {
       label: "Administração",

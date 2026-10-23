@@ -8,6 +8,8 @@
     { "path": "/api/cron/bling?etapa=academy&turno=12h", "schedule": "0 16 * * *" },
     { "path": "/api/cron/bling?etapa=footlink&turno=18h", "schedule": "0 21 * * *" },
     { "path": "/api/cron/bling?etapa=academy&turno=18h", "schedule": "0 22 * * *" },
-    { "path": "/api/cron/cobranca", "schedule": "0 12 * * *" }
+    { "path": "/api/cron/cobranca", "schedule": "0 12 * * *" },
+    { "path": "/api/cron/controladoria?turno=5h", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/controladoria?turno=16h", "schedule": "0 19 * * *" }
   ]
 }

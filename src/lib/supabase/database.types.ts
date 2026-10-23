@@ -233,6 +233,84 @@ export type BlingSyncExecucaoRow = {
   disparado_por: string | null;
 };
 
+/** 0061: Controladoria (visão do CFO). */
+export type CamadaContaFinanceira = "disponivel" | "liquidez" | "aplicacao" | "gateway" | "cartao" | "ignorar";
+export type FinCategoriaRow = { id: number; id_pai: number | null; descricao: string; tipo: number | null; sincronizado_em: string };
+export type FinContaFinanceiraRow = {
+  id: number;
+  descricao: string;
+  camada: CamadaContaFinanceira;
+  saldo_informado: number | null;
+  saldo_informado_em: string | null;
+  atualizado_por: string | null;
+  atualizado_em: string | null;
+  sincronizado_em: string;
+};
+export type FinLancamentoRow = {
+  id: number;
+  tipo: "pagar" | "receber";
+  situacao: number;
+  vencimento: string;
+  valor: number;
+  saldo: number | null;
+  data_emissao: string | null;
+  competencia: string | null;
+  contato_id: number | null;
+  contato_nome: string | null;
+  forma_pagamento_id: number | null;
+  conta_financeira_id: number | null;
+  categoria_id: number | null;
+  ocorrencia_tipo: number | null;
+  origem_tipo: string | null;
+  origem_numero: string | null;
+  tem_cobranca: boolean | null;
+  historico: string | null;
+  assinatura: string;
+  assinatura_detalhe: string | null;
+  detalhado_em: string | null;
+  sincronizado_em: string;
+};
+export type FinPremissasRow = {
+  id: boolean;
+  colchao_meses: number;
+  runway_alerta_meses: number;
+  dias_conciliacao: number;
+  excedente_meses: number;
+  despesa_subiu_pct: number;
+  fornecedor_novo_valor: number;
+  duplicidade_dias: number;
+  receber_antigo_dias: number;
+  cobranca_antecedencia_dias: number;
+  resumo_diario_ativo: boolean;
+  atualizado_em: string;
+  atualizado_por: string | null;
+};
+export type GrupoAlerta = "caixa" | "pagamentos" | "recebiveis" | "integracao";
+export type SeveridadeAlerta = "critico" | "atencao" | "info";
+export type StatusAlerta = "novo" | "em_tratamento" | "adiado" | "encerrado" | "resolvido";
+export type FinAlertaRow = {
+  id: string;
+  chave: string;
+  regra: string;
+  grupo: GrupoAlerta;
+  severidade: SeveridadeAlerta;
+  titulo: string;
+  descricao: string;
+  acao: string;
+  href: string | null;
+  valor: number | null;
+  status: StatusAlerta;
+  responsavel_id: string | null;
+  adiado_ate: string | null;
+  motivo: string | null;
+  criado_em: string;
+  atualizado_em: string;
+  visto_em: string;
+  resolvido_em: string | null;
+};
+export type TipoEventoAlerta = "criado" | "reaberto" | "atribuido" | "adiado" | "encerrado" | "reativado" | "resolvido";
+export type FinAlertaEventoRow = { id: string; alerta_id: string; tipo: TipoEventoAlerta; detalhe: string | null; autor_id: string | null; criado_em: string };
+
 /** 0042/0043/0045: classificação dos produtos do Footure Academy. */
 export type CategoriaAcademy = "especializacao" | "livre" | "hotmart" | "assinatura" | "mensalidade" | "outro";
 /** 0044: uma parcela do pedido de venda do Academy, com a forma de pagamento e a taxa cadastrada nela. */
@@ -742,6 +820,44 @@ export interface Database {
         { bling_pedido_id: number; emails: string[]; buscados_em: string },
         { bling_pedido_id: number; emails?: string[]; buscados_em?: string },
         Partial<{ emails: string[]; buscados_em: string }>
+      >;
+      // supabase/migrations/0061_controladoria.sql
+      fin_categorias: TableDef<FinCategoriaRow, Omit<FinCategoriaRow, "sincronizado_em"> & { sincronizado_em?: string }, Partial<FinCategoriaRow>>;
+      fin_contas_financeiras: TableDef<
+        FinContaFinanceiraRow,
+        Partial<FinContaFinanceiraRow> & Pick<FinContaFinanceiraRow, "id" | "descricao">,
+        Partial<FinContaFinanceiraRow>
+      >;
+      fin_formas_pagamento: TableDef<
+        { id: number; descricao: string; tipo_pagamento: number | null; sincronizado_em: string },
+        { id: number; descricao: string; tipo_pagamento?: number | null; sincronizado_em?: string },
+        Partial<{ descricao: string; tipo_pagamento: number | null; sincronizado_em: string }>
+      >;
+      fin_contatos: TableDef<
+        { id: number; nome: string; sincronizado_em: string },
+        { id: number; nome: string; sincronizado_em?: string },
+        Partial<{ nome: string; sincronizado_em: string }>
+      >;
+      fin_lancamentos: TableDef<
+        FinLancamentoRow,
+        Partial<FinLancamentoRow> & Pick<FinLancamentoRow, "id" | "tipo" | "situacao" | "vencimento" | "valor" | "assinatura">,
+        Partial<FinLancamentoRow>
+      >;
+      fin_premissas: TableDef<FinPremissasRow, Partial<FinPremissasRow>, Partial<FinPremissasRow>>;
+      fin_alertas: TableDef<
+        FinAlertaRow,
+        Partial<FinAlertaRow> & Pick<FinAlertaRow, "chave" | "regra" | "grupo" | "severidade" | "titulo" | "descricao" | "acao">,
+        Partial<FinAlertaRow>
+      >;
+      fin_alerta_eventos: TableDef<
+        FinAlertaEventoRow,
+        Partial<FinAlertaEventoRow> & Pick<FinAlertaEventoRow, "alerta_id" | "tipo">,
+        Partial<FinAlertaEventoRow>
+      >;
+      fin_resumos_diarios: TableDef<
+        { data: string; enviado_em: string; destinatarios: string[]; resend_id: string | null },
+        { data: string; enviado_em?: string; destinatarios?: string[]; resend_id?: string | null },
+        Partial<{ enviado_em: string; destinatarios: string[]; resend_id: string | null }>
       >;
       bling_sync_execucoes: TableDef<
         BlingSyncExecucaoRow,

@@ -1,0 +1,261 @@
+// Sincronização do financeiro inteiro da Footure no Bling para o cache da
+// Controladoria (0061). Roda dentro da trava de bling_sync_execucoes (etapa
+// "controladoria", ver blingSincronizacao.ts) porque usa o mesmo token e o
+// mesmo limite de 3 req/s.
+//
+// 1. Cadastros: categorias, contas financeiras e formas de pagamento.
+// 2. Listagens completas de contas a pagar e a receber (~80 chamadas). A de
+//    receber só devolve o que foi emitido no último ano sem filtro — vai por
+//    janelas de 1 ano de emissão desde 2020 (mesmo cuidado de bling.ts).
+// 3. Detalhe (categoria, conta financeira, histórico, recorrência) só do que é
+//    novo ou mudou, em aberto primeiro, até o prazo da execução. A carga
+//    inicial termina em algumas execuções (o painel mostra o que falta).
+// 4. Nome dos fornecedores (a listagem de contas a pagar só traz o id).
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { CamadaContaFinanceira, Database, FinLancamentoRow } from "@/lib/supabase/database.types";
+import { consultarBling, obterAccessTokenValido } from "@/lib/integracoes/bling";
+import { hojeLocal } from "@/lib/financeiro/carteira";
+import { camadaSugerida, emAberto, somarDias } from "./modelo";
+
+type Supa = SupabaseClient<Database>;
+
+/** Tempo para listagens + detalhes; o restante dos 300 s da função fica para alertas e e-mail. */
+const PRAZO_PADRAO_MS = 170_000;
+/** Detalhes só do que ainda importa: em aberto ou com vencimento nos últimos 24 meses. */
+const MESES_DETALHE = 24;
+const INICIO_HISTORICO = "2020-01-01";
+
+export interface ResultadoSincronizacaoFinanceira {
+  pagar: number;
+  receber: number;
+  removidos: number;
+  detalhados: number;
+  detalhesPendentes: number;
+  fornecedoresNovos: number;
+}
+
+async function listar<T>(token: string, base: string, limite = 100, maxPaginas = 400): Promise<T[]> {
+  const itens: T[] = [];
+  for (let pagina = 1; pagina <= maxPaginas; pagina++) {
+    const sep = base.includes("?") ? "&" : "?";
+    const resp = await consultarBling<{ data?: T[] }>(token, `${base}${sep}limite=${limite}&pagina=${pagina}`);
+    const lote = resp.data ?? [];
+    itens.push(...lote);
+    if (lote.length < limite) break;
+  }
+  return itens;
+}
+
+async function lerTodos<T>(consulta: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>) {
+  const linhas: T[] = [];
+  for (let pagina = 0; ; pagina++) {
+    const { data, error } = await consulta(pagina * 1000, pagina * 1000 + 999);
+    if (error) throw new Error(error.message);
+    linhas.push(...(data ?? []));
+    if (!data || data.length < 1000) return linhas;
+  }
+}
+
+async function emLotes<T>(itens: T[], tamanho: number, fn: (lote: T[]) => PromiseLike<{ error: { message: string } | null }>) {
+  for (let i = 0; i < itens.length; i += tamanho) {
+    const { error } = await fn(itens.slice(i, i + tamanho));
+    if (error) throw new Error(error.message);
+  }
+}
+
+const assinaturaDe = (situacao: number, valor: number, vencimento: string) => `${situacao}|${Number(valor).toFixed(2)}|${vencimento}`;
+const dataOuNull = (d: unknown) => (typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d) && !d.startsWith("0000") ? d.slice(0, 10) : null);
+const idOuNull = (v: unknown) => (typeof v === "number" && v > 0 ? v : null);
+
+async function sincronizarCadastros(supabase: Supa, token: string) {
+  const agora = new Date().toISOString();
+
+  type CategoriaBling = { id: number; idCategoriaPai?: number; descricao: string; tipo?: number };
+  const categorias = await listar<CategoriaBling>(token, "/categorias/receitas-despesas");
+  await emLotes(
+    categorias.map((c) => ({ id: c.id, id_pai: idOuNull(c.idCategoriaPai), descricao: c.descricao ?? "", tipo: c.tipo ?? null, sincronizado_em: agora })),
+    500,
+    (lote) => supabase.from("fin_categorias").upsert(lote),
+  );
+
+  // Conta nova recebe a camada sugerida pelo nome; nas existentes só o nome é atualizado (a camada é da Diretoria).
+  type ContaBling = { id: number; descricao: string };
+  const contas = await listar<ContaBling>(token, "/contas-contabeis");
+  const { data: existentes, error } = await supabase.from("fin_contas_financeiras").select("id");
+  if (error) throw new Error(error.message);
+  const conhecidas = new Set((existentes ?? []).map((c) => c.id));
+  const novas = contas.filter((c) => !conhecidas.has(c.id));
+  if (novas.length) {
+    const linhas = novas.map((c) => ({ id: c.id, descricao: (c.descricao ?? "").trim(), camada: camadaSugerida(c.descricao ?? "") as CamadaContaFinanceira, sincronizado_em: agora }));
+    const { error: erroInsert } = await supabase.from("fin_contas_financeiras").insert(linhas);
+    if (erroInsert) throw new Error(erroInsert.message);
+  }
+  const antigas = contas.filter((c) => conhecidas.has(c.id));
+  if (antigas.length) {
+    await emLotes(
+      antigas.map((c) => ({ id: c.id, descricao: (c.descricao ?? "").trim(), sincronizado_em: agora })),
+      500,
+      (lote) => supabase.from("fin_contas_financeiras").upsert(lote),
+    );
+  }
+
+  type FormaBling = { id: number; descricao: string; tipoPagamento?: number };
+  const formas = await listar<FormaBling>(token, "/formas-pagamentos");
+  await emLotes(
+    formas.map((f) => ({ id: f.id, descricao: f.descricao ?? "", tipo_pagamento: f.tipoPagamento ?? null, sincronizado_em: agora })),
+    500,
+    (lote) => supabase.from("fin_formas_pagamento").upsert(lote),
+  );
+}
+
+type ContaListada = {
+  id: number;
+  situacao: number;
+  vencimento: string;
+  valor: number;
+  dataEmissao?: string;
+  contato?: { id?: number; nome?: string };
+  formaPagamento?: { id?: number };
+  contaContabil?: { id?: number };
+  origem?: { tipoOrigem?: string; numero?: string };
+  linkBoleto?: string;
+  linkQRCodePix?: string;
+};
+
+type LinhaListagem = Pick<FinLancamentoRow, "id" | "tipo" | "situacao" | "vencimento" | "valor" | "assinatura" | "sincronizado_em"> &
+  Partial<Pick<FinLancamentoRow, "data_emissao" | "contato_id" | "contato_nome" | "forma_pagamento_id" | "conta_financeira_id" | "origem_tipo" | "origem_numero" | "tem_cobranca">>;
+
+function linhaDaListagem(tipo: "pagar" | "receber", c: ContaListada, agora: string): LinhaListagem {
+  const base = {
+    id: c.id,
+    tipo,
+    situacao: c.situacao,
+    vencimento: c.vencimento,
+    valor: Number(c.valor) || 0,
+    assinatura: assinaturaDe(c.situacao, c.valor, c.vencimento),
+    contato_id: idOuNull(c.contato?.id),
+    forma_pagamento_id: idOuNull(c.formaPagamento?.id),
+    sincronizado_em: agora,
+  };
+  if (tipo === "pagar") return base;
+  return {
+    ...base,
+    data_emissao: dataOuNull(c.dataEmissao),
+    contato_nome: c.contato?.nome?.trim() || null,
+    conta_financeira_id: idOuNull(c.contaContabil?.id),
+    origem_tipo: c.origem?.tipoOrigem || null,
+    origem_numero: c.origem?.numero || null,
+    tem_cobranca: !!(c.linkBoleto || c.linkQRCodePix),
+  };
+}
+
+async function listarContasReceber(token: string, hoje: string) {
+  const porId = new Map<number, ContaListada>();
+  for (let inicio = INICIO_HISTORICO; inicio <= hoje; inicio = somarDias(inicio, 366)) {
+    const fim = somarDias(inicio, 365) < hoje ? somarDias(inicio, 365) : hoje;
+    for (const c of await listar<ContaListada>(token, `/contas/receber?tipoFiltroData=E&dataInicial=${inicio}&dataFinal=${fim}`)) porId.set(c.id, c);
+  }
+  return [...porId.values()];
+}
+
+type ContaDetalhe = ContaListada & {
+  saldo?: number;
+  competencia?: string;
+  historico?: string;
+  portador?: { id?: number };
+  categoria?: { id?: number };
+  ocorrencia?: { tipo?: number };
+};
+
+export async function sincronizarFinanceiroBling(supabase: Supa, opcoes: { prazoMs?: number } = {}): Promise<ResultadoSincronizacaoFinanceira> {
+  const inicio = Date.now();
+  const prazo = inicio + (opcoes.prazoMs ?? PRAZO_PADRAO_MS);
+  const token = await obterAccessTokenValido(supabase);
+  const hoje = hojeLocal();
+  const agora = new Date().toISOString();
+
+  await sincronizarCadastros(supabase, token);
+
+  const [pagar, receber] = [await listar<ContaListada>(token, "/contas/pagar"), await listarContasReceber(token, hoje)];
+  const linhas = [...pagar.map((c) => linhaDaListagem("pagar", c, agora)), ...receber.map((c) => linhaDaListagem("receber", c, agora))];
+  // Contas a pagar e a receber têm ids distintos no Bling; a listagem pode repetir item entre páginas.
+  const unicas = [...new Map(linhas.map((l) => [l.id, l])).values()];
+  await emLotes(unicas.filter((l) => l.tipo === "pagar"), 500, (lote) => supabase.from("fin_lancamentos").upsert(lote));
+  await emLotes(unicas.filter((l) => l.tipo === "receber"), 500, (lote) => supabase.from("fin_lancamentos").upsert(lote));
+
+  // O que sumiu do Bling (excluído lá) sai do cache.
+  const cache = await lerTodos((de, ate) =>
+    supabase.from("fin_lancamentos").select("id, tipo, situacao, vencimento, assinatura, assinatura_detalhe, detalhado_em, contato_id").order("id").range(de, ate),
+  );
+  const vigentes = new Set(unicas.map((l) => l.id));
+  const removidos = cache.filter((l) => !vigentes.has(l.id)).map((l) => l.id);
+  await emLotes(removidos, 200, (lote) => supabase.from("fin_lancamentos").delete().in("id", lote));
+
+  // Detalhes: novo ou alterado desde o último detalhe; em aberto primeiro, depois do mais recente ao mais antigo.
+  const limiteHistorico = somarDias(hoje, -MESES_DETALHE * 31);
+  const atual = new Map(unicas.map((l) => [l.id, l]));
+  const pendentes = cache
+    .filter((l) => vigentes.has(l.id))
+    .map((l) => ({ ...l, ...atual.get(l.id)! }))
+    .filter((l) => (!l.detalhado_em || l.assinatura_detalhe !== l.assinatura) && (emAberto(l.situacao) || l.vencimento >= limiteHistorico))
+    .sort((a, b) => Number(emAberto(b.situacao)) - Number(emAberto(a.situacao)) || b.vencimento.localeCompare(a.vencimento));
+
+  let detalhados = 0;
+  for (let i = 0; i < pendentes.length && Date.now() < prazo; i += 6) {
+    const lote = pendentes.slice(i, i + 6);
+    await Promise.all(
+      lote.map(async (l) => {
+        const d = (await consultarBling<{ data: ContaDetalhe }>(token, `/contas/${l.tipo}/${l.id}`)).data;
+        const { error } = await supabase
+          .from("fin_lancamentos")
+          .update({
+            saldo: d.saldo ?? null,
+            data_emissao: dataOuNull(d.dataEmissao),
+            competencia: dataOuNull(d.competencia),
+            contato_id: idOuNull(d.contato?.id) ?? l.contato_id,
+            categoria_id: idOuNull(d.categoria?.id),
+            conta_financeira_id: idOuNull(d.portador?.id) ?? idOuNull(d.contaContabil?.id),
+            forma_pagamento_id: idOuNull(d.formaPagamento?.id),
+            ocorrencia_tipo: d.ocorrencia?.tipo ?? null,
+            historico: d.historico?.trim().slice(0, 500) || null,
+            assinatura_detalhe: l.assinatura,
+            detalhado_em: new Date().toISOString(),
+          })
+          .eq("id", l.id);
+        if (error) throw new Error(error.message);
+        detalhados++;
+      }),
+    );
+  }
+
+  // Fornecedores: a listagem de contas a pagar só traz o id do contato.
+  let fornecedoresNovos = 0;
+  if (Date.now() < prazo) {
+    const { data: conhecidos } = await supabase.from("fin_contatos").select("id");
+    const jaTem = new Set((conhecidos ?? []).map((c) => c.id));
+    const faltam = [...new Set(pagar.filter((c) => c.vencimento >= limiteHistorico || emAberto(c.situacao)).map((c) => idOuNull(c.contato?.id)))].filter(
+      (id): id is number => !!id && !jaTem.has(id),
+    );
+    for (let i = 0; i < faltam.length && Date.now() < prazo; i += 6) {
+      const lote = faltam.slice(i, i + 6);
+      const nomes = await Promise.all(
+        lote.map(async (id) => {
+          const c = (await consultarBling<{ data: { nome?: string; fantasia?: string } }>(token, `/contatos/${id}`)).data;
+          return { id, nome: (c.fantasia?.trim() || c.nome?.trim() || `Contato ${id}`).slice(0, 200), sincronizado_em: agora };
+        }),
+      );
+      const { error } = await supabase.from("fin_contatos").upsert(nomes);
+      if (error) throw new Error(error.message);
+      fornecedoresNovos += nomes.length;
+    }
+  }
+
+  return {
+    pagar: pagar.length,
+    receber: receber.length,
+    removidos: removidos.length,
+    detalhados,
+    detalhesPendentes: pendentes.length - detalhados,
+    fornecedoresNovos,
+  };
+}
