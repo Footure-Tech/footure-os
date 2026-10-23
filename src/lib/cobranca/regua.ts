@@ -6,7 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CobrancaConfiguracaoRow, CobrancaEnvioItemRow, CobrancaEnvioRow, Database, EntregaEnvioCobranca } from "@/lib/supabase/database.types";
 import { carregarBaseParcelas } from "@/lib/financeiro/carteira";
-import { consultarBling, obterAccessTokenValido } from "@/lib/integracoes/bling";
+import { consultarBling, obterAccessTokenValido, pedidoBlingCancelado } from "@/lib/integracoes/bling";
 import { enderecoRemetentePadrao, enviarEmailResend } from "@/lib/integracoes/resend";
 import { montarEmailCliente, montarEmailEscalonamento, type EmailCobrancaMontado } from "./emailCobranca";
 import { JANELA_RECUPERACAO_DIAS, diasDesdeVencimento, etapaDoDia, hojeBrt, normalizarEmails, tipoDoEnvio } from "./regras";
@@ -47,7 +47,14 @@ async function tokenBlingSeguro(supabase: Supa): Promise<string | null> {
   const { data } = await supabase.from("integracoes_bling").select("access_token, expires_at").limit(1).maybeSingle();
   if (!data?.access_token) return null;
   if (data.expires_at && Date.parse(data.expires_at) - 60_000 > Date.now()) return data.access_token;
-  const { data: rodando } = await supabase.from("bling_sync_execucoes").select("id").eq("status", "rodando").limit(1).maybeSingle();
+  // "Rodando" há mais de 10 min é execução morta (a função tem limite de 5 min) — não bloqueia.
+  const { data: rodando } = await supabase
+    .from("bling_sync_execucoes")
+    .select("id")
+    .eq("status", "rodando")
+    .gt("iniciado_em", new Date(Date.now() - 10 * 60_000).toISOString())
+    .limit(1)
+    .maybeSingle();
   if (rodando) return null;
   try {
     return await obterAccessTokenValido(supabase);
@@ -65,14 +72,60 @@ async function nomeDoCliente(supabase: Supa, contatoId: number): Promise<string>
   return local?.nome_fantasia || local?.razao_social || contato?.nome || "Cliente";
 }
 
+export type OrigemDestinatarios = "pedido" | "contato";
+
+/** E-mails escritos nas observações internas do pedido ("E-mail financeiro: …"). */
+export function emailsDoTexto(texto: string | null | undefined): string[] {
+  return normalizarEmails(texto?.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi) ?? []);
+}
+
+/** E-mails das observações internas de cada pedido (cache em cobranca_pedidos_emails, relido a cada 7 dias). */
+async function emailsDosPedidos(supabase: Supa, pedidoIds: number[], token: string | null, forcar: boolean): Promise<string[]> {
+  if (!pedidoIds.length) return [];
+  const { data: cache } = await supabase.from("cobranca_pedidos_emails").select("*").in("bling_pedido_id", pedidoIds);
+  const porPedido = new Map((cache ?? []).map((c) => [c.bling_pedido_id, c]));
+  const emails: string[] = [];
+  for (const id of pedidoIds) {
+    const atual = porPedido.get(id);
+    const vencido = forcar || !atual || Date.now() - Date.parse(atual.buscados_em) > VALIDADE_EMAILS_BLING_MS;
+    if (vencido && token) {
+      try {
+        const { data } = await consultarBling<{ data: { observacoesInternas?: string } }>(token, `/pedidos/vendas/${id}`);
+        const lidos = emailsDoTexto(data.observacoesInternas);
+        await supabase.from("cobranca_pedidos_emails").upsert({ bling_pedido_id: id, emails: lidos, buscados_em: new Date().toISOString() });
+        emails.push(...lidos);
+        continue;
+      } catch (e) {
+        console.error(`[cobranca] observações do pedido ${id} no Bling:`, e instanceof Error ? e.message : e);
+      }
+    }
+    emails.push(...(atual?.emails ?? []));
+  }
+  // Pedidos criados pela plataforma: os mesmos e-mails, gravados também aqui (0040).
+  const { data: locais } = await supabase.from("pedidos").select("emails_financeiro").in("bling_pedido_id", pedidoIds.map(String));
+  return normalizarEmails(emails, ...(locais ?? []).map((p) => p.emails_financeiro));
+}
+
 /**
- * Destinatários do cliente: e-mail e e-mail de nota fiscal do contato no Bling
- * (cache em cobranca_clientes, relido a cada 7 dias), os e-mails do financeiro
- * informados nos pedidos da plataforma e os destinatários extras da régua.
+ * Destinatários de uma cobrança. Prioridade: os e-mails que o financeiro anota
+ * nas observações internas dos pedidos de venda das parcelas; sem nenhum, o
+ * e-mail e o e-mail de nota fiscal do contato no Bling (cache em
+ * cobranca_clientes, relido a cada 7 dias). Os destinatários extras da régua
+ * entram sempre.
  */
-export async function destinatariosDoCliente(supabase: Supa, contatoId: number, token: string | null): Promise<string[]> {
+export async function destinatariosDaCobranca(
+  supabase: Supa,
+  contatoId: number,
+  pedidoIds: number[],
+  token: string | null,
+  forcar = false,
+): Promise<{ emails: string[]; origem: OrigemDestinatarios }> {
   let { data: regra } = await supabase.from("cobranca_clientes").select("*").eq("contato_id", contatoId).maybeSingle();
-  const vencido = !regra?.emails_buscados_em || Date.now() - Date.parse(regra.emails_buscados_em) > VALIDADE_EMAILS_BLING_MS;
+  const doPedido = await emailsDosPedidos(supabase, [...new Set(pedidoIds)], token, forcar);
+  const extras = regra?.destinatarios_extra ?? [];
+  if (doPedido.length) return { emails: normalizarEmails(doPedido, extras), origem: "pedido" };
+
+  const vencido = forcar || !regra?.emails_buscados_em || Date.now() - Date.parse(regra.emails_buscados_em) > VALIDADE_EMAILS_BLING_MS;
   if (vencido && token) {
     try {
       const { data } = await consultarBling<{ data: { email?: string; emailNotaFiscal?: string } }>(token, `/contatos/${contatoId}`);
@@ -83,9 +136,7 @@ export async function destinatariosDoCliente(supabase: Supa, contatoId: number, 
       console.error(`[cobranca] e-mails do contato ${contatoId} no Bling:`, e instanceof Error ? e.message : e);
     }
   }
-  const { data: cliente } = await supabase.from("clientes").select("id").eq("bling_contato_id", contatoId).maybeSingle();
-  const { data: pedidos } = cliente ? await supabase.from("pedidos").select("emails_financeiro").eq("cliente_id", cliente.id) : { data: [] };
-  return normalizarEmails(regra?.email_bling, regra?.email_nf_bling, ...(pedidos ?? []).map((p) => p.emails_financeiro), regra?.destinatarios_extra ?? []);
+  return { emails: normalizarEmails(regra?.email_bling, regra?.email_nf_bling, extras), origem: "contato" };
 }
 
 export interface ResumoGeracao {
@@ -134,6 +185,7 @@ export async function gerarEnviosDoDia(supabase: Supa, hoje = hojeBrt()): Promis
     const jaEnviadas = enviadas.get(p.id) ?? new Set<number>();
     const item = (etapa: number): Item => ({
       parcela_id: p.id,
+      bling_pedido_id: p.numeroPedidoOrigem ? (base.pedidoPorChave.get(`${p.contatoId}:${p.numeroPedidoOrigem}`)?.id ?? null) : null,
       etapa,
       vencimento: p.vencimento,
       valor: p.valor,
@@ -157,6 +209,7 @@ export async function gerarEnviosDoDia(supabase: Supa, hoje = hojeBrt()): Promis
         tipo,
         data_prevista: hoje,
         destinatarios,
+        teste: !!config.email_teste,
         status: destinatarios.length ? "pendente" : "erro",
         erro: destinatarios.length ? null : "Cliente sem e-mail válido no Bling e sem destinatários extras na régua.",
       })
@@ -175,7 +228,8 @@ export async function gerarEnviosDoDia(supabase: Supa, hoje = hojeBrt()): Promis
   }
 
   for (const [contatoId, itensCliente] of paraCliente) {
-    await criar(contatoId, tipoDoEnvio(itensCliente.map((i) => i.etapa)), itensCliente, await destinatariosDoCliente(supabase, contatoId, token));
+    const { emails } = await destinatariosDaCobranca(supabase, contatoId, pedidosDe(itensCliente), token);
+    await criar(contatoId, tipoDoEnvio(itensCliente.map((i) => i.etapa)), itensCliente, emails);
     resumo.clientes++;
   }
   for (const [contatoId, itensEsc] of paraEscalonar) {
@@ -193,6 +247,8 @@ export async function gerarEnviosDoDia(supabase: Supa, hoje = hojeBrt()): Promis
   return resumo;
 }
 
+const pedidosDe = (itens: { bling_pedido_id: number | null }[]) => itens.map((i) => i.bling_pedido_id).filter((id): id is number => id !== null);
+
 type EnvioComItens = CobrancaEnvioRow & { itens: CobrancaEnvioItemRow[] };
 
 async function carregarEnvio(supabase: Supa, envioId: string): Promise<EnvioComItens> {
@@ -205,9 +261,55 @@ async function carregarEnvio(supabase: Supa, envioId: string): Promise<EnvioComI
 }
 
 /** Monta o e-mail de um envio (também usado na pré-visualização da tela). */
-export async function montarEmailDoEnvio(supabase: Supa, envio: EnvioComItens, config: CobrancaConfiguracaoRow, hoje = hojeBrt()): Promise<EmailCobrancaMontado> {
+export interface ParcelaVencida {
+  parcela_id: number;
+  vencimento: string;
+  valor: number;
+  rotulo: string;
+}
+
+/**
+ * Outras parcelas do cliente vencidas e não pagas (vencimento entre a data de
+ * corte e ontem), que o e-mail lista junto com as da etapa do dia. Numeração
+ * n/N como na carteira: ordem de vencimento dentro de cada pedido. Parcelas de
+ * pedido cancelado no Bling ficam fora.
+ */
+export async function parcelasVencidasDoCliente(supabase: Supa, contatoId: number, config: CobrancaConfiguracaoRow, excluir: Set<number>, hoje = hojeBrt()): Promise<ParcelaVencida[]> {
+  const [{ data: parcelas }, { data: pedidos }] = await Promise.all([
+    supabase.from("bling_parcelas").select("id, numero_pedido_origem, vencimento, valor, situacao").eq("contato_id", contatoId).order("vencimento"),
+    supabase.from("bling_pedidos").select("numero, situacao_id, situacao_valor").eq("contato_id", contatoId),
+  ]);
+  const cancelados = new Set((pedidos ?? []).filter((p) => pedidoBlingCancelado(p.situacao_id, p.situacao_valor)).map((p) => p.numero));
+  const porPedido = new Map<string, NonNullable<typeof parcelas>>();
+  for (const p of parcelas ?? []) {
+    const chave = p.numero_pedido_origem ?? "avulsa";
+    porPedido.set(chave, [...(porPedido.get(chave) ?? []), p]);
+  }
+  const vencidas: ParcelaVencida[] = [];
+  for (const [pedido, grupo] of porPedido) {
+    if (cancelados.has(pedido)) continue;
+    grupo.forEach((p, i) => {
+      if (excluir.has(p.id) || SITUACOES_ENCERRADAS.has(p.situacao) || p.situacao === 3) return;
+      if (p.vencimento >= hoje || (config.data_corte && p.vencimento < config.data_corte)) return;
+      vencidas.push({ parcela_id: p.id, vencimento: p.vencimento, valor: Number(p.valor), rotulo: `Parcela ${i + 1}/${grupo.length}${pedido !== "avulsa" ? ` · pedido ${pedido}` : ""}` });
+    });
+  }
+  return vencidas;
+}
+
+/** Monta o e-mail de um envio (também usado na pré-visualização). `vencidas`: as demais parcelas em atraso do cliente (sem, são buscadas no cache). */
+export async function montarEmailDoEnvio(
+  supabase: Supa,
+  envio: EnvioComItens,
+  config: CobrancaConfiguracaoRow,
+  hoje = hojeBrt(),
+  vencidas?: ParcelaVencida[],
+): Promise<EmailCobrancaMontado> {
   const nomeCliente = await nomeDoCliente(supabase, envio.contato_id);
-  const itens = envio.itens.map((i) => ({ rotulo: i.rotulo, vencimento: i.vencimento, valor: Number(i.valor), dias: diasDesdeVencimento(i.vencimento, hoje) }));
+  const outras = vencidas ?? (await parcelasVencidasDoCliente(supabase, envio.contato_id, config, new Set(envio.itens.map((i) => i.parcela_id)), hoje));
+  const itens = [...envio.itens, ...outras]
+    .sort((a, b) => a.vencimento.localeCompare(b.vencimento))
+    .map((i) => ({ rotulo: i.rotulo, vencimento: i.vencimento, valor: Number(i.valor), dias: diasDesdeVencimento(i.vencimento, hoje) }));
   if (envio.tipo === "escalonamento") return montarEmailEscalonamento({ nomeCliente, itens, contatoId: envio.contato_id });
   return montarEmailCliente({ tipo: envio.tipo, nomeCliente, itens, chavePix: config.chave_pix });
 }
@@ -220,7 +322,7 @@ export async function previaDoEnvio(supabase: Supa, envioId: string) {
 }
 
 /** Parcelas do envio ainda devidas: confere no Bling ao vivo (ou, sem token, no cache). */
-async function parcelasAindaDevidas(supabase: Supa, itens: CobrancaEnvioItemRow[]): Promise<Set<number>> {
+async function parcelasAindaDevidas(supabase: Supa, itens: { parcela_id: number }[]): Promise<Set<number>> {
   const ids = [...new Set(itens.map((i) => i.parcela_id))];
   const token = await tokenBlingSeguro(supabase);
   if (token) {
@@ -247,10 +349,15 @@ async function parcelasAindaDevidas(supabase: Supa, itens: CobrancaEnvioItemRow[
 export async function enviarEnvio(supabase: Supa, envioId: string, decididoPor?: string): Promise<CobrancaEnvioRow["status"]> {
   const [envio, config] = await Promise.all([carregarEnvio(supabase, envioId), carregarConfiguracaoCobranca(supabase)]);
   if (envio.status !== "pendente" && envio.status !== "erro") throw new Error("Este envio já foi decidido.");
+  // Envio gerado em teste nunca vai ao cliente real, mesmo que o modo de teste tenha sido desligado por fora da tela.
+  if (envio.teste && !config.email_teste) throw new Error("Envio gerado em modo de teste: só pode sair com o modo de teste ligado.");
   const decisao = decididoPor ? { decidido_por: decididoPor, decidido_em: new Date().toISOString() } : {};
 
-  const devidas = await parcelasAindaDevidas(supabase, envio.itens);
+  // As parcelas da etapa e as demais vencidas do cliente (listadas juntas no e-mail), conferidas no Bling.
+  const vencidasCache = await parcelasVencidasDoCliente(supabase, envio.contato_id, config, new Set(envio.itens.map((i) => i.parcela_id)));
+  const devidas = await parcelasAindaDevidas(supabase, [...envio.itens, ...vencidasCache]);
   const itens = envio.itens.filter((i) => devidas.has(i.parcela_id));
+  const vencidas = vencidasCache.filter((p) => devidas.has(p.parcela_id));
   if (itens.length === 0) {
     await supabase.from("cobranca_envios").update({ status: "cancelado", erro: "As parcelas foram pagas antes do envio.", ...decisao }).eq("id", envioId);
     return "cancelado";
@@ -258,23 +365,28 @@ export async function enviarEnvio(supabase: Supa, envioId: string, decididoPor?:
 
   try {
     const interno = envio.tipo === "escalonamento";
-    const destinatarios = interno ? normalizarEmails(config.emails_escalonamento) : await destinatariosDoCliente(supabase, envio.contato_id, await tokenBlingSeguro(supabase));
+    const destinatarios = interno
+      ? normalizarEmails(config.emails_escalonamento)
+      : (await destinatariosDaCobranca(supabase, envio.contato_id, pedidosDe(itens), await tokenBlingSeguro(supabase))).emails;
     if (!destinatarios.length) throw new Error(interno ? "Lista de escalonamento vazia." : "Cliente sem e-mail válido no Bling e sem destinatários extras na régua.");
-    const email = await montarEmailDoEnvio(supabase, { ...envio, itens }, config);
-    // Homologação: o e-mail ao cliente vai só para o endereço de teste.
+    const email = await montarEmailDoEnvio(supabase, { ...envio, itens }, config, hojeBrt(), vencidas);
+    // Homologação: o e-mail ao cliente vai só para o endereço de teste. A marca vai no FIM do
+    // assunto, com o nome do cliente: o Gmail ignora prefixos entre colchetes ao agrupar
+    // conversas, e cobranças de clientes diferentes com o mesmo assunto viravam uma só.
     const teste = !interno && config.email_teste ? config.email_teste : null;
+    const assunto = teste ? `${email.assunto} · TESTE ${await nomeDoCliente(supabase, envio.contato_id)} → ${destinatarios.join(", ")}` : email.assunto;
     const resendId = await enviarEmailResend({
       de: interno ? `Footure OS <${enderecoRemetentePadrao()}>` : `${config.remetente_nome} <${config.remetente_email || enderecoRemetentePadrao()}>`,
       para: teste ? [teste] : destinatarios,
       responderPara: interno ? undefined : config.responder_para,
-      assunto: teste ? `[TESTE → ${destinatarios.join(", ")}] ${email.assunto}` : email.assunto,
+      assunto,
       html: email.html,
       texto: email.texto,
       anexos: email.anexos,
     });
     await supabase
       .from("cobranca_envios")
-      .update({ status: "enviado", resend_id: resendId, assunto: email.assunto, destinatarios, erro: null, enviado_em: new Date().toISOString(), ...decisao })
+      .update({ status: "enviado", resend_id: resendId, assunto, destinatarios, erro: null, enviado_em: new Date().toISOString(), ...decisao })
       .eq("id", envioId);
     return "enviado";
   } catch (e) {

@@ -165,6 +165,12 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
   marketing: [
     { label: "Marketing", links: [DESEMPENHO_CAMPANHAS, INVESTIMENTO_RETORNO] },
   ],
+  financeiro: [
+    {
+      label: "Financeiro",
+      links: [REGUA_COBRANCA, INADIMPLENCIA, PAGAMENTOS, CONTRATOS_FINANCEIRO],
+    },
+  ],
   juridico: [
     {
       label: "Jurídico",
@@ -254,7 +260,7 @@ export function SidebarNav({
   const pathname = usePathname();
   const groups = gruposDoContexto(GRUPOS_POR_PAPEL[papel], contexto);
   // Mesmos papéis da action de sincronização (sincronizarContatosBlingAction).
-  const podeSincronizar = papel === "vendedor" || papel === "admin";
+  const podeSincronizar = papel === "vendedor" || papel === "admin" || papel === "financeiro";
 
   return (
     <aside className="sticky top-[60px] flex h-[calc(100vh-60px)] w-[72px] shrink-0 flex-col border-r border-gray5 bg-surface py-5 transition-colors duration-300 lg:w-[248px]">

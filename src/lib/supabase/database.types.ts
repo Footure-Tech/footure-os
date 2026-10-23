@@ -4,7 +4,7 @@
 //   supabase gen types typescript --project-id <ref> > src/lib/supabase/database.types.ts
 // e conferir se nada divergiu do que está aqui.
 
-export type PapelUsuario = "vendedor" | "juridico" | "admin" | "marketing";
+export type PapelUsuario = "vendedor" | "juridico" | "admin" | "marketing" | "financeiro";
 export type TipoCliente = "clube" | "agente";
 /** 0047 · Marketing */
 export type BuMarketing = "academy" | "footlink";
@@ -207,10 +207,14 @@ export type CobrancaEnvioRow = {
   decidido_por: string | null;
   decidido_em: string | null;
   enviado_em: string | null;
+  /** 0059: gerado em modo de teste — apagado ao sair do teste. */
+  teste: boolean;
 };
 export type CobrancaEnvioItemRow = {
   envio_id: string;
   parcela_id: number;
+  /** 0060: pedido de venda da parcela (destinatários pelas observações internas). */
+  bling_pedido_id: number | null;
   etapa: number;
   vencimento: string;
   valor: number;
@@ -733,6 +737,12 @@ export interface Database {
         Partial<CobrancaEnvioRow>
       >;
       cobranca_envio_itens: TableDef<CobrancaEnvioItemRow, CobrancaEnvioItemRow, Partial<CobrancaEnvioItemRow>>;
+      // supabase/migrations/0060_cobranca_emails_pedido.sql
+      cobranca_pedidos_emails: TableDef<
+        { bling_pedido_id: number; emails: string[]; buscados_em: string },
+        { bling_pedido_id: number; emails?: string[]; buscados_em?: string },
+        Partial<{ emails: string[]; buscados_em: string }>
+      >;
       bling_sync_execucoes: TableDef<
         BlingSyncExecucaoRow,
         Partial<BlingSyncExecucaoRow> & { origem: BlingSyncExecucaoRow["origem"] },

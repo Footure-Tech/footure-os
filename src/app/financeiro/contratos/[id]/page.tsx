@@ -82,7 +82,7 @@ export default async function ContratoFinanceiroPage({ params }: PageProps<"/fin
   if (!Number.isSafeInteger(blingPedidoId)) notFound();
 
   // Vendedor consulta; editar dados e anexar arquivos é só da Diretoria.
-  const sessao = await exigirPapel("admin", "vendedor");
+  const sessao = await exigirPapel("admin", "vendedor", "financeiro");
   const ehAdmin = sessao.papel === "admin";
   const supabase = await createClient();
   const dados = await carregarContrato(supabase, blingPedidoId);

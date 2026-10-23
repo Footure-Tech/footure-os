@@ -39,8 +39,11 @@ function situacao(item: ItemEmailCobranca) {
   return item.dias === 1 ? "1 dia em atraso" : `${item.dias} dias em atraso`;
 }
 
-function tabelaParcelas(itens: ItemEmailCobranca[], comSituacao: boolean) {
+/** Com mais de uma parcela, a tabela fecha com o total em negrito. */
+function tabelaParcelas(itens: ItemEmailCobranca[], comSituacao: boolean, rotuloTotal = "Total") {
+  const total = itens.reduce((s, i) => s + i.valor, 0);
   return {
+    total: itens.length > 1 ? { rotulo: rotuloTotal, valor: formatarMoeda(total) } : undefined,
     colunas: comSituacao ? ["Parcela", "Vencimento", "Situação", "Valor"] : ["Parcela", "Vencimento", "Valor"],
     linhas: itens.map((i) =>
       comSituacao ? [i.rotulo, data(i.vencimento), i.dias > 0 ? `${i.dias} ${i.dias === 1 ? "dia" : "dias"} em atraso` : i.dias === 0 ? "vence hoje" : "a vencer", formatarMoeda(i.valor)] : [i.rotulo, data(i.vencimento), formatarMoeda(i.valor)],
@@ -55,8 +58,10 @@ export function montarEmailCliente(dados: {
   itens: ItemEmailCobranca[];
   chavePix: string | null;
 }): EmailCobrancaMontado {
-  const { tipo, nomeCliente, itens, chavePix } = dados;
+  const { nomeCliente, itens, chavePix } = dados;
   const varias = itens.length > 1;
+  // Com alguma parcela já vencida na lista, o e-mail é de atraso mesmo que a etapa do dia seja um lembrete.
+  const tipo = itens.some((i) => i.dias > 0) ? "atraso" : dados.tipo;
   const total = itens.reduce((s, i) => s + i.valor, 0);
   const primeiro = itens[0];
   const maiorAtraso = Math.max(...itens.map((i) => i.dias));
@@ -84,7 +89,7 @@ export function montarEmailCliente(dados: {
   } else {
     assunto = varias ? "Pendência financeira no seu contrato Footlink" : `Pendência: parcela do Footlink vencida em ${data(primeiro.vencimento)}`;
     titulo = "Há uma pendência no seu contrato Footlink";
-    abertura = `Olá, ${nomeCliente}! ${varias ? "As parcelas abaixo continuam" : "A parcela abaixo continua"} em aberto:`;
+    abertura = `Olá, ${nomeCliente}! Não identificamos o pagamento ${varias ? "das parcelas abaixo" : "da parcela abaixo"}:`;
     fechamento = "Pedimos que regularize o pagamento ou responda este e-mail para combinarmos a melhor forma de quitar. Se o pagamento já foi feito, envie o comprovante respondendo esta mensagem.";
   }
 
@@ -93,8 +98,7 @@ export function montarEmailCliente(dados: {
     titulo,
     blocos: [
       { paragrafo: abertura },
-      { tabela: tabelaParcelas(itens, tipo === "atraso" && varias) },
-      ...(varias ? [{ paragrafo: `Total: ${formatarMoeda(total)}.` }] : []),
+      { tabela: tabelaParcelas(itens, varias) },
       ...pix,
       { paragrafo: fechamento },
     ],
@@ -115,8 +119,7 @@ export function montarEmailEscalonamento(dados: { nomeCliente: string; itens: It
     titulo: "Cliente precisa de contato da equipe",
     blocos: [
       { paragrafo: `${nomeCliente} segue com pagamento em atraso depois dos avisos automáticos da régua. A partir daqui o acompanhamento é da equipe.` },
-      { tabela: tabelaParcelas(itens, true) },
-      { paragrafo: `Total em atraso: ${formatarMoeda(total)}.` },
+      { tabela: tabelaParcelas(itens, true, "Total em atraso") },
     ],
     botao: { rotulo: "Abrir a régua de cobrança", url: `${urlDoSistema()}/financeiro/cobranca?aba=clientes` },
     observacao: "Você recebe este aviso por estar na lista de escalonamento da régua de cobrança.",

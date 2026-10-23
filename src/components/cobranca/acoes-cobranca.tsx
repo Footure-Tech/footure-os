@@ -66,7 +66,7 @@ export function BotaoGerarAgora({ desabilitado }: { desabilitado: boolean }) {
   );
 }
 
-function PreviaEnvio({ envioId }: { envioId: string }) {
+function PreviaEnvio({ envioId, emailTeste }: { envioId: string; emailTeste: string | null }) {
   const [aberto, setAberto] = useState(false);
   const [previa, setPrevia] = useState<{ assunto?: string; html?: string; destinatarios?: string[] } | null>(null);
   const [pendente, iniciar] = useTransition();
@@ -90,7 +90,9 @@ function PreviaEnvio({ envioId }: { envioId: string }) {
       <DialogContent className="sm:max-w-[680px]">
         <DialogHeader>
           <DialogTitle>{previa?.assunto ?? "Prévia do e-mail"}</DialogTitle>
-          <DialogDescription>Para: {previa?.destinatarios?.join(", ") || "—"}</DialogDescription>
+          <DialogDescription>
+            {emailTeste ? `Teste: vai só para ${emailTeste} · destinatários reais: ${previa?.destinatarios?.join(", ") || "—"}` : `Para: ${previa?.destinatarios?.join(", ") || "—"}`}
+          </DialogDescription>
         </DialogHeader>
         {pendente || !previa?.html ? (
           <p className="py-10 text-center text-sm text-gray3">Montando a prévia…</p>
@@ -103,13 +105,16 @@ function PreviaEnvio({ envioId }: { envioId: string }) {
 }
 
 /** Envios aguardando aprovação (pendentes) e com erro (para tentar de novo). */
-export function ListaAguardando({ envios, modo }: { envios: EnvioTela[]; modo: ModoCobranca }) {
+export function ListaAguardando({ envios, modo, emailTeste }: { envios: EnvioTela[]; modo: ModoCobranca; emailTeste: string | null }) {
   const pendentes = envios.filter((e) => e.status === "pendente");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set(pendentes.map((e) => e.id)));
   const [pendente, iniciar] = useTransition();
   const router = useRouter();
+  // Envios aguardando a confirmação no modal (nada sai sem ela).
+  const [aConfirmar, setAConfirmar] = useState<string[] | null>(null);
 
   function enviar(ids: string[]) {
+    setAConfirmar(null);
     iniciar(async () => {
       try {
         const r = exigirSucesso(await enviarEnviosAprovados(ids));
@@ -155,7 +160,7 @@ export function ListaAguardando({ envios, modo }: { envios: EnvioTela[]; modo: M
             {selecionados.size} de {pendentes.length} selecionados
             {modo === "automatico" && " · a régua está no automático: estes ficaram de antes da troca de modo"}
           </span>
-          <Button disabled={pendente || selecionados.size === 0} onClick={() => enviar([...selecionados])}>
+          <Button disabled={pendente || selecionados.size === 0} onClick={() => setAConfirmar([...selecionados])}>
             <MdSend className="size-[18px]" />
             {pendente ? "Enviando…" : "Aprovar e enviar"}
           </Button>
@@ -167,6 +172,7 @@ export function ListaAguardando({ envios, modo }: { envios: EnvioTela[]; modo: M
             {e.status === "pendente" && <Checkbox checked={selecionados.has(e.id)} onCheckedChange={() => alternar(e.id)} aria-label={`Selecionar ${e.cliente}`} />}
             <span className="text-base font-bold text-darkPurple1">{e.cliente}</span>
             <StatusPill tom={TOM_TIPO_ENVIO[e.tipo]}>{ROTULO_TIPO_ENVIO[e.tipo]}</StatusPill>
+            {e.teste && <StatusPill tom="pending">Teste</StatusPill>}
             <span className="text-sm text-gray3">previsto para {formatarDataCurta(e.data_prevista)}</span>
             <span className="ml-auto text-base font-bold text-darkPurple1">{formatarMoeda(e.total)}</span>
           </div>
@@ -182,14 +188,22 @@ export function ListaAguardando({ envios, modo }: { envios: EnvioTela[]; modo: M
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2.5 border-t border-gray5 pt-3">
-            <span className="flex-1 text-xs text-gray3">Para: {e.destinatarios.join(", ") || "sem destinatário"}</span>
-            <PreviaEnvio envioId={e.id} />
+            <span className="flex-1 text-xs text-gray3">
+              {emailTeste && e.tipo !== "escalonamento" ? (
+                <>
+                  <span className="font-semibold text-[#ce9232]">Teste: vai só para {emailTeste}</span> · destinatários reais: {e.destinatarios.join(", ") || "nenhum"}
+                </>
+              ) : (
+                <>Para: {e.destinatarios.join(", ") || "sem destinatário"}</>
+              )}
+            </span>
+            <PreviaEnvio envioId={e.id} emailTeste={e.tipo !== "escalonamento" ? emailTeste : null} />
             <Button variant="white" size="sm" disabled={pendente} onClick={() => descartar(e.id)}>
               <MdDelete className="size-4" />
               Descartar
             </Button>
             {e.status === "erro" && (
-              <Button size="sm" disabled={pendente} onClick={() => enviar([e.id])}>
+              <Button size="sm" disabled={pendente} onClick={() => setAConfirmar([e.id])}>
                 <MdRefresh className="size-4" />
                 Tentar de novo
               </Button>
@@ -197,7 +211,71 @@ export function ListaAguardando({ envios, modo }: { envios: EnvioTela[]; modo: M
           </div>
         </div>
       ))}
+      <ConfirmarEnvio envios={envios.filter((e) => aConfirmar?.includes(e.id))} emailTeste={emailTeste} aberto={aConfirmar !== null} onCancelar={() => setAConfirmar(null)} onConfirmar={() => aConfirmar && enviar(aConfirmar)} />
     </div>
+  );
+}
+
+/** Confirmação antes de qualquer envio: quantos e-mails, para quem e se é teste ou real. */
+function ConfirmarEnvio({
+  envios,
+  emailTeste,
+  aberto,
+  onCancelar,
+  onConfirmar,
+}: {
+  envios: EnvioTela[];
+  emailTeste: string | null;
+  aberto: boolean;
+  onCancelar: () => void;
+  onConfirmar: () => void;
+}) {
+  const aClientes = envios.filter((e) => e.tipo !== "escalonamento");
+  const real = aClientes.length > 0 && !emailTeste;
+  const total = envios.reduce((s, e) => s + e.total, 0);
+  const destino = (e: EnvioTela) => (e.tipo !== "escalonamento" && emailTeste ? `só ${emailTeste} (teste)` : e.destinatarios.join(", ") || "sem destinatário");
+  return (
+    <Dialog open={aberto} onOpenChange={(v) => !v && onCancelar()}>
+      <DialogContent className="sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle>
+            Enviar {envios.length} {envios.length === 1 ? "e-mail" : "e-mails"}?
+          </DialogTitle>
+          <DialogDescription>Confira os destinatários antes de confirmar. Parcelas pagas desde a geração são retiradas na hora do envio.</DialogDescription>
+        </DialogHeader>
+        {real ? (
+          <p className="rounded-lg border border-red/30 bg-dangerBg px-3 py-2.5 text-sm font-semibold text-red">
+            Envio real: {aClientes.length === 1 ? "o cliente abaixo vai" : `os ${aClientes.length} clientes abaixo vão`} receber a cobrança por e-mail. Não dá para desfazer.
+          </p>
+        ) : emailTeste && aClientes.length > 0 ? (
+          <p className="rounded-lg border border-orange/40 bg-orange3 px-3 py-2.5 text-sm font-semibold text-[#ce9232]">Modo de teste: nenhum cliente recebe — os e-mails vão só para {emailTeste}.</p>
+        ) : null}
+        <div className="flex max-h-[40vh] flex-col gap-2 overflow-y-auto">
+          {envios.map((e) => (
+            <div key={e.id} className="flex flex-col gap-0.5 rounded-lg border border-gray5 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className="flex-1 text-sm font-bold text-darkPurple1">{e.cliente}</span>
+                <span className="text-xs text-gray3">{ROTULO_TIPO_ENVIO[e.tipo]}</span>
+                <span className="text-sm font-semibold text-darkPurple1">{formatarMoeda(e.total)}</span>
+              </div>
+              <span className="text-xs break-all text-gray2">Para: {destino(e)}</span>
+            </div>
+          ))}
+        </div>
+        {envios.length > 1 && (
+          <p className="text-right text-sm">
+            Total: <span className="font-bold text-darkPurple1">{formatarMoeda(total)}</span>
+          </p>
+        )}
+        <DialogFooter>
+          <DialogClose render={<Button type="button" variant="white" />}>Cancelar</DialogClose>
+          <Button type="button" variant={real ? "destructive" : "default"} onClick={onConfirmar}>
+            <MdSend className="size-[18px]" />
+            {real ? "Enviar aos clientes" : "Confirmar envio"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -228,8 +306,9 @@ export function DialogRegraCliente({ cliente, reguaPadrao }: { cliente: ClienteC
   function relerEmails() {
     iniciar(async () => {
       try {
-        setEmails(exigirSucesso(await atualizarEmailsDoCliente(cliente.contatoId)).emails ?? []);
-        toast.success("E-mails relidos do Bling.");
+        const r = exigirSucesso(await atualizarEmailsDoCliente(cliente.contatoId));
+        setEmails(r.emails ?? []);
+        toast.success(r.origem === "pedido" ? "E-mails relidos das observações dos pedidos." : "Pedido sem e-mail nas observações: valem os e-mails do cadastro do contato.");
       } catch (e) {
         erroToast(e, "Falha ao ler os e-mails no Bling.");
       }
@@ -249,8 +328,11 @@ export function DialogRegraCliente({ cliente, reguaPadrao }: { cliente: ClienteC
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <Label variante="campo">Destinatários</Label>
+            <Label variante="campo">Destinatários {cliente.origemEmails === "pedido" ? "(observações internas do pedido)" : "(cadastro do contato no Bling)"}</Label>
             <p className="text-sm text-gray2">{emails.length ? emails.join(", ") : "Nenhum e-mail encontrado no Bling."}</p>
+            <p className="text-xs text-gray3">
+              Prioridade: os e-mails anotados nas observações internas do pedido de venda no Bling. Sem nenhum, valem o e-mail e o e-mail de nota fiscal do cadastro do contato.
+            </p>
             <Button type="button" variant="white" size="sm" className="self-start" disabled={pendente} onClick={relerEmails}>
               <MdMarkEmailRead className="size-4" />
               Reler e-mails do Bling
@@ -379,7 +461,8 @@ export function FormConfiguracaoCobranca({ config }: { config: CobrancaConfigura
           <Label variante="campo">Modo de teste: enviar tudo para</Label>
           <Input value={emailTeste} onChange={(e) => setEmailTeste(e.target.value)} placeholder="Vazio = e-mails vão para os clientes" />
           <p className="text-xs text-gray2">
-            Preenchido, nenhum cliente recebe nada: cada e-mail da régua vai só para este endereço, com o assunto marcado [TESTE] e os destinatários reais indicados. Use durante a homologação.
+            Preenchido, nenhum cliente recebe nada: cada e-mail da régua vai só para este endereço, com o assunto marcado [TESTE] e os destinatários reais indicados. Use durante a homologação. Ao
+            esvaziar este campo, os envios feitos em teste são apagados, para não contarem como enviados.
           </p>
         </div>
         <Button className="self-end" disabled={pendente} onClick={salvar}>

@@ -5,13 +5,14 @@ import { z } from "zod";
 import { executar, type ResultadoAcao } from "@/lib/acaoServidor";
 import { exigirPapel } from "@/lib/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import type { PapelUsuario } from "@/lib/supabase/database.types";
-import { destinatariosDoCliente, enviarEnvio, gerarEnviosDoDia, previaDoEnvio, type ResumoGeracao } from "./regua";
+import { createServiceClient } from "@/lib/supabase/service";
+import { PAPEIS_COBRANCA } from "./permissoes";
+import { destinatariosDaCobranca, enviarEnvio, gerarEnviosDoDia, previaDoEnvio, type ResumoGeracao } from "./regua";
 import { lerRegua, normalizarEmails } from "./regras";
 
-// Quem opera a régua (aprova, configura). Só Diretoria até o perfil do
-// financeiro ser definido — mudar aqui e nas policies de 0058.
-const PAPEIS_COBRANCA: PapelUsuario[] = ["admin"];
+// Gerar, enviar, pré-visualizar e reler e-mails usam o client de serviço depois
+// de exigirPapel: leem os pedidos (e-mails do financeiro, que a RLS só mostra ao
+// dono e à Diretoria) e as credenciais do Bling (só Diretoria).
 const TELA = "/financeiro/cobranca";
 
 const ConfiguracaoSchema = z.object({
@@ -39,6 +40,11 @@ export async function salvarConfiguracaoCobranca(dados: z.input<typeof Configura
     const emailTeste = d.emailTeste ? normalizarEmails(d.emailTeste)[0] : null;
     if (d.emailTeste && !emailTeste) throw new Error("E-mail de teste inválido.");
     const supabase = await createClient();
+    // Saindo do modo de teste: os envios de teste somem, para as etapas deles voltarem a valer nos envios reais.
+    if (!emailTeste) {
+      const { error: erroLimpeza } = await supabase.from("cobranca_envios").delete().eq("teste", true);
+      if (erroLimpeza) throw new Error(`Falha ao apagar os envios de teste: ${erroLimpeza.message}`);
+    }
     const { error } = await supabase
       .from("cobranca_configuracao")
       .update({
@@ -91,25 +97,30 @@ export async function salvarRegraCliente(dados: z.input<typeof RegraSchema>): Pr
   });
 }
 
-/** Relê agora os e-mails do contato no Bling (sem esperar os 7 dias do cache). */
-export async function atualizarEmailsDoCliente(contatoId: number): Promise<ResultadoAcao & { emails?: string[] }> {
-  let emails: string[] = [];
+/** Relê agora os e-mails no Bling — observações dos pedidos em aberto e cadastro do contato — sem esperar os 7 dias do cache. */
+export async function atualizarEmailsDoCliente(contatoId: number): Promise<ResultadoAcao & { emails?: string[]; origem?: string }> {
+  let resultado: Awaited<ReturnType<typeof destinatariosDaCobranca>> | null = null;
   const r = await executar(async () => {
     await exigirPapel(...PAPEIS_COBRANCA);
-    const supabase = await createClient();
-    await supabase.from("cobranca_clientes").upsert({ contato_id: contatoId, emails_buscados_em: null });
+    const supabase = createServiceClient();
     const { obterAccessTokenValido } = await import("@/lib/integracoes/bling");
-    emails = await destinatariosDoCliente(supabase, contatoId, await obterAccessTokenValido(supabase));
+    const { carregarBaseParcelas } = await import("@/lib/financeiro/carteira");
+    const base = await carregarBaseParcelas(supabase);
+    const pedidos = base.parcelas
+      .filter((p) => p.contatoId === contatoId && (p.situacao === "em_aberto" || p.situacao === "atrasada") && p.numeroPedidoOrigem)
+      .map((p) => base.pedidoPorChave.get(`${contatoId}:${p.numeroPedidoOrigem}`)?.id)
+      .filter((id): id is number => !!id);
+    resultado = await destinatariosDaCobranca(supabase, contatoId, pedidos, await obterAccessTokenValido(supabase), true);
     revalidatePath(TELA);
   });
-  return r.erro ? r : { emails };
+  return r.erro || !resultado ? r : resultado;
 }
 
 export async function enviarEnviosAprovados(ids: string[]): Promise<ResultadoAcao & { enviados?: number; cancelados?: number; falhas?: number }> {
   const contagem = { enviados: 0, cancelados: 0, falhas: 0 };
   const r = await executar(async () => {
     const sessao = await exigirPapel(...PAPEIS_COBRANCA);
-    const supabase = await createClient();
+    const supabase = createServiceClient();
     for (const id of z.array(z.string().uuid()).parse(ids)) {
       const status = await enviarEnvio(supabase, id, sessao.id);
       if (status === "enviado") contagem.enviados++;
@@ -139,7 +150,7 @@ export async function previaEnvioCobranca(id: string): Promise<ResultadoAcao & {
   let previa: Awaited<ReturnType<typeof previaDoEnvio>> | null = null;
   const r = await executar(async () => {
     await exigirPapel(...PAPEIS_COBRANCA);
-    previa = await previaDoEnvio(await createClient(), z.string().uuid().parse(id));
+    previa = await previaDoEnvio(createServiceClient(), z.string().uuid().parse(id));
   });
   return r.erro || !previa ? r : previa;
 }
@@ -149,7 +160,7 @@ export async function gerarEnviosAgora(): Promise<ResultadoAcao & { resumo?: Res
   let resumo: ResumoGeracao | undefined;
   const r = await executar(async () => {
     await exigirPapel(...PAPEIS_COBRANCA);
-    resumo = await gerarEnviosDoDia(await createClient());
+    resumo = await gerarEnviosDoDia(createServiceClient());
     revalidatePath(TELA);
   });
   return r.erro ? r : { resumo };

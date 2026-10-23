@@ -34,8 +34,9 @@ export interface BlocoEmail {
   paragrafo?: string;
   /** Caixa destacada com pares rótulo → valor (ex.: e-mail e senha temporária). */
   dados?: { rotulo: string; valor: string; mono?: boolean }[];
-  /** Tabela simples (ex.: parcelas em aberto); a última coluna fica alinhada à direita. */
-  tabela?: { colunas: string[]; linhas: string[][] };
+  /** Tabela simples (ex.: parcelas em aberto); a última coluna fica alinhada à direita.
+   * `total`: linha final em negrito (rótulo na primeira coluna, valor na última). */
+  tabela?: { colunas: string[]; linhas: string[][]; total?: { rotulo: string; valor: string } };
 }
 
 /** Identidade do cabeçalho e do rodapé. Padrão: Footure OS (e-mails internos). */
@@ -99,6 +100,14 @@ function blocoHtml(b: BlocoEmail): string {
       <tr><td style="padding:14px 18px 6px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
         <tr>${b.tabela.colunas.map((c, i) => celula(c, i, true)).join("")}</tr>
         ${b.tabela.linhas.map((l) => `<tr>${l.map((c, i) => celula(c, i, false)).join("")}</tr>`).join("")}
+        ${
+          b.tabela.total
+            ? `<tr>
+          <td colspan="${ultima}" style="padding:10px 0;font-family:${FONTE};font-size:14px;font-weight:700;color:${TEXTO};border-top:2px solid ${TEXTO};">${escaparHtml(b.tabela.total.rotulo)}</td>
+          <td style="padding:10px 0 10px 12px;text-align:right;font-family:${FONTE};font-size:15px;font-weight:700;color:${TEXTO};border-top:2px solid ${TEXTO};white-space:nowrap;">${escaparHtml(b.tabela.total.valor)}</td>
+        </tr>`
+            : ""
+        }
       </table></td></tr>
     </table>`;
   }
@@ -157,7 +166,11 @@ export function montarEmail(conteudo: ConteudoEmail): { html: string; texto: str
         : b.dados
           ? [...b.dados.map((d) => `${d.rotulo}: ${d.valor}`), ""]
           : b.tabela
-            ? [...b.tabela.linhas.map((l) => l.map((c, i) => (i === 0 ? c : `${b.tabela!.colunas[i]}: ${c}`)).join(" · ")), ""]
+            ? [
+                ...b.tabela.linhas.map((l) => l.map((c, i) => (i === 0 ? c : `${b.tabela!.colunas[i]}: ${c}`)).join(" · ")),
+                ...(b.tabela.total ? [`${b.tabela.total.rotulo}: ${b.tabela.total.valor}`] : []),
+                "",
+              ]
             : [],
     ),
     ...(conteudo.botao ? [`${conteudo.botao.rotulo}: ${conteudo.botao.url}`, ""] : []),

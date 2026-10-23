@@ -3,6 +3,6 @@ import { exigirPapel } from "@/lib/auth/session";
 import { AppShell } from "@/components/app-shell";
 
 export default async function InadimplenciaLayout({ children }: { children: ReactNode }) {
-  const sessao = await exigirPapel("vendedor", "admin");
+  const sessao = await exigirPapel("vendedor", "admin", "financeiro");
   return <AppShell sessao={sessao}>{children}</AppShell>;
 }

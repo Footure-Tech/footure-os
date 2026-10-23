@@ -6,6 +6,7 @@ const AREA_POR_PAPEL = {
   juridico: "/juridico",
   admin: "/dashboard",
   marketing: "/marketing",
+  financeiro: "/financeiro/cobranca",
 } as const;
 
 export default async function Home() {

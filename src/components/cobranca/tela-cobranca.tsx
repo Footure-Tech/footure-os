@@ -76,7 +76,7 @@ export function TelaCobranca({ dados, aba }: { dados: Dados; aba: AbaCobranca })
             />
           </div>
         ) : (
-          <ListaAguardando envios={aguardando} modo={config.modo} />
+          <ListaAguardando envios={aguardando} modo={config.modo} emailTeste={config.email_teste} />
         ))}
 
       {aba === "historico" &&
@@ -105,6 +105,7 @@ export function TelaCobranca({ dados, aba }: { dados: Dados; aba: AbaCobranca })
                   <TableCell className="max-w-[240px] font-bold whitespace-normal text-darkPurple1">{e.cliente}</TableCell>
                   <TableCell>
                     <StatusPill tom={TOM_TIPO_ENVIO[e.tipo]}>{ROTULO_TIPO_ENVIO[e.tipo]}</StatusPill>
+                    {e.teste && <span className="ml-1.5 text-xs font-semibold text-[#ce9232]">teste</span>}
                   </TableCell>
                   <TableCell className="text-gray2">{e.itens.length}</TableCell>
                   <TableCell className="font-semibold text-darkPurple1">{formatarMoeda(e.total)}</TableCell>
@@ -150,7 +151,12 @@ export function TelaCobranca({ dados, aba }: { dados: Dados; aba: AbaCobranca })
                   </TableCell>
                   <TableCell className="text-gray2">{c.proximoVencimento ? formatarDataCurta(c.proximoVencimento) : "—"}</TableCell>
                   <TableCell className="max-w-[240px] text-xs whitespace-normal text-gray2">
-                    {c.emails.length ? c.emails.join(", ") : c.regra?.emails_buscados_em ? <span className="font-semibold text-red">sem e-mail no Bling</span> : <span className="text-gray3">lidos no primeiro envio</span>}
+                    {c.emails.length ? (
+                      <>
+                        {c.emails.join(", ")}
+                        <span className="block text-[11px] text-gray3">{c.origemEmails === "pedido" ? "das observações do pedido" : "do cadastro do contato"}</span>
+                      </>
+                    ) : c.regra?.emails_buscados_em ? <span className="font-semibold text-red">sem e-mail no Bling</span> : <span className="text-gray3">lidos no primeiro envio</span>}
                   </TableCell>
                   <TableCell className="text-gray2">
                     {c.ultimoEnvio ? `${ROTULO_TIPO_ENVIO[c.ultimoEnvio.tipo]} · ${formatarDataCurta(c.ultimoEnvio.enviado_em!)}` : "—"}

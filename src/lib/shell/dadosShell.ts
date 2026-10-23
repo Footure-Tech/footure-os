@@ -67,7 +67,7 @@ export async function obterDadosShell(supabase: Supa, papel: PapelUsuario, usuar
     );
   }
 
-  if (papel === "vendedor" || papel === "admin") {
+  if (papel === "vendedor" || papel === "admin" || papel === "financeiro") {
     tarefas.push(
       contar(
         supabase.from("bling_contatos").select("id", { count: "exact", head: true }).eq("tem_parcela_atrasada", true),

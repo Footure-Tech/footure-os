@@ -22,6 +22,8 @@ export interface ClienteCobranca {
   maiorAtraso: number;
   proximoVencimento: string | null;
   emails: string[];
+  /** Origem dos destinatários: observações internas do pedido ou cadastro do contato no Bling. */
+  origemEmails: "pedido" | "contato";
   regra: CobrancaClienteRow | null;
   ultimoEnvio: Pick<CobrancaEnvioRow, "tipo" | "status" | "enviado_em" | "entrega"> | null;
 }
@@ -30,12 +32,14 @@ export interface ClienteCobranca {
 export async function carregarTelaCobranca(supabase: Supa) {
   const hoje = hojeBrt();
   const desde = new Date(Date.now() - 60 * 86_400_000).toISOString();
-  const [config, base, { data: envios }, { data: regras }] = await Promise.all([
+  const [config, base, { data: envios }, { data: regras }, { data: emailsPedidos }] = await Promise.all([
     carregarConfiguracaoCobranca(supabase),
     carregarBaseParcelas(supabase),
     supabase.from("cobranca_envios").select("*, itens:cobranca_envio_itens(*)").gte("criado_em", desde).order("criado_em", { ascending: false }).limit(500),
     supabase.from("cobranca_clientes").select("*"),
+    supabase.from("cobranca_pedidos_emails").select("bling_pedido_id, emails"),
   ]);
+  const emailsDoPedido = new Map((emailsPedidos ?? []).map((p) => [p.bling_pedido_id, p.emails]));
 
   const paraTela = (e: CobrancaEnvioRow & { itens: CobrancaEnvioItemRow[] }): EnvioTela => ({
     ...e,
@@ -64,10 +68,17 @@ export async function carregarTelaCobranca(supabase: Supa) {
       atrasado: 0,
       maiorAtraso: 0,
       proximoVencimento: null,
-      emails: normalizarEmails(regra?.email_bling, regra?.email_nf_bling, regra?.destinatarios_extra ?? []),
+      emails: [],
+      origemEmails: "contato",
       regra,
       ultimoEnvio: ultimoDe.get(p.contatoId) ?? null,
     };
+    const pedidoId = p.numeroPedidoOrigem ? base.pedidoPorChave.get(`${p.contatoId}:${p.numeroPedidoOrigem}`)?.id : undefined;
+    const doPedido = pedidoId ? emailsDoPedido.get(pedidoId) : undefined;
+    if (doPedido?.length) {
+      c.emails = normalizarEmails(c.origemEmails === "pedido" ? c.emails : [], doPedido);
+      c.origemEmails = "pedido";
+    }
     c.emAberto += p.valor;
     const dias = diasDesdeVencimento(p.vencimento, hoje);
     if (dias > 0) {
@@ -75,6 +86,10 @@ export async function carregarTelaCobranca(supabase: Supa) {
       c.maiorAtraso = Math.max(c.maiorAtraso, dias);
     } else if (!c.proximoVencimento || p.vencimento < c.proximoVencimento) c.proximoVencimento = p.vencimento;
     porContato.set(p.contatoId, c);
+  }
+  for (const c of porContato.values()) {
+    const extras = c.regra?.destinatarios_extra ?? [];
+    c.emails = c.origemEmails === "pedido" ? normalizarEmails(c.emails, extras) : normalizarEmails(c.regra?.email_bling, c.regra?.email_nf_bling, extras);
   }
   const clientes = [...porContato.values()].sort((a, b) => b.maiorAtraso - a.maiorAtraso || a.nome.localeCompare(b.nome));
 
