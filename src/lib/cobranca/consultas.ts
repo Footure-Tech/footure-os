@@ -1,0 +1,82 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { CobrancaClienteRow, CobrancaEnvioItemRow, CobrancaEnvioRow, Database } from "@/lib/supabase/database.types";
+import { carregarBaseParcelas } from "@/lib/financeiro/carteira";
+import { carregarConfiguracaoCobranca } from "./regua";
+import { diasDesdeVencimento, hojeBrt, normalizarEmails } from "./regras";
+
+type Supa = SupabaseClient<Database>;
+
+export type AbaCobranca = "aprovacao" | "historico" | "clientes" | "configuracao";
+
+export interface EnvioTela extends CobrancaEnvioRow {
+  cliente: string;
+  itens: CobrancaEnvioItemRow[];
+  total: number;
+}
+
+export interface ClienteCobranca {
+  contatoId: number;
+  nome: string;
+  emAberto: number;
+  atrasado: number;
+  maiorAtraso: number;
+  proximoVencimento: string | null;
+  emails: string[];
+  regra: CobrancaClienteRow | null;
+  ultimoEnvio: Pick<CobrancaEnvioRow, "tipo" | "status" | "enviado_em" | "entrega"> | null;
+}
+
+/** Dados da tela /financeiro/cobranca. */
+export async function carregarTelaCobranca(supabase: Supa) {
+  const hoje = hojeBrt();
+  const desde = new Date(Date.now() - 60 * 86_400_000).toISOString();
+  const [config, base, { data: envios }, { data: regras }] = await Promise.all([
+    carregarConfiguracaoCobranca(supabase),
+    carregarBaseParcelas(supabase),
+    supabase.from("cobranca_envios").select("*, itens:cobranca_envio_itens(*)").gte("criado_em", desde).order("criado_em", { ascending: false }).limit(500),
+    supabase.from("cobranca_clientes").select("*"),
+  ]);
+
+  const paraTela = (e: CobrancaEnvioRow & { itens: CobrancaEnvioItemRow[] }): EnvioTela => ({
+    ...e,
+    cliente: base.nomeDoContato(e.contato_id),
+    itens: [...e.itens].sort((a, b) => a.vencimento.localeCompare(b.vencimento)),
+    total: e.itens.reduce((s, i) => s + Number(i.valor), 0),
+  });
+  // Itens aninhados pela FK envio_id (os tipos à mão não descrevem relações).
+  const todos = ((envios ?? []) as unknown as (CobrancaEnvioRow & { itens: CobrancaEnvioItemRow[] })[]).map(paraTela);
+  const aguardando = todos.filter((e) => e.status === "pendente" || e.status === "erro");
+  const historico = todos.filter((e) => e.status !== "pendente");
+  const problemasEntrega = historico.filter((e) => e.entrega === "devolvido" || e.entrega === "spam");
+
+  // Clientes com parcelas em aberto (o que a régua acompanha).
+  const regraDe = new Map((regras ?? []).map((r) => [r.contato_id, r]));
+  const ultimoDe = new Map<number, EnvioTela>();
+  for (const e of todos) if (e.tipo !== "escalonamento" && e.status === "enviado" && !ultimoDe.has(e.contato_id)) ultimoDe.set(e.contato_id, e);
+  const porContato = new Map<number, ClienteCobranca>();
+  for (const p of base.parcelas) {
+    if ((p.situacao !== "em_aberto" && p.situacao !== "atrasada") || base.deCancelado(p)) continue;
+    const regra = regraDe.get(p.contatoId) ?? null;
+    const c = porContato.get(p.contatoId) ?? {
+      contatoId: p.contatoId,
+      nome: base.nomeDoContato(p.contatoId),
+      emAberto: 0,
+      atrasado: 0,
+      maiorAtraso: 0,
+      proximoVencimento: null,
+      emails: normalizarEmails(regra?.email_bling, regra?.email_nf_bling, regra?.destinatarios_extra ?? []),
+      regra,
+      ultimoEnvio: ultimoDe.get(p.contatoId) ?? null,
+    };
+    c.emAberto += p.valor;
+    const dias = diasDesdeVencimento(p.vencimento, hoje);
+    if (dias > 0) {
+      c.atrasado += p.valor;
+      c.maiorAtraso = Math.max(c.maiorAtraso, dias);
+    } else if (!c.proximoVencimento || p.vencimento < c.proximoVencimento) c.proximoVencimento = p.vencimento;
+    porContato.set(p.contatoId, c);
+  }
+  const clientes = [...porContato.values()].sort((a, b) => b.maiorAtraso - a.maiorAtraso || a.nome.localeCompare(b.nome));
+
+  return { config, aguardando, historico, problemasEntrega, clientes, hoje, temCache: base.temCache };
+}

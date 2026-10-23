@@ -13,6 +13,7 @@ import {
   MdHistoryEdu,
   MdPayments,
   MdManageAccounts,
+  MdMarkEmailUnread,
   MdReceipt,
   MdSettings,
   MdTrendingUp,
@@ -131,6 +132,13 @@ const INVESTIMENTO_RETORNO: SidebarLink = {
   cor: "bg-iconGreen",
   exact: true,
 };
+const REGUA_COBRANCA: SidebarLink = {
+  href: "/financeiro/cobranca",
+  label: "Régua de cobrança",
+  icon: MdMarkEmailUnread,
+  cor: "bg-iconBlue",
+  exact: true,
+};
 const INADIMPLENCIA: SidebarLink = {
   href: "/inadimplencia",
   label: "Inadimplência",
@@ -173,7 +181,7 @@ const GRUPOS_POR_PAPEL: Record<PapelUsuario, SidebarGroup[]> = {
     { label: "Jurídico", links: [CONTRATOS, HISTORICO_MODELO] },
     {
       label: "Financeiro",
-      links: [CONTRATOS_FINANCEIRO, PAGAMENTOS, INADIMPLENCIA],
+      links: [CONTRATOS_FINANCEIRO, PAGAMENTOS, INADIMPLENCIA, REGUA_COBRANCA],
     },
     {
       label: "Administração",
@@ -205,6 +213,7 @@ const SO_FOOTLINK = new Set([
   HISTORICO_MODELO.href,
   CONTRATOS_FINANCEIRO.href,
   PAGAMENTOS.href,
+  REGUA_COBRANCA.href,
 ]);
 
 function gruposDoContexto(

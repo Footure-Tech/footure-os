@@ -4,6 +4,7 @@
     { "path": "/api/cron/marketing", "schedule": "0 10 * * *" },
     { "path": "/api/cron/bling?turno=7h", "schedule": "0 10 * * *" },
     { "path": "/api/cron/bling?turno=12h", "schedule": "0 15 * * *" },
-    { "path": "/api/cron/bling?turno=18h", "schedule": "0 21 * * *" }
+    { "path": "/api/cron/bling?turno=18h", "schedule": "0 21 * * *" },
+    { "path": "/api/cron/cobranca", "schedule": "0 12 * * *" }
   ]
 }

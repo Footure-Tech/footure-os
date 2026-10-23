@@ -158,6 +158,65 @@ export type SyncExecucaoRow = {
   terminado_em: string | null;
   disparado_por: string | null;
 };
+/** 0058: régua de cobrança do Footlink (F1). */
+export type ModoCobranca = "desligado" | "aprovacao" | "automatico";
+export type TipoEnvioCobranca = "lembrete" | "vencimento" | "atraso" | "escalonamento";
+export type StatusEnvioCobranca = "pendente" | "enviado" | "erro" | "descartado" | "cancelado";
+export type EntregaEnvioCobranca = "entregue" | "atrasada" | "devolvido" | "spam";
+export type CobrancaConfiguracaoRow = {
+  id: boolean;
+  modo: ModoCobranca;
+  regua_dias: number[];
+  escalonamento_dias: number;
+  data_corte: string | null;
+  remetente_nome: string;
+  remetente_email: string | null;
+  responder_para: string[];
+  emails_escalonamento: string[];
+  chave_pix: string | null;
+  email_teste: string | null;
+  atualizado_em: string;
+  atualizado_por: string | null;
+};
+export type CobrancaClienteRow = {
+  contato_id: number;
+  pausada: boolean;
+  motivo_pausa: string | null;
+  regua_dias: number[] | null;
+  destinatarios_extra: string[];
+  email_bling: string | null;
+  email_nf_bling: string | null;
+  emails_buscados_em: string | null;
+  atualizado_em: string;
+  atualizado_por: string | null;
+};
+export type CobrancaEnvioRow = {
+  id: string;
+  contato_id: number;
+  tipo: TipoEnvioCobranca;
+  data_prevista: string;
+  status: StatusEnvioCobranca;
+  destinatarios: string[];
+  assunto: string | null;
+  erro: string | null;
+  resend_id: string | null;
+  entrega: EntregaEnvioCobranca | null;
+  entrega_detalhe: string | null;
+  entrega_em: string | null;
+  criado_em: string;
+  decidido_por: string | null;
+  decidido_em: string | null;
+  enviado_em: string | null;
+};
+export type CobrancaEnvioItemRow = {
+  envio_id: string;
+  parcela_id: number;
+  etapa: number;
+  vencimento: string;
+  valor: number;
+  rotulo: string;
+};
+
 /** 0053: execuções da sincronização com o Bling (cron e botão da sidebar). */
 export type BlingSyncExecucaoRow = {
   id: string;
@@ -665,6 +724,15 @@ export interface Database {
         Partial<SyncExecucaoRow>
       >;
       // supabase/migrations/0053_bling_sync_execucoes.sql
+      // supabase/migrations/0058_cobranca_regua.sql
+      cobranca_configuracao: TableDef<CobrancaConfiguracaoRow, Partial<CobrancaConfiguracaoRow>, Partial<CobrancaConfiguracaoRow>>;
+      cobranca_clientes: TableDef<CobrancaClienteRow, Partial<CobrancaClienteRow> & { contato_id: number }, Partial<CobrancaClienteRow>>;
+      cobranca_envios: TableDef<
+        CobrancaEnvioRow,
+        Partial<CobrancaEnvioRow> & Pick<CobrancaEnvioRow, "contato_id" | "tipo" | "data_prevista">,
+        Partial<CobrancaEnvioRow>
+      >;
+      cobranca_envio_itens: TableDef<CobrancaEnvioItemRow, CobrancaEnvioItemRow, Partial<CobrancaEnvioItemRow>>;
       bling_sync_execucoes: TableDef<
         BlingSyncExecucaoRow,
         Partial<BlingSyncExecucaoRow> & { origem: BlingSyncExecucaoRow["origem"] },

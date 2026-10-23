@@ -34,7 +34,30 @@ export interface BlocoEmail {
   paragrafo?: string;
   /** Caixa destacada com pares rótulo → valor (ex.: e-mail e senha temporária). */
   dados?: { rotulo: string; valor: string; mono?: boolean }[];
+  /** Tabela simples (ex.: parcelas em aberto); a última coluna fica alinhada à direita. */
+  tabela?: { colunas: string[]; linhas: string[][] };
 }
+
+/** Identidade do cabeçalho e do rodapé. Padrão: Footure OS (e-mails internos). */
+export interface MarcaEmail {
+  logoCid: string;
+  logoLargura: number;
+  logoAltura: number;
+  logoAlt: string;
+  /** Linhas do rodapé (texto puro, escapado). */
+  rodape: string[];
+  /** Link do sistema no rodapé — só nos e-mails internos. */
+  linkDoSistema: boolean;
+}
+
+const MARCA_FOOTURE_OS: MarcaEmail = {
+  logoCid: LOGO_EMAIL_CID,
+  logoLargura: 94,
+  logoAltura: 36,
+  logoAlt: "Footure Football Company",
+  rodape: [`${NOME_DO_SISTEMA} · Footure Football Company — e-mail automático, não responda.`],
+  linkDoSistema: true,
+};
 
 export interface ConteudoEmail {
   /** Texto curto que aparece na prévia da caixa de entrada. */
@@ -44,6 +67,7 @@ export interface ConteudoEmail {
   botao?: { rotulo: string; url: string };
   /** Linha pequena abaixo do botão (ex.: validade do link). */
   observacao?: string;
+  marca?: MarcaEmail;
 }
 
 function blocoHtml(b: BlocoEmail): string {
@@ -63,11 +87,27 @@ function blocoHtml(b: BlocoEmail): string {
       <tr><td style="padding:12px 18px;"><table role="presentation" cellpadding="0" cellspacing="0">${linhas}</table></td></tr>
     </table>`;
   }
+  if (b.tabela) {
+    const ultima = b.tabela.colunas.length - 1;
+    const celula = (texto: string, i: number, cabecalho: boolean) =>
+      `<td style="padding:${cabecalho ? "0 0 8px" : "9px 0"};${i > 0 ? "padding-left:12px;" : ""}${i === ultima ? "text-align:right;" : ""}font-family:${FONTE};${
+        cabecalho
+          ? `font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${CINZA};`
+          : `font-size:14px;color:${TEXTO};border-top:1px solid ${BORDA};${i === ultima ? "font-weight:700;white-space:nowrap;" : ""}`
+      }">${escaparHtml(texto)}</td>`;
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;background:${FUNDO};border:1px solid ${BORDA};border-radius:10px;">
+      <tr><td style="padding:14px 18px 6px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>${b.tabela.colunas.map((c, i) => celula(c, i, true)).join("")}</tr>
+        ${b.tabela.linhas.map((l) => `<tr>${l.map((c, i) => celula(c, i, false)).join("")}</tr>`).join("")}
+      </table></td></tr>
+    </table>`;
+  }
   return "";
 }
 
 export function montarEmail(conteudo: ConteudoEmail): { html: string; texto: string } {
   const url = urlDoSistema();
+  const marca = conteudo.marca ?? MARCA_FOOTURE_OS;
   const botao = conteudo.botao
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 16px;">
         <tr><td style="border-radius:8px;background:${MARCA};">
@@ -89,7 +129,7 @@ export function montarEmail(conteudo: ConteudoEmail): { html: string; texto: str
     <tr><td align="center" style="padding:32px 16px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
         <tr><td style="background:${MARCA};border-radius:12px 12px 0 0;padding:22px 32px;">
-          <img src="cid:${LOGO_EMAIL_CID}" width="94" height="36" alt="Footure Football Company" style="display:block;border:0;outline:none;width:94px;height:36px;">
+          <img src="cid:${marca.logoCid}" width="${marca.logoLargura}" height="${marca.logoAltura}" alt="${escaparHtml(marca.logoAlt)}" style="display:block;border:0;outline:none;width:${marca.logoLargura}px;height:${marca.logoAltura}px;">
         </td></tr>
         <tr><td style="background:#ffffff;border:1px solid ${BORDA};border-top:0;border-radius:0 0 12px 12px;padding:32px;">
           <h1 style="margin:0 0 20px;font-family:${FONTE};font-size:22px;line-height:1.3;font-weight:700;color:${TEXTO};">${escaparHtml(conteudo.titulo)}</h1>
@@ -98,8 +138,9 @@ export function montarEmail(conteudo: ConteudoEmail): { html: string; texto: str
           ${observacao}
         </td></tr>
         <tr><td style="padding:20px 32px 0;font-family:${FONTE};font-size:12px;line-height:1.5;color:${CINZA};text-align:center;">
-          ${NOME_DO_SISTEMA} · Footure Football Company — e-mail automático, não responda.<br>
-          <a href="${url}" style="color:${CINZA};">${escaparHtml(url.replace(/^https?:\/\//, ""))}</a>
+          ${marca.rodape.map(escaparHtml).join("<br>")}${
+            marca.linkDoSistema ? `<br>\n          <a href="${url}" style="color:${CINZA};">${escaparHtml(url.replace(/^https?:\/\//, ""))}</a>` : ""
+          }
         </td></tr>
       </table>
     </td></tr>
@@ -110,11 +151,20 @@ export function montarEmail(conteudo: ConteudoEmail): { html: string; texto: str
   const texto = [
     conteudo.titulo,
     "",
-    ...conteudo.blocos.flatMap((b) => (b.paragrafo ? [b.paragrafo, ""] : b.dados ? [...b.dados.map((d) => `${d.rotulo}: ${d.valor}`), ""] : [])),
+    ...conteudo.blocos.flatMap((b) =>
+      b.paragrafo
+        ? [b.paragrafo, ""]
+        : b.dados
+          ? [...b.dados.map((d) => `${d.rotulo}: ${d.valor}`), ""]
+          : b.tabela
+            ? [...b.tabela.linhas.map((l) => l.map((c, i) => (i === 0 ? c : `${b.tabela!.colunas[i]}: ${c}`)).join(" · ")), ""]
+            : [],
+    ),
     ...(conteudo.botao ? [`${conteudo.botao.rotulo}: ${conteudo.botao.url}`, ""] : []),
     ...(conteudo.observacao ? [conteudo.observacao, ""] : []),
     "—",
-    `${NOME_DO_SISTEMA} · Footure Football Company · ${url}`,
+    ...marca.rodape,
+    ...(marca.linkDoSistema ? [url] : []),
   ].join("\n");
 
   return { html, texto };

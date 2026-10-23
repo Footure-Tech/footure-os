@@ -11,29 +11,59 @@ function comNomeDoSistema(remetente: string) {
   return `${NOME_DO_SISTEMA} <${endereco}>`;
 }
 
-async function enviarEmail(para: string | string[], assunto: string, conteudo: Parameters<typeof montarEmail>[0]) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const remetente = process.env.RESEND_FROM_EMAIL;
-  if (!apiKey || !remetente) throw new Error("RESEND_API_KEY / RESEND_FROM_EMAIL não configurados.");
+export interface EmailResend {
+  /** "Nome <endereco>". */
+  de: string;
+  para: string[];
+  responderPara?: string[];
+  assunto: string;
+  html: string;
+  texto: string;
+  /** Anexos; com contentId viram imagem inline (cid:). */
+  anexos?: { nome: string; base64: string; contentId?: string }[];
+}
 
-  const { html, texto } = montarEmail(conteudo);
+/** Envia e devolve o id do e-mail no Resend (usado para casar os eventos de entrega do webhook). */
+export async function enviarEmailResend(email: EmailResend): Promise<string> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("RESEND_API_KEY não configurada.");
   const resposta = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: comNomeDoSistema(remetente),
-      to: para,
-      subject: assunto,
-      html,
-      text: texto,
-      // Logo do cabeçalho embutido (cid:) — ver lib/email/logo.ts.
-      attachments: [{ filename: "footure-logo.png", content: LOGO_EMAIL_BASE64, content_id: LOGO_EMAIL_CID }],
+      from: email.de,
+      to: email.para,
+      reply_to: email.responderPara?.length ? email.responderPara : undefined,
+      subject: email.assunto,
+      html: email.html,
+      text: email.texto,
+      attachments: email.anexos?.map((a) => ({ filename: a.nome, content: a.base64, content_id: a.contentId })),
     }),
   });
-
   if (!resposta.ok) {
     throw new Error(`Falha ao enviar e-mail via Resend (${resposta.status}): ${await resposta.text()}`);
   }
+  return ((await resposta.json()) as { id: string }).id;
+}
+
+/** Endereço de RESEND_FROM_EMAIL, sem o nome ("Fulano <x@y>" → "x@y"). */
+export function enderecoRemetentePadrao(): string {
+  const remetente = process.env.RESEND_FROM_EMAIL;
+  if (!remetente) throw new Error("RESEND_FROM_EMAIL não configurado.");
+  return remetente.match(/<([^>]+)>/)?.[1] ?? remetente.trim();
+}
+
+async function enviarEmail(para: string | string[], assunto: string, conteudo: Parameters<typeof montarEmail>[0]) {
+  const { html, texto } = montarEmail(conteudo);
+  await enviarEmailResend({
+    de: comNomeDoSistema(enderecoRemetentePadrao()),
+    para: Array.isArray(para) ? para : [para],
+    assunto,
+    html,
+    texto,
+    // Logo do cabeçalho embutido (cid:) — ver lib/email/logo.ts.
+    anexos: [{ nome: "footure-logo.png", base64: LOGO_EMAIL_BASE64, contentId: LOGO_EMAIL_CID }],
+  });
 }
 
 /** Cadastro de usuário novo (criado = true) ou reenvio de acesso (criado = false). */
