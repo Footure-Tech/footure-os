@@ -6,10 +6,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CobrancaConfiguracaoRow, CobrancaEnvioItemRow, CobrancaEnvioRow, Database, EntregaEnvioCobranca } from "@/lib/supabase/database.types";
 import { carregarBaseParcelas } from "@/lib/financeiro/carteira";
-import { consultarBling, obterAccessTokenValido, pedidoBlingCancelado } from "@/lib/integracoes/bling";
+import { consultarBling, pedidoBlingCancelado } from "@/lib/integracoes/bling";
 import { enderecoRemetentePadrao, enviarEmailResend } from "@/lib/integracoes/resend";
 import { montarEmailCliente, montarEmailEscalonamento, type EmailCobrancaMontado, type ItemEmailCobranca } from "./emailCobranca";
 import { SITUACOES_BOLETO_PAGO, SITUACOES_BOLETO_VALIDO, boletosDasParcelas, cancelarBoletosDasParcelas, conferirBoletosAbertos, garantirBoleto, pdfsDosBoletos, pendenciasEmissaoInter } from "./boletos";
+import { tokenBlingSeguro } from "./blingToken";
 import { JANELA_RECUPERACAO_DIAS, dataEnvioCobranca, diasDesdeVencimento, etapaDoDia, hojeBrt, normalizarEmails, tipoDoEnvio } from "./regras";
 
 type Supa = SupabaseClient<Database>;
@@ -42,31 +43,6 @@ export async function carregarConfiguracaoCobranca(supabase: Supa): Promise<Cobr
   return data;
 }
 
-/**
- * Token do Bling sem disputar a renovação com a sincronização: o Bling
- * invalida o refresh_token anterior a cada renovação (ver 0053). Token ainda
- * válido é usado direto; vencido, só renova se não houver sincronização
- * rodando. null = seguir só com o cache.
- */
-async function tokenBlingSeguro(supabase: Supa): Promise<string | null> {
-  const { data } = await supabase.from("integracoes_bling").select("access_token, expires_at").limit(1).maybeSingle();
-  if (!data?.access_token) return null;
-  if (data.expires_at && Date.parse(data.expires_at) - 60_000 > Date.now()) return data.access_token;
-  // "Rodando" há mais de 10 min é execução morta (a função tem limite de 5 min) — não bloqueia.
-  const { data: rodando } = await supabase
-    .from("bling_sync_execucoes")
-    .select("id")
-    .eq("status", "rodando")
-    .gt("iniciado_em", new Date(Date.now() - 10 * 60_000).toISOString())
-    .limit(1)
-    .maybeSingle();
-  if (rodando) return null;
-  try {
-    return await obterAccessTokenValido(supabase);
-  } catch {
-    return null;
-  }
-}
 
 /** Nome exibido do cliente: cadastro local (fantasia/razão social) ou o nome do contato no Bling. */
 async function nomeDoCliente(supabase: Supa, contatoId: number): Promise<string> {

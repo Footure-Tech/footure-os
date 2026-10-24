@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { atualizarBoleto } from "@/lib/cobranca/boletos";
+import { baixarBoletosPagos } from "@/lib/cobranca/baixaBling";
 
 // Avisos da API Cobrança do Banco Inter (pagamento, cancelamento, expiração).
 // O Inter não assina os avisos: o endereço registrado leva uma chave secreta
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
       falhas.push(`${codigo_solicitacao}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+  // Pagamento confirmado: baixa no Bling já (o que falhar, a conferência das 9h tenta de novo).
+  if ((nossos ?? []).length) await baixarBoletosPagos(supabase).catch((e) => falhas.push(`baixa no Bling: ${e instanceof Error ? e.message : String(e)}`));
   if (evento) await supabase.from("cobranca_inter_eventos").update({ processado: falhas.length === 0, erro: falhas.join(" | ") || null }).eq("id", evento.id);
   // 200 mesmo com falha pontual: a conferência diária relê os boletos em aberto.
   return NextResponse.json({ ok: true, atualizados: (nossos ?? []).length - falhas.length });
