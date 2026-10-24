@@ -20,12 +20,14 @@ import { camadaSugerida, emAberto, somarDias } from "./modelo";
 type Supa = SupabaseClient<Database>;
 
 /** Tempo para listagens + detalhes; o restante dos 300 s da função fica para alertas e e-mail. */
-const PRAZO_PADRAO_MS = 170_000;
+const PRAZO_PADRAO_MS = 150_000;
 /** Detalhes só do que ainda importa: em aberto ou com vencimento nos últimos 24 meses. */
 const MESES_DETALHE = 24;
 const INICIO_HISTORICO = "2020-01-01";
 
 export interface ResultadoSincronizacaoFinanceira {
+  /** Movimentos de Caixa e Bancos listados nesta rodada e detalhes pendentes deles. */
+  caixas: { listados: number; removidos: number; detalhados: number; pendentes: number; historicoCompleto: boolean };
   pagar: number;
   receber: number;
   removidos: number;
@@ -79,21 +81,27 @@ async function sincronizarCadastros(supabase: Supa, token: string) {
   );
 
   // Conta nova recebe a camada sugerida pelo nome; nas existentes só o nome é atualizado (a camada é da Diretoria).
-  type ContaBling = { id: number; descricao: string };
+  type ContaBling = { id: number; descricao: string; saldoInicial?: number };
   const contas = await listar<ContaBling>(token, "/contas-contabeis");
   const { data: existentes, error } = await supabase.from("fin_contas_financeiras").select("id");
   if (error) throw new Error(error.message);
   const conhecidas = new Set((existentes ?? []).map((c) => c.id));
   const novas = contas.filter((c) => !conhecidas.has(c.id));
   if (novas.length) {
-    const linhas = novas.map((c) => ({ id: c.id, descricao: (c.descricao ?? "").trim(), camada: camadaSugerida(c.descricao ?? "") as CamadaContaFinanceira, sincronizado_em: agora }));
+    const linhas = novas.map((c) => ({
+      id: c.id,
+      descricao: (c.descricao ?? "").trim(),
+      camada: camadaSugerida(c.descricao ?? "") as CamadaContaFinanceira,
+      saldo_inicial: c.saldoInicial ?? null,
+      sincronizado_em: agora,
+    }));
     const { error: erroInsert } = await supabase.from("fin_contas_financeiras").insert(linhas);
     if (erroInsert) throw new Error(erroInsert.message);
   }
   const antigas = contas.filter((c) => conhecidas.has(c.id));
   if (antigas.length) {
     await emLotes(
-      antigas.map((c) => ({ id: c.id, descricao: (c.descricao ?? "").trim(), sincronizado_em: agora })),
+      antigas.map((c) => ({ id: c.id, descricao: (c.descricao ?? "").trim(), saldo_inicial: c.saldoInicial ?? null, sincronizado_em: agora })),
       500,
       (lote) => supabase.from("fin_contas_financeiras").upsert(lote),
     );
@@ -257,5 +265,116 @@ export async function sincronizarFinanceiroBling(supabase: Supa, opcoes: { prazo
     detalhados,
     detalhesPendentes: pendentes.length - detalhados,
     fornecedoresNovos,
+    caixas: await sincronizarCaixas(supabase, token, hoje, prazo),
   };
+}
+
+// ─── Caixa e Bancos (/caixas, 0065) ──────────────────────────────────────────
+/** Primeiro mês com movimento de caixa na conta da Footure (histórico completo na carga inicial). */
+const INICIO_CAIXAS = "2020-12";
+/** Rodadas normais relistam só os meses recentes (onde baixas e lançamentos ainda mudam). */
+const MESES_RELISTADOS = 3;
+
+type CaixaListado = { id: number; data: string; debCred: string; valor: number; situacao?: string; contaFinanceira?: { id?: number } };
+type CaixaDetalhe = {
+  competencia?: string;
+  categoria?: { id?: number };
+  transferencia?: string;
+  tipoLancamento?: string | number;
+  origem?: { id?: number; tipo?: string };
+};
+
+/** O detalhe de /caixas devolve datas como dd/mm/aaaa; a listagem, ISO. */
+function dataBling(d: unknown): string | null {
+  if (typeof d !== "string") return null;
+  const br = d.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  return dataOuNull(d);
+}
+
+/** /caixas corta em 50 por página mesmo pedindo 100: segue até a página vazia. */
+async function listarCaixasDoMes(token: string, mes: string) {
+  const [a, m] = mes.split("-").map(Number);
+  const fim = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10);
+  const itens: CaixaListado[] = [];
+  for (let pagina = 1; pagina <= 60; pagina++) {
+    const resp = await consultarBling<{ data?: CaixaListado[] }>(token, `/caixas?dataInicial=${mes}-01&dataFinal=${fim}&limite=100&pagina=${pagina}`);
+    const lote = resp.data ?? [];
+    if (!lote.length) break;
+    itens.push(...lote);
+  }
+  return itens;
+}
+
+async function sincronizarCaixas(supabase: Supa, token: string, hoje: string, prazo: number) {
+  const { count } = await supabase.from("fin_caixa_movimentos").select("id", { count: "exact", head: true });
+  const historicoCompleto = !count;
+  const mesAtual = hoje.slice(0, 7);
+  const meses: string[] = [];
+  const primeiro = historicoCompleto ? INICIO_CAIXAS : deslocar(mesAtual, -(MESES_RELISTADOS - 1));
+  for (let mes = primeiro; mes <= mesAtual; mes = deslocar(mes, 1)) meses.push(mes);
+
+  const agora = new Date().toISOString();
+  const listados: CaixaListado[] = [];
+  for (const mes of meses) listados.push(...(await listarCaixasDoMes(token, mes)));
+  const unicos = [...new Map(listados.map((c) => [c.id, c])).values()];
+  const linhas = unicos
+    .map((c) => {
+      const data = dataBling(c.data);
+      const dc = c.debCred === "C" || c.debCred === "D" ? c.debCred : "S";
+      const valor = Math.abs(Number(c.valor) || 0);
+      const conta = idOuNull(c.contaFinanceira?.id);
+      return data
+        ? { id: c.id, data, debito_credito: dc as "C" | "D" | "S", valor, situacao: c.situacao ?? null, conta_financeira_id: conta, assinatura: `${data}|${dc}|${valor.toFixed(2)}|${conta ?? ""}`, sincronizado_em: agora }
+        : null;
+    })
+    .filter((l): l is NonNullable<typeof l> => !!l);
+  await emLotes(linhas, 500, (lote) => supabase.from("fin_caixa_movimentos").upsert(lote));
+
+  // Excluídos no Bling: só dentro dos meses relistados.
+  const vistos = new Set(linhas.map((l) => l.id));
+  const noPeriodo = await lerTodos((de, ate) =>
+    supabase.from("fin_caixa_movimentos").select("id").gte("data", `${meses[0]}-01`).order("id").range(de, ate),
+  );
+  const removidos = noPeriodo.map((l) => l.id).filter((id) => !vistos.has(id));
+  await emLotes(removidos, 200, (lote) => supabase.from("fin_caixa_movimentos").delete().in("id", lote));
+
+  // Detalhe (categoria, competência, origem, transferência): novos/alterados dos últimos 24 meses, do mais recente.
+  const limite = somarDias(hoje, -MESES_DETALHE * 31);
+  const pendentes = (
+    await lerTodos((de, ate) =>
+      supabase.from("fin_caixa_movimentos").select("id, assinatura, assinatura_detalhe, detalhado_em, data").gte("data", limite).order("id").range(de, ate),
+    )
+  )
+    .filter((m) => !m.detalhado_em || m.assinatura_detalhe !== m.assinatura)
+    .sort((a, b) => b.data.localeCompare(a.data));
+  let detalhados = 0;
+  for (let i = 0; i < pendentes.length && Date.now() < prazo; i += 6) {
+    await Promise.all(
+      pendentes.slice(i, i + 6).map(async (m) => {
+        const d = (await consultarBling<{ data: CaixaDetalhe }>(token, `/caixas/${m.id}`)).data;
+        const { error } = await supabase
+          .from("fin_caixa_movimentos")
+          .update({
+            competencia: dataBling(d.competencia),
+            categoria_id: idOuNull(d.categoria?.id),
+            transferencia: d.transferencia === "S",
+            tipo_lancamento: d.tipoLancamento == null ? null : String(d.tipoLancamento),
+            origem_tipo: d.origem?.tipo || null,
+            origem_id: idOuNull(d.origem?.id),
+            assinatura_detalhe: m.assinatura,
+            detalhado_em: new Date().toISOString(),
+          })
+          .eq("id", m.id);
+        if (error) throw new Error(error.message);
+        detalhados++;
+      }),
+    );
+  }
+  return { listados: linhas.length, removidos: removidos.length, detalhados, pendentes: pendentes.length - detalhados, historicoCompleto };
+}
+
+function deslocar(mes: string, delta: number) {
+  const [a, m] = mes.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1 + delta, 1)).toISOString().slice(0, 7);
 }

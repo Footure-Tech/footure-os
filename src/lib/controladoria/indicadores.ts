@@ -40,9 +40,9 @@ async function lerTudo<T>(consulta: (de: number, ate: number) => PromiseLike<{ d
 }
 
 export async function carregarBaseControladoria(supabase: Supa) {
-  const [lancamentosBrutos, categorias, contas, formas, contatos, premissas, execucao] = await Promise.all([
+  const [lancamentosBrutos, categorias, contas, formas, contatos, premissas, execucao, movimentos] = await Promise.all([
     lerTudo((de, ate) => supabase.from("fin_lancamentos").select("*").order("id").range(de, ate)),
-    lerTudo((de, ate) => supabase.from("fin_categorias").select("id, id_pai, descricao").range(de, ate)),
+    lerTudo((de, ate) => supabase.from("fin_categorias").select("id, id_pai, descricao, tipo").range(de, ate)),
     lerTudo((de, ate) => supabase.from("fin_contas_financeiras").select("*").order("descricao").range(de, ate)),
     lerTudo((de, ate) => supabase.from("fin_formas_pagamento").select("id, descricao, tipo_pagamento").range(de, ate)),
     lerTudo((de, ate) => supabase.from("fin_contatos").select("id, nome").range(de, ate)),
@@ -54,6 +54,18 @@ export async function carregarBaseControladoria(supabase: Supa) {
       .order("iniciado_em", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // 0065: movimentos de Caixa e Bancos (regime de caixa e lançamentos diretos no caixa).
+    // Tabela ausente (0065 ainda não aplicada) não pode derrubar as telas: segue sem movimentos.
+    lerTudo((de, ate) =>
+      supabase
+        .from("fin_caixa_movimentos")
+        .select("id, data, debito_credito, valor, conta_financeira_id, competencia, categoria_id, transferencia, origem_tipo, detalhado_em")
+        .order("id")
+        .range(de, ate),
+    ).catch((erro: unknown) => {
+      console.warn("[controladoria] movimentos de caixa indisponíveis:", erro instanceof Error ? erro.message : erro);
+      return [];
+    }),
   ]);
   if (premissas.error) throw new Error(`[controladoria] premissas: ${premissas.error.message}`);
 
@@ -77,6 +89,9 @@ export async function carregarBaseControladoria(supabase: Supa) {
 
   return {
     lancamentos,
+    /** Árvore do plano de contas (id → pai), para agregar das folhas aos totalizadores. */
+    categorias,
+    movimentos: movimentos.map((m) => ({ ...m, valor: Number(m.valor) })),
     contas: contas.map((c) => ({ ...c, saldo_informado: c.saldo_informado === null ? null : Number(c.saldo_informado) })),
     premissas: premissas.data as FinPremissasRow,
     ultimaExecucao: execucao.data,

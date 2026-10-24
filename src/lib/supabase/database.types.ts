@@ -287,6 +287,27 @@ export type FinContaFinanceiraRow = {
   atualizado_por: string | null;
   atualizado_em: string | null;
   sincronizado_em: string;
+  /** 0065: saldo inicial cadastrado na conta no Bling. */
+  saldo_inicial: number | null;
+};
+/** 0065: movimento de Caixa e Bancos do Bling (/caixas). */
+export type FinCaixaMovimentoRow = {
+  id: number;
+  data: string;
+  debito_credito: "C" | "D" | "S";
+  valor: number;
+  situacao: string | null;
+  conta_financeira_id: number | null;
+  competencia: string | null;
+  categoria_id: number | null;
+  transferencia: boolean | null;
+  tipo_lancamento: string | null;
+  origem_tipo: string | null;
+  origem_id: number | null;
+  assinatura: string;
+  assinatura_detalhe: string | null;
+  detalhado_em: string | null;
+  sincronizado_em: string;
 };
 export type FinLancamentoRow = {
   id: number;
@@ -326,6 +347,9 @@ export type FinPremissasRow = {
   resumo_diario_ativo: boolean;
   atualizado_em: string;
   atualizado_por: string | null;
+  /** 0065: diferença constante entre a soma dos movimentos e o saldo do balancete. */
+  saldo_abertura_ajuste: number;
+  saldo_abertura_referencia: string | null;
 };
 export type GrupoAlerta = "caixa" | "pagamentos" | "recebiveis" | "integracao";
 export type SeveridadeAlerta = "critico" | "atencao" | "info";
@@ -897,6 +921,12 @@ export interface Database {
         Partial<FinLancamentoRow>
       >;
       fin_premissas: TableDef<FinPremissasRow, Partial<FinPremissasRow>, Partial<FinPremissasRow>>;
+      // supabase/migrations/0065_controladoria_caixas.sql
+      fin_caixa_movimentos: TableDef<
+        FinCaixaMovimentoRow,
+        Partial<FinCaixaMovimentoRow> & Pick<FinCaixaMovimentoRow, "id" | "data" | "debito_credito" | "valor" | "assinatura">,
+        Partial<FinCaixaMovimentoRow>
+      >;
       fin_alertas: TableDef<
         FinAlertaRow,
         Partial<FinAlertaRow> & Pick<FinAlertaRow, "chave" | "regra" | "grupo" | "severidade" | "titulo" | "descricao" | "acao">,
