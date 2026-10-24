@@ -63,15 +63,18 @@ function blocosComoPagar(itens: ItemEmailCobranca[]) {
   if (!comBoleto.length) return [];
   const varias = comBoleto.length > 1;
   return [
-    { paragrafo: `Para pagar, use a linha digitável do boleto ou o Pix copia e cola${varias ? " de cada parcela" : ""}:` },
+    {
+      paragrafo: `Para pagar${varias ? " cada parcela" : ""}, use a linha digitável do boleto ou copie o código Pix e cole no app do seu banco, na opção Pix copia e cola:`,
+    },
     ...comBoleto.map((i) =>
       i.pagamento === "previa"
-        ? { dados: [...(varias ? [{ rotulo: "Parcela", valor: i.rotulo }] : []), { rotulo: "Boleto e Pix", valor: "emitidos no Banco Inter no momento do envio" }] }
+        ? { empilhado: true, dados: [...(varias ? [{ rotulo: "Parcela", valor: i.rotulo }] : []), { rotulo: "Boleto e Pix", valor: "emitidos no Banco Inter no momento do envio" }] }
         : {
+            empilhado: true,
             dados: [
               ...(varias ? [{ rotulo: "Parcela", valor: i.rotulo }] : []),
               ...(i.pagamento?.linhaDigitavel ? [{ rotulo: "Linha digitável", valor: i.pagamento.linhaDigitavel, mono: true }] : []),
-              ...(i.pagamento?.pixCopiaECola ? [{ rotulo: "Pix copia e cola", valor: i.pagamento.pixCopiaECola, mono: true }] : []),
+              ...(i.pagamento?.pixCopiaECola ? [{ rotulo: "Pix copia e cola", valor: i.pagamento.pixCopiaECola, mono: true, semLink: true }] : []),
             ],
           },
     ),

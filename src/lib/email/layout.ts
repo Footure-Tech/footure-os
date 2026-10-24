@@ -32,8 +32,11 @@ export function escaparHtml(texto: string): string {
 export interface BlocoEmail {
   /** Parágrafo de texto (escapado). */
   paragrafo?: string;
-  /** Caixa destacada com pares rótulo → valor (ex.: e-mail e senha temporária). */
-  dados?: { rotulo: string; valor: string; mono?: boolean }[];
+  /** Caixa destacada com pares rótulo → valor (ex.: e-mail e senha temporária).
+   * `empilhado`: rótulo em cima e valor embaixo, na largura toda (valores longos, ex.: linha digitável e Pix — no celular, duas colunas apertam).
+   * `semLink`: impede que o cliente de e-mail transforme o valor em link (o Pix copia e cola contém um endereço do banco). */
+  dados?: { rotulo: string; valor: string; mono?: boolean; semLink?: boolean }[];
+  empilhado?: boolean;
   /** Tabela simples (ex.: parcelas em aberto); a última coluna fica alinhada à direita.
    * `total`: linha final em negrito (rótulo na primeira coluna, valor na última). */
   tabela?: { colunas: string[]; linhas: string[][]; total?: { rotulo: string; valor: string } };
@@ -71,9 +74,30 @@ export interface ConteudoEmail {
   marca?: MarcaEmail;
 }
 
+/**
+ * Texto que o cliente de e-mail não transforma em link: cada ponto vai num
+ * <span> próprio, então o texto deixa de "parecer" endereço para o detector de
+ * links (Gmail, Apple Mail) — mas continua idêntico ao ser copiado (sem
+ * caracteres invisíveis, que quebrariam um Pix copia e cola).
+ */
+function semAutoLink(texto: string): string {
+  return escaparHtml(texto).split(".").join('<span style="font-size:inherit;">.</span>');
+}
+
 function blocoHtml(b: BlocoEmail): string {
   if (b.paragrafo) {
     return `<p style="margin:0 0 16px;font-family:${FONTE};font-size:15px;line-height:1.6;color:${TEXTO};">${escaparHtml(b.paragrafo)}</p>`;
+  }
+  if (b.dados && b.empilhado) {
+    const itens = b.dados
+      .map(
+        (d, i) => `<tr><td style="padding:${i ? "14px" : "4px"} 0 2px;font-family:${FONTE};font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${CINZA};">${escaparHtml(d.rotulo)}</td></tr>
+        <tr><td style="padding:2px 0 4px;font-family:${d.mono ? "'SFMono-Regular', Menlo, Consolas, monospace" : FONTE};font-size:14px;line-height:1.5;font-weight:700;color:${TEXTO};word-break:break-all;">${d.semLink ? semAutoLink(d.valor) : escaparHtml(d.valor)}</td></tr>`,
+      )
+      .join("");
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;background:${FUNDO};border:1px solid ${BORDA};border-radius:10px;">
+      <tr><td style="padding:12px 18px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${itens}</table></td></tr>
+    </table>`;
   }
   if (b.dados) {
     const linhas = b.dados
